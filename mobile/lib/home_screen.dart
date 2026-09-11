@@ -13,7 +13,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int _bottomIndex = 0;
   int _topIndex = 0;
 
-  final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _searchController =
+      TextEditingController();
 
   final List<String> _videos = [
     'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
@@ -21,6 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   final List<VideoPlayerController> _controllers = [];
+
   final List<bool> _liked = [];
   final List<bool> _saved = [];
   final List<bool> _followed = [];
@@ -30,18 +32,26 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
 
     for (final url in _videos) {
-      final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+      final controller =
+          VideoPlayerController.networkUrl(Uri.parse(url));
+
       _controllers.add(controller);
       _liked.add(false);
       _saved.add(false);
       _followed.add(false);
 
       controller.initialize().then((_) {
-        if (mounted) {
-          setState(() {});
-        }
+        if (!mounted) return;
+
+        setState(() {});
+
         controller.setLooping(true);
-        controller.play();
+
+        if (_controllers.first == controller &&
+            _bottomIndex == 0 &&
+            _topIndex == 0) {
+          controller.play();
+        }
       });
     }
   }
@@ -57,16 +67,27 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  // ------------------------------------------------------------
+  // MESSAGE
+  // ------------------------------------------------------------
+
   void _showMessage(String message) {
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         duration: const Duration(seconds: 1),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
+
+  // ------------------------------------------------------------
+  // LIKE
+  // ------------------------------------------------------------
 
   void _toggleLike(int index) {
     setState(() {
@@ -74,15 +95,25 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  // ------------------------------------------------------------
+  // SAVE
+  // ------------------------------------------------------------
+
   void _toggleSave(int index) {
     setState(() {
       _saved[index] = !_saved[index];
     });
 
     _showMessage(
-      _saved[index] ? 'ভিডিও Save করা হয়েছে' : 'ভিডিও থেকে Save সরানো হয়েছে',
+      _saved[index]
+          ? 'ভিডিও Save করা হয়েছে'
+          : 'ভিডিও থেকে Save সরানো হয়েছে',
     );
   }
+
+  // ------------------------------------------------------------
+  // FOLLOW
+  // ------------------------------------------------------------
 
   void _toggleFollow(int index) {
     setState(() {
@@ -90,9 +121,15 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     _showMessage(
-      _followed[index] ? 'Follow করা হয়েছে' : 'Unfollow করা হয়েছে',
+      _followed[index]
+          ? 'Follow করা হয়েছে'
+          : 'Unfollow করা হয়েছে',
     );
   }
+
+  // ------------------------------------------------------------
+  // COMMENTS
+  // ------------------------------------------------------------
 
   void _showComments() {
     showModalBottomSheet(
@@ -101,7 +138,7 @@ class _HomeScreenState extends State<HomeScreen> {
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
-          top: Radius.circular(22),
+          top: Radius.circular(24),
         ),
       ),
       builder: (context) {
@@ -109,8 +146,9 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: EdgeInsets.only(
             left: 20,
             right: 20,
-            top: 20,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            top: 12,
+            bottom:
+                MediaQuery.of(context).viewInsets.bottom + 20,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -123,7 +161,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              const SizedBox(height: 20),
+
+              const SizedBox(height: 18),
+
               const Text(
                 'Comments',
                 style: TextStyle(
@@ -131,14 +171,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+
               const SizedBox(height: 20),
+
               const Text(
                 'এখনও কোনো কমেন্ট নেই',
                 style: TextStyle(
                   color: Colors.grey,
+                  fontSize: 15,
                 ),
               ),
+
               const SizedBox(height: 20),
+
               TextField(
                 decoration: InputDecoration(
                   hintText: 'Add a comment...',
@@ -146,7 +191,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: const Icon(Icons.send),
                     onPressed: () {
                       Navigator.pop(context);
-                      _showMessage('Comment যোগ করার ব্যবস্থা প্রস্তুত');
+                      _showMessage(
+                        'Comment যোগ করার ব্যবস্থা প্রস্তুত',
+                      );
                     },
                   ),
                   border: OutlineInputBorder(
@@ -161,14 +208,22 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ------------------------------------------------------------
+  // SHARE
+  // ------------------------------------------------------------
+
   void _shareVideo() {
     _showMessage('Share অপশন প্রস্তুত');
   }
 
+  // ------------------------------------------------------------
+  // SVG ICON
+  // ------------------------------------------------------------
+
   Widget _svgIcon({
     required String path,
-    required bool active,
-    double size = 29,
+    double size = 42,
+    bool active = false,
   }) {
     return SvgPicture.string(
       path,
@@ -181,61 +236,297 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ------------------------------------------------------------
+  // PERSON SVG
+  // ------------------------------------------------------------
+
   String _personSvg() {
     return '''
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-<circle cx="12" cy="7" r="4" fill="none" stroke="white" stroke-width="2"/>
-<path d="M4 21c.7-4.2 3.3-6.5 8-6.5s7.3 2.3 8 6.5"
-fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 24 24">
+  <circle
+    cx="12"
+    cy="7"
+    r="4"
+    fill="none"
+    stroke="white"
+    stroke-width="2"/>
+  <path
+    d="M4 21c.7-4.2 3.3-6.5 8-6.5s7.3 2.3 8 6.5"
+    fill="none"
+    stroke="white"
+    stroke-width="2"
+    stroke-linecap="round"/>
 </svg>
 ''';
   }
+
+  // ------------------------------------------------------------
+  // HEART SVG
+  // ------------------------------------------------------------
 
   String _heartSvg() {
     return '''
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-<path d="M20.8 8.8c0 5.5-8.8 10.2-8.8 10.2S3.2 14.3 3.2 8.8
-C3.2 5.8 5.3 4 8 4c1.6 0 3.1.8 4 2.1C12.9 4.8 14.4 4 16 4
-c2.7 0 4.8 1.8 4.8 4.8z"
-fill="none" stroke="white" stroke-width="2"
-stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 24 24">
+  <path
+    d="M20.8 8.8c0 5.5-8.8 10.2-8.8 10.2S3.2 14.3 3.2 8.8
+    C3.2 5.8 5.3 4 8 4c1.6 0 3.1.8 4 2.1
+    C12.9 4.8 14.4 4 16 4c2.7 0 4.8 1.8 4.8 4.8z"
+    fill="none"
+    stroke="white"
+    stroke-width="2"
+    stroke-linejoin="round"/>
 </svg>
 ''';
   }
+
+  // ------------------------------------------------------------
+  // COMMENT SVG
+  // ------------------------------------------------------------
 
   String _commentSvg() {
     return '''
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8
-a2.5 2.5 0 0 1-2.5 2.5H10l-5.5 4v-4.3A2.5 2.5 0 0 1 4 13.5z"
-fill="none" stroke="white" stroke-width="2"
-stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 24 24">
+  <path
+    d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11
+    A2.5 2.5 0 0 1 20 5.5v8
+    a2.5 2.5 0 0 1-2.5 2.5H10l-5.5 4v-4.3
+    A2.5 2.5 0 0 1 4 13.5z"
+    fill="none"
+    stroke="white"
+    stroke-width="2"
+    stroke-linejoin="round"/>
 </svg>
 ''';
   }
+
+  // ------------------------------------------------------------
+  // BOOKMARK SVG
+  // ------------------------------------------------------------
 
   String _bookmarkSvg() {
     return '''
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-<path d="M6 4.5A2.5 2.5 0 0 1 8.5 2h7A2.5 2.5 0 0 1 18 4.5V21
-l-6-3.7L6 21z"
-fill="none" stroke="white" stroke-width="2"
-stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 24 24">
+  <path
+    d="M6 4.5A2.5 2.5 0 0 1 8.5 2h7
+    A2.5 2.5 0 0 1 18 4.5V21
+    l-6-3.7L6 21z"
+    fill="none"
+    stroke="white"
+    stroke-width="2"
+    stroke-linejoin="round"/>
 </svg>
 ''';
   }
 
+  // ------------------------------------------------------------
+  // SHARE SVG
+  // ------------------------------------------------------------
+
   String _shareSvg() {
     return '''
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-<circle cx="18" cy="5" r="2.5" fill="none" stroke="white" stroke-width="2"/>
-<circle cx="6" cy="12" r="2.5" fill="none" stroke="white" stroke-width="2"/>
-<circle cx="18" cy="19" r="2.5" fill="none" stroke="white" stroke-width="2"/>
-<path d="M8.2 10.8l7.5-4.4M8.2 13.2l7.5 4.4"
-fill="none" stroke="white" stroke-width="2"/>
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 24 24">
+  <circle
+    cx="18"
+    cy="5"
+    r="2.5"
+    fill="none"
+    stroke="white"
+    stroke-width="2"/>
+
+  <circle
+    cx="6"
+    cy="12"
+    r="2.5"
+    fill="none"
+    stroke="white"
+    stroke-width="2"/>
+
+  <circle
+    cx="18"
+    cy="19"
+    r="2.5"
+    fill="none"
+    stroke="white"
+    stroke-width="2"/>
+
+  <path
+    d="M8.2 10.8l7.5-4.4
+       M8.2 13.2l7.5 4.4"
+    fill="none"
+    stroke="white"
+    stroke-width="2"
+    stroke-linecap="round"/>
 </svg>
 ''';
   }
+
+  // ------------------------------------------------------------
+  // HOME SVG
+  // ------------------------------------------------------------
+
+  String _homeSvg() {
+    return '''
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 24 24">
+  <path
+    d="M3 10.5L12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"
+    fill="none"
+    stroke="white"
+    stroke-width="2"
+    stroke-linejoin="round"/>
+</svg>
+''';
+  }
+
+  // ------------------------------------------------------------
+  // FRIENDS SVG
+  // ------------------------------------------------------------
+
+  String _friendsSvg() {
+    return '''
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 24 24">
+  <circle
+    cx="9"
+    cy="8"
+    r="3"
+    fill="none"
+    stroke="white"
+    stroke-width="2"/>
+
+  <circle
+    cx="17"
+    cy="9"
+    r="2.5"
+    fill="none"
+    stroke="white"
+    stroke-width="2"/>
+
+  <path
+    d="M3.5 20c.5-3.6 2.3-5.5 5.5-5.5
+      s5 1.9 5.5 5.5"
+    fill="none"
+    stroke="white"
+    stroke-width="2"
+    stroke-linecap="round"/>
+
+  <path
+    d="M15 14.5c2.8.2 4.5 1.8 5 4.5"
+    fill="none"
+    stroke="white"
+    stroke-width="2"
+    stroke-linecap="round"/>
+</svg>
+''';
+  }
+
+  // ------------------------------------------------------------
+  // INBOX SVG
+  // ------------------------------------------------------------
+
+  String _inboxSvg() {
+    return '''
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 24 24">
+  <path
+    d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11
+    A2.5 2.5 0 0 1 20 5.5v10
+    A2.5 2.5 0 0 1 17.5 18H14l-2 3-2-3H6.5
+    A2.5 2.5 0 0 1 4 15.5z"
+    fill="none"
+    stroke="white"
+    stroke-width="2"
+    stroke-linejoin="round"/>
+</svg>
+''';
+  }
+
+  // ------------------------------------------------------------
+  // PROFILE SVG
+  // ------------------------------------------------------------
+
+  String _profileSvg() {
+    return '''
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 24 24">
+  <circle
+    cx="12"
+    cy="8"
+    r="4"
+    fill="none"
+    stroke="white"
+    stroke-width="2"/>
+
+  <path
+    d="M4 21c.7-4.5 3.5-6.8 8-6.8s7.3 2.3 8 6.8"
+    fill="none"
+    stroke="white"
+    stroke-width="2"
+    stroke-linecap="round"/>
+</svg>
+''';
+  }
+
+  // ------------------------------------------------------------
+  // SEARCH SVG
+  // ------------------------------------------------------------
+
+  String _searchSvg() {
+    return '''
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 24 24">
+  <circle
+    cx="10.8"
+    cy="10.8"
+    r="6.5"
+    fill="none"
+    stroke="white"
+    stroke-width="2"/>
+
+  <path
+    d="M16 16l5 5"
+    fill="none"
+    stroke="white"
+    stroke-width="2"
+    stroke-linecap="round"/>
+</svg>
+''';
+  }
+
+  // ------------------------------------------------------------
+  // UPLOAD SVG
+  // ------------------------------------------------------------
+
+  String _uploadSvg() {
+    return '''
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 40 40">
+
+  <rect
+    x="5"
+    y="4"
+    width="30"
+    height="32"
+    rx="9"
+    fill="white"/>
+
+  <path
+    d="M20 12v16M12 20h16"
+    stroke="black"
+    stroke-width="3"
+    stroke-linecap="round"/>
+</svg>
+''';
+  }
+
+  // ------------------------------------------------------------
+  // ACTION BUTTON
+  // ------------------------------------------------------------
 
   Widget _actionButton({
     required Widget icon,
@@ -244,22 +535,26 @@ fill="none" stroke="white" stroke-width="2"/>
     bool active = false,
   }) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 21),
+        padding: const EdgeInsets.only(bottom: 18),
         child: Column(
           children: [
             AnimatedScale(
               scale: active ? 1.12 : 1.0,
-              duration: const Duration(milliseconds: 150),
+              duration:
+                  const Duration(milliseconds: 160),
               child: icon,
             ),
-            const SizedBox(height: 5),
+
+            const SizedBox(height: 4),
+
             Text(
               label,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 13,
+                fontSize: 12.5,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -269,12 +564,19 @@ fill="none" stroke="white" stroke-width="2"/>
     );
   }
 
+  // ------------------------------------------------------------
+  // VIDEO FEED
+  // ------------------------------------------------------------
+
   Widget _videoFeed() {
     return PageView.builder(
       scrollDirection: Axis.vertical,
       itemCount: _videos.length,
+
       onPageChanged: (index) {
-        for (int i = 0; i < _controllers.length; i++) {
+        for (int i = 0;
+            i < _controllers.length;
+            i++) {
           if (i == index) {
             _controllers[i].play();
           } else {
@@ -282,21 +584,28 @@ fill="none" stroke="white" stroke-width="2"/>
           }
         }
       },
+
       itemBuilder: (context, index) {
         final controller = _controllers[index];
 
         return Stack(
           fit: StackFit.expand,
           children: [
-            Container(color: Colors.black),
+            // Background
+            Container(
+              color: Colors.black,
+            ),
 
+            // Video
             if (controller.value.isInitialized)
               Center(
                 child: FittedBox(
                   fit: BoxFit.cover,
                   child: SizedBox(
-                    width: controller.value.size.width,
-                    height: controller.value.size.height,
+                    width:
+                        controller.value.size.width,
+                    height:
+                        controller.value.size.height,
                     child: VideoPlayer(controller),
                   ),
                 ),
@@ -308,7 +617,7 @@ fill="none" stroke="white" stroke-width="2"/>
                 ),
               ),
 
-            // কালো/গ্রেডিয়েন্ট overlay
+            // Gradient
             Positioned.fill(
               child: IgnorePointer(
                 child: DecoratedBox(
@@ -317,9 +626,14 @@ fill="none" stroke="white" stroke-width="2"/>
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        Colors.black.withOpacity(.35),
+                        Colors.black.withOpacity(.30),
                         Colors.transparent,
-                        Colors.black.withOpacity(.65),
+                        Colors.black.withOpacity(.78),
+                      ],
+                      stops: const [
+                        0.0,
+                        0.45,
+                        1.0,
                       ],
                     ),
                   ),
@@ -327,9 +641,12 @@ fill="none" stroke="white" stroke-width="2"/>
               ),
             ),
 
-            // PALOK logo
+            // --------------------------------------------------
+            // PALOK LOGO
+            // --------------------------------------------------
+
             const Positioned(
-              top: 48,
+              top: 38,
               left: 0,
               right: 0,
               child: Center(
@@ -337,7 +654,7 @@ fill="none" stroke="white" stroke-width="2"/>
                   'PALOK',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 28,
+                    fontSize: 27,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 5,
                   ),
@@ -345,87 +662,130 @@ fill="none" stroke="white" stroke-width="2"/>
               ),
             ),
 
-            // Top tabs
+            // --------------------------------------------------
+            // TOP TABS
+            // --------------------------------------------------
+
             Positioned(
-              top: 105,
+              top: 88,
               left: 0,
               right: 0,
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment:
+                    MainAxisAlignment.center,
                 children: [
-                  _topTab('For You', 0),
+                  _topTab(
+                    'For You',
+                    0,
+                  ),
+
                   const SizedBox(width: 28),
-                  _topTab('Following', 1),
+
+                  _topTab(
+                    'Following',
+                    1,
+                  ),
+
                   const SizedBox(width: 20),
+
                   GestureDetector(
+                    behavior:
+                        HitTestBehavior.opaque,
                     onTap: () {
                       setState(() {
                         _topIndex = 2;
                       });
+
+                      for (final c
+                          in _controllers) {
+                        c.pause();
+                      }
                     },
-                    child: const Icon(
-                      Icons.search,
-                      color: Colors.white,
-                      size: 27,
+                    child: SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: _svgIcon(
+                        path: _searchSvg(),
+                        size: 27,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
 
-            // Right action buttons
+            // --------------------------------------------------
+            // RIGHT ACTIONS
+            // --------------------------------------------------
+
             Positioned(
-              right: 14,
-              bottom: 145,
+              right: 10,
+              bottom: 125,
               child: Column(
                 children: [
+                  // Follow
                   _actionButton(
                     icon: _svgIcon(
                       path: _personSvg(),
-                      active: _followed[index],
+                      active:
+                          _followed[index],
                       size: 43,
                     ),
-                    label: _followed[index] ? 'Following' : 'Follow',
-                    active: _followed[index],
-                    onTap: () => _toggleFollow(index),
+                    label: _followed[index]
+                        ? 'Following'
+                        : 'Follow',
+                    active:
+                        _followed[index],
+                    onTap: () =>
+                        _toggleFollow(index),
                   ),
 
+                  // Like
                   _actionButton(
                     icon: _svgIcon(
                       path: _heartSvg(),
-                      active: _liked[index],
+                      active:
+                          _liked[index],
                       size: 43,
                     ),
                     label: 'Like',
-                    active: _liked[index],
-                    onTap: () => _toggleLike(index),
+                    active:
+                        _liked[index],
+                    onTap: () =>
+                        _toggleLike(index),
                   ),
 
+                  // Comment
                   _actionButton(
                     icon: _svgIcon(
                       path: _commentSvg(),
-                      active: false,
                       size: 43,
                     ),
                     label: 'Comment',
                     onTap: _showComments,
                   ),
 
+                  // Save
                   _actionButton(
                     icon: _svgIcon(
                       path: _bookmarkSvg(),
-                      active: _saved[index],
+                      active:
+                          _saved[index],
                       size: 43,
                     ),
-                    label: 'Save',
-                    active: _saved[index],
-                    onTap: () => _toggleSave(index),
+                    label: _saved[index]
+                        ? 'Saved'
+                        : 'Save',
+                    active:
+                        _saved[index],
+                    onTap: () =>
+                        _toggleSave(index),
                   ),
 
+                  // Share
                   _actionButton(
                     icon: _svgIcon(
                       path: _shareSvg(),
-                      active: false,
                       size: 43,
                     ),
                     label: 'Share',
@@ -435,13 +795,17 @@ fill="none" stroke="white" stroke-width="2"/>
               ),
             ),
 
-            // Caption
+            // --------------------------------------------------
+            // CAPTION
+            // --------------------------------------------------
+
             Positioned(
-              left: 18,
-              right: 100,
-              bottom: 108,
+              left: 16,
+              right: 92,
+              bottom: 92,
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
@@ -450,32 +814,46 @@ fill="none" stroke="white" stroke-width="2"/>
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 17,
-                          fontWeight: FontWeight.bold,
+                          fontWeight:
+                              FontWeight.bold,
                         ),
                       ),
+
                       const SizedBox(width: 8),
+
                       GestureDetector(
-                        onTap: () => _toggleFollow(index),
+                        onTap: () =>
+                            _toggleFollow(index),
                         child: Text(
-                          _followed[index] ? 'Following' : 'Follow',
-                          style: const TextStyle(
+                          _followed[index]
+                              ? 'Following'
+                              : 'Follow',
+                          style:
+                              const TextStyle(
                             color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            fontWeight:
+                                FontWeight.bold,
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+
+                  const SizedBox(height: 8),
+
                   const Text(
                     'Welcome to PALOK 🎬',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 16,
+                      fontWeight:
+                          FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(height: 7),
+
+                  const SizedBox(height: 6),
+
                   const Text(
                     '#Palok #ShortVideo #Bangladesh',
                     style: TextStyle(
@@ -492,14 +870,29 @@ fill="none" stroke="white" stroke-width="2"/>
     );
   }
 
-  Widget _topTab(String title, int index) {
-    final selected = _topIndex == index;
+  // ------------------------------------------------------------
+  // TOP TAB
+  // ------------------------------------------------------------
+
+  Widget _topTab(
+    String title,
+    int index,
+  ) {
+    final selected =
+        _topIndex == index;
 
     return GestureDetector(
       onTap: () {
         setState(() {
           _topIndex = index;
         });
+
+        if (index == 0 ||
+            index == 1) {
+          if (_controllers.isNotEmpty) {
+            _controllers.first.play();
+          }
+        }
       },
       child: Column(
         children: [
@@ -508,26 +901,43 @@ fill="none" stroke="white" stroke-width="2"/>
             style: TextStyle(
               color: Colors.white,
               fontSize: 16,
-              fontWeight:
-                  selected ? FontWeight.bold : FontWeight.normal,
+              fontWeight: selected
+                  ? FontWeight.bold
+                  : FontWeight.normal,
             ),
           ),
+
           const SizedBox(height: 5),
+
           AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
+            duration:
+                const Duration(milliseconds: 200),
             height: 2,
             width: selected ? 35 : 0,
-            color: Colors.white,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius:
+                  BorderRadius.circular(10),
+            ),
           ),
         ],
       ),
     );
   }
 
+  // ------------------------------------------------------------
+  // SEARCH PAGE
+  // ------------------------------------------------------------
+
   Widget _searchPage() {
     return Container(
       color: Colors.black,
-      padding: const EdgeInsets.fromLTRB(18, 55, 18, 20),
+      padding: const EdgeInsets.fromLTRB(
+        16,
+        35,
+        16,
+        20,
+      ),
       child: Column(
         children: [
           Row(
@@ -537,31 +947,74 @@ fill="none" stroke="white" stroke-width="2"/>
                   setState(() {
                     _topIndex = 0;
                   });
+
+                  if (_controllers.isNotEmpty) {
+                    _controllers.first.play();
+                  }
                 },
-                child: const Icon(
-                  Icons.arrow_back,
-                  color: Colors.white,
+                child: _svgIcon(
+                  path: '''
+<svg xmlns="http://www.w3.org/2000/svg"
+viewBox="0 0 24 24">
+<path d="M15 18l-6-6 6-6"
+fill="none"
+stroke="white"
+stroke-width="2"
+stroke-linecap="round"
+stroke-linejoin="round"/>
+</svg>
+''',
+                  size: 28,
                 ),
               ),
-              const SizedBox(width: 15),
+
+              const SizedBox(width: 12),
+
               Expanded(
                 child: TextField(
-                  controller: _searchController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'Search on PALOK',
-                    hintStyle: const TextStyle(color: Colors.grey),
-                    prefixIcon: const Icon(
-                      Icons.search,
+                  controller:
+                      _searchController,
+                  autofocus: true,
+                  style: const TextStyle(
+                    color: Colors.white,
+                  ),
+                  decoration:
+                      InputDecoration(
+                    hintText:
+                        'Search on PALOK',
+                    hintStyle:
+                        const TextStyle(
                       color: Colors.grey,
                     ),
+                    prefixIcon:
+                        Padding(
+                      padding:
+                          const EdgeInsets.all(12),
+                      child: _svgIcon(
+                        path:
+                            _searchSvg(),
+                        size: 22,
+                      ),
+                    ),
                     filled: true,
-                    fillColor: Colors.white12,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(30),
-                      borderSide: BorderSide.none,
+                    fillColor:
+                        Colors.white12,
+                    border:
+                        OutlineInputBorder(
+                      borderRadius:
+                          BorderRadius.circular(
+                              30),
+                      borderSide:
+                          BorderSide.none,
                     ),
                   ),
+                  onSubmitted: (value) {
+                    if (value.trim().isNotEmpty) {
+                      _showMessage(
+                        'Search: $value',
+                      );
+                    }
+                  },
                 ),
               ),
             ],
@@ -571,19 +1024,28 @@ fill="none" stroke="white" stroke-width="2"/>
     );
   }
 
-  Widget _simplePage(String title, IconData icon) {
+  // ------------------------------------------------------------
+  // SIMPLE PAGE
+  // ------------------------------------------------------------
+
+  Widget _simplePage(
+    String title,
+    String svg,
+  ) {
     return Container(
       color: Colors.black,
       child: Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment:
+              MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              color: Colors.white,
-              size: 65,
+            _svgIcon(
+              path: svg,
+              size: 70,
             ),
+
             const SizedBox(height: 18),
+
             Text(
               title,
               style: const TextStyle(
@@ -598,94 +1060,159 @@ fill="none" stroke="white" stroke-width="2"/>
     );
   }
 
+  // ------------------------------------------------------------
+  // BOTTOM NAVIGATION
+  // ------------------------------------------------------------
+
   Widget _bottomNav() {
     return Container(
-      height: 76,
+      height: 70,
       decoration: const BoxDecoration(
         color: Colors.black,
         border: Border(
           top: BorderSide(
             color: Colors.white12,
-            width: .5,
+            width: .6,
           ),
         ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        mainAxisAlignment:
+            MainAxisAlignment.spaceAround,
         children: [
-          _navItem(Icons.home_rounded, 'Home', 0),
-          _navItem(Icons.people_alt_rounded, 'Friends', 1),
+          // Home
+          _navItem(
+            _homeSvg(),
+            'Home',
+            0,
+          ),
 
-          // Upload button
+          // Friends
+          _navItem(
+            _friendsSvg(),
+            'Friends',
+            1,
+          ),
+
+          // Upload
           GestureDetector(
+            behavior:
+                HitTestBehavior.opaque,
             onTap: () {
               setState(() {
                 _bottomIndex = 2;
               });
 
-              _showMessage('Upload screen প্রস্তুত');
+              for (final controller
+                  in _controllers) {
+                controller.pause();
+              }
             },
-            child: Container(
-              width: 48,
-              height: 34,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xff25F4EE),
-                    Colors.white,
-                    Color(0xffFE2C55),
-                  ],
+            child: Column(
+              mainAxisAlignment:
+                  MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 48,
+                  height: 36,
+                  child: _svgIcon(
+                    path: _uploadSvg(),
+                    size: 48,
+                  ),
                 ),
-              ),
-              child: const Center(
-                child: Icon(
-                  Icons.add,
-                  color: Colors.black,
-                  size: 28,
+
+                const SizedBox(height: 1),
+
+                const Text(
+                  'Upload',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight:
+                        FontWeight.w600,
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
 
-          _navItem(Icons.chat_bubble_rounded, 'Inbox', 3),
-          _navItem(Icons.person_rounded, 'Profile', 4),
+          // Inbox
+          _navItem(
+            _inboxSvg(),
+            'Inbox',
+            3,
+          ),
+
+          // Profile
+          _navItem(
+            _profileSvg(),
+            'Profile',
+            4,
+          ),
         ],
       ),
     );
   }
 
+  // ------------------------------------------------------------
+  // BOTTOM NAV ITEM
+  // ------------------------------------------------------------
+
   Widget _navItem(
-    IconData icon,
+    String svg,
     String label,
     int index,
   ) {
-    final active = _bottomIndex == index;
+    final active =
+        _bottomIndex == index;
 
     return GestureDetector(
+      behavior:
+          HitTestBehavior.opaque,
       onTap: () {
         setState(() {
           _bottomIndex = index;
         });
+
+        if (index != 0) {
+          for (final controller
+              in _controllers) {
+            controller.pause();
+          }
+        } else {
+          if (_controllers.isNotEmpty) {
+            _controllers.first.play();
+          }
+        }
       },
       child: SizedBox(
         width: 65,
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment:
+              MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              color: active ? Colors.white : Colors.grey,
-              size: 25,
+            AnimatedScale(
+              scale: active ? 1.08 : 1.0,
+              duration:
+                  const Duration(milliseconds: 150),
+              child: _svgIcon(
+                path: svg,
+                size: 25,
+              ),
             ),
-            const SizedBox(height: 4),
+
+            const SizedBox(height: 3),
+
             Text(
               label,
               style: TextStyle(
-                color: active ? Colors.white : Colors.grey,
+                color: active
+                    ? Colors.white
+                    : Colors.grey,
                 fontSize: 11,
-                fontWeight:
-                    active ? FontWeight.bold : FontWeight.normal,
+                fontWeight: active
+                    ? FontWeight.bold
+                    : FontWeight.normal,
               ),
             ),
           ],
@@ -694,51 +1221,66 @@ fill="none" stroke="white" stroke-width="2"/>
     );
   }
 
+  // ------------------------------------------------------------
+  // CURRENT PAGE
+  // ------------------------------------------------------------
+
   Widget _currentPage() {
+    // Friends
     if (_bottomIndex == 1) {
       return _simplePage(
         'Friends',
-        Icons.people_alt_rounded,
+        _friendsSvg(),
       );
     }
 
+    // Upload
     if (_bottomIndex == 2) {
       return _simplePage(
         'Upload Video',
-        Icons.add_circle_outline,
+        _uploadSvg(),
       );
     }
 
+    // Inbox
     if (_bottomIndex == 3) {
       return _simplePage(
         'Inbox',
-        Icons.chat_bubble_outline,
+        _inboxSvg(),
       );
     }
 
+    // Profile
     if (_bottomIndex == 4) {
       return _simplePage(
         'Profile',
-        Icons.person_outline,
+        _profileSvg(),
       );
     }
 
-    // Home
+    // Search
     if (_topIndex == 2) {
       return _searchPage();
     }
 
+    // Home
     return _videoFeed();
   }
+
+  // ------------------------------------------------------------
+  // BUILD
+  // ------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+
       body: SafeArea(
         bottom: false,
         child: _currentPage(),
       ),
+
       bottomNavigationBar: SafeArea(
         top: false,
         child: _bottomNav(),
