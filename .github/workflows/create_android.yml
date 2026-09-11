@@ -1,0 +1,52 @@
+name: Create Palok Android Project
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  create-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create Android project structure
+        run: |
+          set -e
+
+          rm -rf mobile_generated
+
+          flutter create \
+            --platforms=android \
+            --org com.palok \
+            --project-name app \
+            mobile_generated
+
+          rm -rf mobile_generated/lib
+          cp -R mobile/lib mobile_generated/lib
+
+          cp mobile/pubspec.yaml mobile_generated/pubspec.yaml
+
+          rm -rf mobile/android
+          cp -R mobile_generated/android mobile/android
+
+      - name: Commit Android project
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add mobile/android
+
+          git commit -m "Create Palok Android project structure" || echo "No changes to commit"
+
+          git push
