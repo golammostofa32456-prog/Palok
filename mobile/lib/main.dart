@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'home_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    debugPrint('Firebase error: $e');
+  }
 
   runApp(const PalokApp());
 }
@@ -19,73 +24,12 @@ class PalokApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Palok',
+      title: 'PALOK',
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: Colors.black,
         useMaterial3: true,
       ),
-      home: const PalokHomePage(),
-    );
-  }
-}
-
-class PalokHomePage extends StatelessWidget {
-  const PalokHomePage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFF151515),
-                  Colors.black,
-                ],
-              ),
-            ),
-          ),
-          const Center(
-            child: Text(
-              'PALOK',
-              style: TextStyle(
-                fontSize: 38,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 6,
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                vertical: 18,
-                horizontal: 20,
-              ),
-              decoration: const BoxDecoration(
-                color: Colors.black87,
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  Icon(Icons.home, size: 28),
-                  Icon(Icons.search, size: 28),
-                  Icon(Icons.add_circle, size: 42),
-                  Icon(Icons.notifications_none, size: 28),
-                  Icon(Icons.person_outline, size: 28),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+      home: const HomeScreen(),
     );
   }
 }
