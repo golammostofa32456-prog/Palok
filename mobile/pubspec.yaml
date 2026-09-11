@@ -30,3 +30,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+dependencies:
+  flutter:
+    sdk: flutter
+  video_player: ^2.9.5
+  flutter_svg: ^2.0.17
