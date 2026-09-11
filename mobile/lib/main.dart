@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   runApp(const PalokApp());
 }
 
@@ -42,7 +50,6 @@ class PalokHomePage extends StatelessWidget {
               ),
             ),
           ),
-
           const Center(
             child: Text(
               'PALOK',
@@ -53,7 +60,6 @@ class PalokHomePage extends StatelessWidget {
               ),
             ),
           ),
-
           Positioned(
             bottom: 0,
             left: 0,
