@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -27,6 +29,14 @@ class _HomeScreenState extends State<HomeScreen>
   late Animation<double> _logoOpacity;
 
   // ================================================================
+  // FIREBASE
+  // ================================================================
+  final FirebaseFirestore _firestore =
+      FirebaseFirestore.instance;
+
+  String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+
+  // ================================================================
   // VIDEOS
   // ================================================================
   final List<String> videoUrls = [
@@ -44,7 +54,9 @@ class _HomeScreenState extends State<HomeScreen>
 
   bool _following = false;
 
-  // Base counts
+  // ================================================================
+  // COUNTS
+  // ================================================================
   final List<int> _likeCounts = [11700, 8500];
   final List<int> _commentCounts = [234, 128];
   final List<int> _saveCounts = [811, 452];
@@ -56,6 +68,9 @@ class _HomeScreenState extends State<HomeScreen>
   final TextEditingController _commentController =
       TextEditingController();
 
+  // ================================================================
+  // INIT
+  // ================================================================
   @override
   void initState() {
     super.initState();
@@ -63,7 +78,7 @@ class _HomeScreenState extends State<HomeScreen>
     _pageController = PageController();
 
     // ============================================================
-    // PALOK LOGO ANIMATION
+    // LOGO ANIMATION
     // ============================================================
     _logoAnimationController = AnimationController(
       vsync: this,
@@ -93,8 +108,21 @@ class _HomeScreenState extends State<HomeScreen>
     // ============================================================
     // LOAD VIDEOS
     // ============================================================
+    _loadVideos();
+
+    // ============================================================
+    // LOAD USER STATE
+    // ============================================================
+    _loadFirebaseState();
+  }
+
+  // ================================================================
+  // LOAD VIDEOS
+  // ================================================================
+  void _loadVideos() {
     for (final url in videoUrls) {
-      final controller = VideoPlayerController.networkUrl(
+      final controller =
+          VideoPlayerController.networkUrl(
         Uri.parse(url),
       );
 
@@ -106,14 +134,76 @@ class _HomeScreenState extends State<HomeScreen>
         setState(() {});
 
         controller
-          ..setLooping(true)
-          ..play();
+          ..setLooping(true);
+
+        // প্রথম ভিডিও Auto Play
+        if (_videoControllers.indexOf(controller) == 0) {
+          controller.play();
+        }
       }).catchError((error) {
-        debugPrint('Video loading error: $error');
+        debugPrint(
+          'Video loading error: $error',
+        );
       });
     }
   }
 
+  // ================================================================
+  // LOAD FIREBASE STATE
+  // ================================================================
+  Future<void> _loadFirebaseState() async {
+    final uid = _uid;
+
+    if (uid == null) return;
+
+    try {
+      for (int i = 0; i < videoUrls.length; i++) {
+        final videoId = 'demo_video_$i';
+
+        final likeDoc = await _firestore
+            .collection('videos')
+            .doc(videoId)
+            .collection('likes')
+            .doc(uid)
+            .get();
+
+        final saveDoc = await _firestore
+            .collection('videos')
+            .doc(videoId)
+            .collection('saves')
+            .doc(uid)
+            .get();
+
+        if (!mounted) return;
+
+        setState(() {
+          _liked[i] = likeDoc.exists;
+          _saved[i] = saveDoc.exists;
+        });
+      }
+
+      final followDoc = await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('following')
+          .doc('palok_user')
+          .get();
+
+      if (!mounted) return;
+
+      setState(() {
+        _following = followDoc.exists;
+      });
+    } catch (e) {
+      debugPrint(
+        'Firebase state loading error: $e',
+      );
+    }
+  }
+
+  // ================================================================
+  // DISPOSE
+  // ================================================================
   @override
   void dispose() {
     _pageController.dispose();
@@ -148,74 +238,203 @@ class _HomeScreenState extends State<HomeScreen>
   // VIDEO CHANGE
   // ================================================================
   void _onVideoChanged(int index) {
-    for (int i = 0; i < _videoControllers.length; i++) {
-      if (!_videoControllers[i].value.isInitialized) {
+    for (int i = 0;
+        i < _videoControllers.length;
+        i++) {
+      final controller = _videoControllers[i];
+
+      if (!controller.value.isInitialized) {
         continue;
       }
 
       if (i == index) {
-        _videoControllers[i].play();
+        controller.play();
       } else {
-        _videoControllers[i].pause();
+        controller.pause();
       }
     }
 
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  // ================================================================
+  // VIDEO PLAY / PAUSE
+  // ================================================================
+  void _toggleVideo(int index) {
+    final controller = _videoControllers[index];
+
+    if (!controller.value.isInitialized) {
+      return;
+    }
+
+    setState(() {
+      if (controller.value.isPlaying) {
+        controller.pause();
+      } else {
+        controller.play();
+      }
+    });
   }
 
   // ================================================================
   // LIKE
   // ================================================================
-  void _toggleLike() {
+  Future<void> _toggleLike() async {
     final index = _currentVideo;
+    final uid = _uid;
+
+    if (uid == null) return;
+
+    final videoId = 'demo_video_$index';
+
+    final wasLiked = _liked[index];
 
     setState(() {
-      _liked[index] = !_liked[index];
+      _liked[index] = !wasLiked;
 
       if (_liked[index]) {
         _likeCounts[index]++;
-      } else {
+      } else if (_likeCounts[index] > 0) {
         _likeCounts[index]--;
       }
     });
+
+    try {
+      final likeRef = _firestore
+          .collection('videos')
+          .doc(videoId)
+          .collection('likes')
+          .doc(uid);
+
+      if (!wasLiked) {
+        await likeRef.set({
+          'uid': uid,
+          'createdAt':
+              FieldValue.serverTimestamp(),
+        });
+      } else {
+        await likeRef.delete();
+      }
+
+      await _firestore
+          .collection('videos')
+          .doc(videoId)
+          .set({
+        'likeCount': _likeCounts[index],
+        'updatedAt':
+            FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint(
+        'Like error: $e',
+      );
+    }
   }
 
   // ================================================================
   // SAVE
   // ================================================================
-  void _toggleSave() {
+  Future<void> _toggleSave() async {
     final index = _currentVideo;
+    final uid = _uid;
+
+    if (uid == null) return;
+
+    final videoId = 'demo_video_$index';
+
+    final wasSaved = _saved[index];
 
     setState(() {
-      _saved[index] = !_saved[index];
+      _saved[index] = !wasSaved;
 
       if (_saved[index]) {
         _saveCounts[index]++;
-      } else {
+      } else if (_saveCounts[index] > 0) {
         _saveCounts[index]--;
       }
     });
 
-    _showMessage(
-      _saved[index]
-          ? 'ভিডিওটি Saved হয়েছে'
-          : 'ভিডিওটি Unsave করা হয়েছে',
-    );
+    try {
+      final saveRef = _firestore
+          .collection('videos')
+          .doc(videoId)
+          .collection('saves')
+          .doc(uid);
+
+      if (!wasSaved) {
+        await saveRef.set({
+          'uid': uid,
+          'createdAt':
+              FieldValue.serverTimestamp(),
+        });
+      } else {
+        await saveRef.delete();
+      }
+
+      await _firestore
+          .collection('videos')
+          .doc(videoId)
+          .set({
+        'saveCount': _saveCounts[index],
+        'updatedAt':
+            FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      _showMessage(
+        _saved[index]
+            ? 'ভিডিওটি Saved হয়েছে'
+            : 'ভিডিওটি Unsave করা হয়েছে',
+      );
+    } catch (e) {
+      debugPrint(
+        'Save error: $e',
+      );
+    }
   }
 
   // ================================================================
   // FOLLOW
   // ================================================================
-  void _toggleFollow() {
+  Future<void> _toggleFollow() async {
+    final uid = _uid;
+
+    if (uid == null) return;
+
+    final wasFollowing = _following;
+
     setState(() {
-      _following = !_following;
+      _following = !wasFollowing;
     });
 
-    _showMessage(
-      _following
-          ? '@palok_user কে Follow করা হয়েছে'
-          : '@palok_user কে Unfollow করা হয়েছে',
-    );
+    try {
+      final followRef = _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('following')
+          .doc('palok_user');
+
+      if (!wasFollowing) {
+        await followRef.set({
+          'username': '@palok_user',
+          'createdAt':
+              FieldValue.serverTimestamp(),
+        });
+      } else {
+        await followRef.delete();
+      }
+
+      _showMessage(
+        _following
+            ? '@palok_user কে Follow করা হয়েছে'
+            : '@palok_user কে Unfollow করা হয়েছে',
+      );
+    } catch (e) {
+      debugPrint(
+        'Follow error: $e',
+      );
+    }
   }
 
   // ================================================================
@@ -229,31 +448,50 @@ class _HomeScreenState extends State<HomeScreen>
         'PALOK Short Video\n'
         '${videoUrls[index]}';
 
-    await Clipboard.setData(
-      ClipboardData(text: shareText),
-    );
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          text: shareText,
+        ),
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _shareCounts[index]++;
-    });
+      setState(() {
+        _shareCounts[index]++;
+      });
 
-    _showMessage(
-      'ভিডিওর Share link কপি হয়েছে',
-    );
+      final uid = _uid;
+
+      if (uid != null) {
+        await _firestore
+            .collection('videos')
+            .doc('demo_video_$index')
+            .set({
+          'shareCount':
+              _shareCounts[index],
+          'updatedAt':
+              FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      debugPrint(
+        'Share error: $e',
+      );
+    }
   }
 
   // ================================================================
   // SEARCH
   // ================================================================
   void _openSearch() {
-    final TextEditingController searchController =
+    final TextEditingController
+        searchController =
         TextEditingController();
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           backgroundColor: Colors.black,
           title: const Text(
@@ -269,7 +507,8 @@ class _HomeScreenState extends State<HomeScreen>
               color: Colors.white,
             ),
             decoration: InputDecoration(
-              hintText: 'Search videos, users...',
+              hintText:
+                  'Search videos, users...',
               hintStyle: TextStyle(
                 color: Colors.grey.shade400,
               ),
@@ -277,24 +516,29 @@ class _HomeScreenState extends State<HomeScreen>
                 Icons.search,
                 color: Colors.white,
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
+              enabledBorder:
+                  OutlineInputBorder(
+                borderRadius:
+                    BorderRadius.circular(12),
+                borderSide:
+                    const BorderSide(
                   color: Colors.white54,
                 ),
               ),
-              focusedBorder: const OutlineInputBorder(
-                borderSide: BorderSide(
+              focusedBorder:
+                  const OutlineInputBorder(
+                borderSide:
+                    BorderSide(
                   color: Colors.white,
                 ),
               ),
             ),
             onSubmitted: (value) {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
 
               if (value.trim().isNotEmpty) {
-                _showMessage(
-                  'Searching for "$value"',
+                _performSearch(
+                  value.trim(),
                 );
               }
             },
@@ -302,7 +546,7 @@ class _HomeScreenState extends State<HomeScreen>
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(context);
+                Navigator.pop(dialogContext);
               },
               child: const Text(
                 'Cancel',
@@ -314,14 +558,13 @@ class _HomeScreenState extends State<HomeScreen>
             TextButton(
               onPressed: () {
                 final value =
-                    searchController.text.trim();
+                    searchController.text
+                        .trim();
 
-                Navigator.pop(context);
+                Navigator.pop(dialogContext);
 
                 if (value.isNotEmpty) {
-                  _showMessage(
-                    'Searching for "$value"',
-                  );
+                  _performSearch(value);
                 }
               },
               child: const Text(
@@ -338,10 +581,58 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // ================================================================
+  // PERFORM SEARCH
+  // ================================================================
+  Future<void> _performSearch(
+    String query,
+  ) async {
+    _showMessage(
+      'Searching for "$query"...',
+    );
+
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .where(
+            'username',
+            isGreaterThanOrEqualTo: query,
+          )
+          .where(
+            'username',
+            isLessThanOrEqualTo:
+                '$query\uf8ff',
+          )
+          .limit(20)
+          .get();
+
+      if (!mounted) return;
+
+      if (snapshot.docs.isEmpty) {
+        _showMessage(
+          'কোনো user পাওয়া যায়নি',
+        );
+      } else {
+        _showMessage(
+          '${snapshot.docs.length} জন user পাওয়া গেছে',
+        );
+      }
+    } catch (e) {
+      debugPrint(
+        'Search error: $e',
+      );
+
+      _showMessage(
+        'Search করতে সমস্যা হয়েছে',
+      );
+    }
+  }
+
+  // ================================================================
   // COMMENTS
   // ================================================================
   void _openComments() {
     final index = _currentVideo;
+    final videoId = 'demo_video_$index';
 
     showModalBottomSheet(
       context: context,
@@ -352,194 +643,306 @@ class _HomeScreenState extends State<HomeScreen>
           top: Radius.circular(20),
         ),
       ),
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context)
-                .viewInsets
-                .bottom,
-          ),
-          child: SizedBox(
-            height: MediaQuery.of(context).size.height * 0.62,
-            child: Column(
-              children: [
-                // HEADER
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 14,
-                  ),
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Comments',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 19,
-                            fontWeight: FontWeight.w700,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(sheetContext)
+                  .viewInsets
+                  .bottom,
+            ),
+            child: SizedBox(
+              height:
+                  MediaQuery.of(sheetContext)
+                          .size
+                          .height *
+                      0.62,
+              child: Column(
+                children: [
+                  // HEADER
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 14,
+                    ),
+                    child: Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Comments',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 19,
+                              fontWeight:
+                                  FontWeight.w700,
+                            ),
                           ),
                         ),
-                      ),
-                      Text(
-                        '${_commentCounts[index]}',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 15,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.pop(context);
-                        },
-                        child: const Icon(
-                          Icons.close,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const Divider(
-                  color: Colors.white12,
-                  height: 1,
-                ),
-
-                // COMMENTS
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: const [
-                      _CommentItem(
-                        username: '@rahim',
-                        comment:
-                            'ভিডিওটা অনেক সুন্দর হয়েছে ❤️',
-                      ),
-                      _CommentItem(
-                        username: '@karim',
-                        comment:
-                            'PALOK অনেক ভালো লাগছে 🔥',
-                      ),
-                      _CommentItem(
-                        username: '@user123',
-                        comment:
-                            'Nice video!',
-                      ),
-                    ],
-                  ),
-                ),
-
-                // COMMENT INPUT
-                Container(
-                  padding: const EdgeInsets.fromLTRB(
-                    14,
-                    10,
-                    10,
-                    10,
-                  ),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF111111),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _commentController,
+                        Text(
+                          '${_commentCounts[index]}',
                           style: const TextStyle(
-                            color: Colors.white,
-                          ),
-                          decoration:
-                              InputDecoration(
-                            hintText:
-                                'Add a comment...',
-                            hintStyle:
-                                const TextStyle(
-                              color: Colors.white54,
-                            ),
-                            filled: true,
-                            fillColor:
-                                Colors.white10,
-                            border:
-                                OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.circular(
-                                      25),
-                              borderSide:
-                                  BorderSide.none,
-                            ),
-                            contentPadding:
-                                const EdgeInsets
-                                    .symmetric(
-                              horizontal: 18,
-                              vertical: 11,
-                            ),
+                            color: Colors.white70,
+                            fontSize: 15,
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: () {
-                          if (_commentController
-                              .text
-                              .trim()
-                              .isEmpty) {
-                            return;
-                          }
+                        const SizedBox(width: 12),
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.pop(
+                              sheetContext,
+                            );
+                          },
+                          child: const Icon(
+                            Icons.close,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
 
-                          final comment =
-                              _commentController
-                                  .text
-                                  .trim();
+                  const Divider(
+                    color: Colors.white12,
+                    height: 1,
+                  ),
 
-                          _commentController.clear();
-
-                          setState(() {
-                            _commentCounts[index]++;
-                          });
-
-                          FocusScope.of(context)
-                              .unfocus();
-
-                          ScaffoldMessenger.of(
-                            context,
-                          ).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Comment added: $comment',
-                              ),
-                              duration:
-                                  const Duration(
-                                seconds: 2,
-                              ),
+                  // ==================================================
+                  // REAL-TIME COMMENTS
+                  // ==================================================
+                  Expanded(
+                    child: StreamBuilder<
+                        QuerySnapshot>(
+                      stream: _firestore
+                          .collection('videos')
+                          .doc(videoId)
+                          .collection(
+                              'comments')
+                          .orderBy(
+                            'createdAt',
+                            descending: true,
+                          )
+                          .snapshots(),
+                      builder:
+                          (context, snapshot) {
+                        if (snapshot
+                                .connectionState ==
+                            ConnectionState
+                                .waiting) {
+                          return const Center(
+                            child:
+                                CircularProgressIndicator(
+                              color: Colors.white,
                             ),
                           );
-                        },
-                        child: Container(
-                          width: 45,
-                          height: 45,
-                          decoration:
-                              const BoxDecoration(
-                            color: Colors.pink,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.send,
-                            color: Colors.white,
-                            size: 20,
+                        }
+
+                        final docs =
+                            snapshot.data?.docs ??
+                                [];
+
+                        if (docs.isEmpty) {
+                          return ListView(
+                            padding:
+                                const EdgeInsets
+                                    .all(16),
+                            children: const [
+                              _CommentItem(
+                                username:
+                                    '@rahim',
+                                comment:
+                                    'ভিডিওটা অনেক সুন্দর হয়েছে ❤️',
+                              ),
+                              _CommentItem(
+                                username:
+                                    '@karim',
+                                comment:
+                                    'PALOK অনেক ভালো লাগছে 🔥',
+                              ),
+                              _CommentItem(
+                                username:
+                                    '@user123',
+                                comment:
+                                    'Nice video!',
+                              ),
+                            ],
+                          );
+                        }
+
+                        return ListView.builder(
+                          padding:
+                              const EdgeInsets
+                                  .all(16),
+                          itemCount: docs.length,
+                          itemBuilder:
+                              (context, i) {
+                            final data =
+                                docs[i].data()
+                                    as Map<String,
+                                        dynamic>;
+
+                            return _CommentItem(
+                              username:
+                                  data['username'] ??
+                                      '@user',
+                              comment:
+                                  data['text'] ??
+                                      '',
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+
+                  // COMMENT INPUT
+                  Container(
+                    padding:
+                        const EdgeInsets.fromLTRB(
+                      14,
+                      10,
+                      10,
+                      10,
+                    ),
+                    decoration:
+                        const BoxDecoration(
+                      color: Color(0xFF111111),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller:
+                                _commentController,
+                            style:
+                                const TextStyle(
+                              color: Colors.white,
+                            ),
+                            decoration:
+                                InputDecoration(
+                              hintText:
+                                  'Add a comment...',
+                              hintStyle:
+                                  const TextStyle(
+                                color:
+                                    Colors.white54,
+                              ),
+                              filled: true,
+                              fillColor:
+                                  Colors.white10,
+                              border:
+                                  OutlineInputBorder(
+                                borderRadius:
+                                    BorderRadius
+                                        .circular(
+                                            25),
+                                borderSide:
+                                    BorderSide.none,
+                              ),
+                              contentPadding:
+                                  const EdgeInsets
+                                      .symmetric(
+                                horizontal: 18,
+                                vertical: 11,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () {
+                            _addComment(
+                              index,
+                              videoId,
+                              sheetContext,
+                            );
+                          },
+                          child: Container(
+                            width: 45,
+                            height: 45,
+                            decoration:
+                                const BoxDecoration(
+                              color: Colors.pink,
+                              shape:
+                                  BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.send,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
       },
     );
+  }
+
+  // ================================================================
+  // ADD COMMENT
+  // ================================================================
+  Future<void> _addComment(
+    int index,
+    String videoId,
+    BuildContext sheetContext,
+  ) async {
+    final uid = _uid;
+
+    final comment =
+        _commentController.text.trim();
+
+    if (uid == null || comment.isEmpty) {
+      return;
+    }
+
+    _commentController.clear();
+
+    FocusScope.of(sheetContext).unfocus();
+
+    try {
+      await _firestore
+          .collection('videos')
+          .doc(videoId)
+          .collection('comments')
+          .add({
+        'uid': uid,
+        'username': '@palok_user',
+        'text': comment,
+        'createdAt':
+            FieldValue.serverTimestamp(),
+      });
+
+      await _firestore
+          .collection('videos')
+          .doc(videoId)
+          .set({
+        'commentCount':
+            FieldValue.increment(1),
+        'updatedAt':
+            FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (!mounted) return;
+
+      setState(() {
+        _commentCounts[index]++;
+      });
+    } catch (e) {
+      debugPrint(
+        'Comment error: $e',
+      );
+
+      _showMessage(
+        'Comment যোগ করতে সমস্যা হয়েছে',
+      );
+    }
   }
 
   // ================================================================
@@ -557,35 +960,37 @@ class _HomeScreenState extends State<HomeScreen>
       builder: (context) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(22),
+            padding:
+                const EdgeInsets.all(22),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisSize:
+                  MainAxisSize.min,
               children: [
                 Container(
                   width: 45,
                   height: 4,
-                  decoration: BoxDecoration(
+                  decoration:
+                      BoxDecoration(
                     color: Colors.white30,
                     borderRadius:
-                        BorderRadius.circular(10),
+                        BorderRadius.circular(
+                            10),
                   ),
                 ),
-
                 const SizedBox(height: 24),
-
                 const Text(
                   'Create on PALOK',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 22,
-                    fontWeight: FontWeight.w700,
+                    fontWeight:
+                        FontWeight.w700,
                   ),
                 ),
-
                 const SizedBox(height: 22),
-
                 _createOption(
-                  icon: Icons.videocam_outlined,
+                  icon:
+                      Icons.videocam_outlined,
                   title: 'Record Video',
                   onTap: () {
                     Navigator.pop(context);
@@ -594,11 +999,10 @@ class _HomeScreenState extends State<HomeScreen>
                     );
                   },
                 ),
-
                 const SizedBox(height: 12),
-
                 _createOption(
-                  icon: Icons.photo_library_outlined,
+                  icon:
+                      Icons.photo_library_outlined,
                   title: 'Upload Video',
                   onTap: () {
                     Navigator.pop(context);
@@ -607,9 +1011,7 @@ class _HomeScreenState extends State<HomeScreen>
                     );
                   },
                 ),
-
                 const SizedBox(height: 12),
-
                 _createOption(
                   icon: Icons.music_note,
                   title: 'Add Sound',
@@ -620,7 +1022,6 @@ class _HomeScreenState extends State<HomeScreen>
                     );
                   },
                 ),
-
                 const SizedBox(height: 12),
               ],
             ),
@@ -639,13 +1040,15 @@ class _HomeScreenState extends State<HomeScreen>
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(
+        padding:
+            const EdgeInsets.symmetric(
           horizontal: 18,
           vertical: 16,
         ),
         decoration: BoxDecoration(
           color: Colors.white10,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius:
+              BorderRadius.circular(14),
         ),
         child: Row(
           children: [
@@ -669,7 +1072,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // ================================================================
-  // BOTTOM NAV ACTION
+  // BOTTOM NAV
   // ================================================================
   void _selectBottom(int index) {
     setState(() {
@@ -703,8 +1106,10 @@ class _HomeScreenState extends State<HomeScreen>
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
+          duration:
+              const Duration(seconds: 2),
+          behavior:
+              SnackBarBehavior.floating,
         ),
       );
   }
@@ -724,10 +1129,13 @@ class _HomeScreenState extends State<HomeScreen>
           // ========================================================
           PageView.builder(
             controller: _pageController,
-            scrollDirection: Axis.vertical,
+            scrollDirection:
+                Axis.vertical,
             itemCount: videoUrls.length,
-            onPageChanged: _onVideoChanged,
-            itemBuilder: (context, index) {
+            onPageChanged:
+                _onVideoChanged,
+            itemBuilder:
+                (context, index) {
               return _buildVideo(index);
             },
           ),
@@ -737,7 +1145,8 @@ class _HomeScreenState extends State<HomeScreen>
           // ========================================================
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.only(
+              padding:
+                  const EdgeInsets.only(
                 top: 10,
                 left: 18,
                 right: 18,
@@ -746,15 +1155,14 @@ class _HomeScreenState extends State<HomeScreen>
                 crossAxisAlignment:
                     CrossAxisAlignment.start,
                 children: [
-                  // ==================================================
-                  // PALOK LOGO
-                  // ==================================================
                   AnimatedBuilder(
                     animation:
                         _logoAnimationController,
-                    builder: (context, child) {
+                    builder:
+                        (context, child) {
                       return Transform.scale(
-                        scale: _logoScale.value,
+                        scale:
+                            _logoScale.value,
                         alignment:
                             Alignment.centerLeft,
                         child: Opacity(
@@ -764,52 +1172,50 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                       );
                     },
-                    child: _buildPalokLogo(),
+                    child:
+                        _buildPalokLogo(),
                   ),
 
                   const Spacer(),
 
-                  // ==================================================
-                  // FOR YOU
-                  // ==================================================
                   GestureDetector(
                     onTap: () {
                       setState(() {
                         _topIndex = 0;
                       });
 
-                      _showMessage('For You');
+                      _showMessage(
+                        'For You',
+                      );
                     },
                     child: _topTab(
                       title: 'For You',
-                      selected: _topIndex == 0,
+                      selected:
+                          _topIndex == 0,
                     ),
                   ),
 
                   const SizedBox(width: 28),
 
-                  // ==================================================
-                  // FOLLOWING
-                  // ==================================================
                   GestureDetector(
                     onTap: () {
                       setState(() {
                         _topIndex = 1;
                       });
 
-                      _showMessage('Following');
+                      _showMessage(
+                        'Following',
+                      );
                     },
                     child: _topTab(
                       title: 'Following',
-                      selected: _topIndex == 1,
+                      selected:
+                          _topIndex == 1,
                     ),
                   ),
 
                   const SizedBox(width: 24),
 
-                  // ==================================================
-                  // SEARCH
-                  // ==================================================
                   GestureDetector(
                     onTap: _openSearch,
                     child: const Icon(
@@ -829,7 +1235,8 @@ class _HomeScreenState extends State<HomeScreen>
           Positioned(
             right: 10,
             bottom: 116,
-            child: _buildRightButtons(),
+            child:
+                _buildRightButtons(),
           ),
 
           // ========================================================
@@ -839,7 +1246,8 @@ class _HomeScreenState extends State<HomeScreen>
             left: 18,
             right: 92,
             bottom: 124,
-            child: _buildVideoInformation(),
+            child:
+                _buildVideoInformation(),
           ),
 
           // ========================================================
@@ -851,7 +1259,8 @@ class _HomeScreenState extends State<HomeScreen>
             bottom: 0,
             child: SafeArea(
               top: false,
-              child: _buildBottomNavigation(),
+              child:
+                  _buildBottomNavigation(),
             ),
           ),
         ],
@@ -860,21 +1269,27 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // ================================================================
-  // PALOK LOGO
+  // LOGO
   // ================================================================
   Widget _buildPalokLogo() {
     return Row(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize:
+          MainAxisSize.min,
       children: [
         Container(
           width: 44,
           height: 44,
-          decoration: BoxDecoration(
+          decoration:
+              BoxDecoration(
             borderRadius:
-                BorderRadius.circular(13),
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+                BorderRadius.circular(
+                    13),
+            gradient:
+                const LinearGradient(
+              begin:
+                  Alignment.topLeft,
+              end:
+                  Alignment.bottomRight,
               colors: [
                 Colors.white,
                 Color(0xFFFF3B81),
@@ -882,7 +1297,8 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ),
           child: Stack(
-            alignment: Alignment.center,
+            alignment:
+                Alignment.center,
             children: [
               const Text(
                 'P',
@@ -909,11 +1325,13 @@ class _HomeScreenState extends State<HomeScreen>
                         width: 9,
                       ),
                       top: BorderSide(
-                        color: Colors.transparent,
+                        color:
+                            Colors.transparent,
                         width: 6,
                       ),
                       bottom: BorderSide(
-                        color: Colors.transparent,
+                        color:
+                            Colors.transparent,
                         width: 6,
                       ),
                     ),
@@ -923,15 +1341,14 @@ class _HomeScreenState extends State<HomeScreen>
             ],
           ),
         ),
-
         const SizedBox(width: 7),
-
         const Text(
           'Palok',
           style: TextStyle(
             color: Colors.white,
             fontSize: 24,
-            fontWeight: FontWeight.w800,
+            fontWeight:
+                FontWeight.w800,
             letterSpacing: -0.5,
           ),
         ),
@@ -958,18 +1375,21 @@ class _HomeScreenState extends State<HomeScreen>
                 : FontWeight.w400,
           ),
         ),
-
         const SizedBox(height: 7),
-
         AnimatedContainer(
           duration:
-              const Duration(milliseconds: 180),
-          width: selected ? 42 : 0,
+              const Duration(
+            milliseconds: 180,
+          ),
+          width:
+              selected ? 42 : 0,
           height: 3,
-          decoration: BoxDecoration(
+          decoration:
+              BoxDecoration(
             color: Colors.white,
             borderRadius:
-                BorderRadius.circular(10),
+                BorderRadius.circular(
+                    10),
           ),
         ),
       ],
@@ -977,20 +1397,21 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // ================================================================
-  // RIGHT SIDE BUTTONS
+  // RIGHT BUTTONS
   // ================================================================
   Widget _buildRightButtons() {
     final index = _currentVideo;
 
     return Column(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize:
+          MainAxisSize.min,
       children: [
-        // LIKE
         _actionButton(
           icon: _liked[index]
               ? Icons.favorite
               : Icons.favorite_border,
-          count: _formatCount(
+          count:
+              _formatCount(
             _likeCounts[index],
           ),
           active: _liked[index],
@@ -999,10 +1420,11 @@ class _HomeScreenState extends State<HomeScreen>
 
         const SizedBox(height: 25),
 
-        // COMMENT
         _actionButton(
-          icon: Icons.chat_bubble_outline,
-          count: _formatCount(
+          icon:
+              Icons.chat_bubble_outline,
+          count:
+              _formatCount(
             _commentCounts[index],
           ),
           onTap: _openComments,
@@ -1010,12 +1432,12 @@ class _HomeScreenState extends State<HomeScreen>
 
         const SizedBox(height: 25),
 
-        // SAVE
         _actionButton(
           icon: _saved[index]
               ? Icons.bookmark
               : Icons.bookmark_border,
-          count: _formatCount(
+          count:
+              _formatCount(
             _saveCounts[index],
           ),
           active: _saved[index],
@@ -1024,10 +1446,11 @@ class _HomeScreenState extends State<HomeScreen>
 
         const SizedBox(height: 25),
 
-        // SHARE
         _actionButton(
-          icon: Icons.share_outlined,
-          count: _formatCount(
+          icon:
+              Icons.share_outlined,
+          count:
+              _formatCount(
             _shareCounts[index],
           ),
           onTap: _shareVideo,
@@ -1035,22 +1458,25 @@ class _HomeScreenState extends State<HomeScreen>
 
         const SizedBox(height: 24),
 
-        // FOLLOW
         GestureDetector(
           onTap: _toggleFollow,
           child: SizedBox(
             width: 54,
             height: 62,
             child: Stack(
-              alignment: Alignment.topCenter,
+              alignment:
+                  Alignment.topCenter,
               children: [
                 Container(
                   width: 50,
                   height: 50,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
+                  decoration:
+                      BoxDecoration(
+                    shape:
+                        BoxShape.circle,
                     border: Border.all(
-                      color: Colors.white,
+                      color:
+                          Colors.white,
                       width: 1.8,
                     ),
                   ),
@@ -1058,11 +1484,11 @@ class _HomeScreenState extends State<HomeScreen>
                     _following
                         ? Icons.person
                         : Icons.person_outline,
-                    color: Colors.white,
+                    color:
+                        Colors.white,
                     size: 29,
                   ),
                 ),
-
                 if (!_following)
                   Positioned(
                     right: 0,
@@ -1073,11 +1499,14 @@ class _HomeScreenState extends State<HomeScreen>
                       decoration:
                           const BoxDecoration(
                         color: Colors.red,
-                        shape: BoxShape.circle,
+                        shape:
+                            BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child:
+                          const Icon(
                         Icons.add,
-                        color: Colors.white,
+                        color:
+                            Colors.white,
                         size: 17,
                       ),
                     ),
@@ -1091,7 +1520,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // ================================================================
-  // RIGHT ACTION BUTTON
+  // ACTION BUTTON
   // ================================================================
   Widget _actionButton({
     required IconData icon,
@@ -1112,15 +1541,15 @@ class _HomeScreenState extends State<HomeScreen>
                   : Colors.white,
               size: 31,
             ),
-
             const SizedBox(height: 5),
-
             Text(
               count,
-              style: const TextStyle(
+              style:
+                  const TextStyle(
                 color: Colors.white,
                 fontSize: 13,
-                fontWeight: FontWeight.w600,
+                fontWeight:
+                    FontWeight.w600,
               ),
             ),
           ],
@@ -1144,30 +1573,29 @@ class _HomeScreenState extends State<HomeScreen>
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 17,
-                fontWeight: FontWeight.w800,
+                fontWeight:
+                    FontWeight.w800,
               ),
             ),
-
             const SizedBox(width: 12),
-
             GestureDetector(
               onTap: _toggleFollow,
               child: Text(
                 _following
                     ? 'Following'
                     : 'Follow',
-                style: const TextStyle(
+                style:
+                    const TextStyle(
                   color: Colors.white,
                   fontSize: 17,
-                  fontWeight: FontWeight.w700,
+                  fontWeight:
+                      FontWeight.w700,
                 ),
               ),
             ),
           ],
         ),
-
         const SizedBox(height: 8),
-
         const Text(
           'Welcome to PALOK 🎬',
           style: TextStyle(
@@ -1175,9 +1603,7 @@ class _HomeScreenState extends State<HomeScreen>
             fontSize: 16,
           ),
         ),
-
         const SizedBox(height: 6),
-
         const Text(
           '#Palok #ShortVideo #Bangladesh',
           style: TextStyle(
@@ -1185,32 +1611,31 @@ class _HomeScreenState extends State<HomeScreen>
             fontSize: 15,
           ),
         ),
-
         const SizedBox(height: 12),
-
         Container(
           padding:
               const EdgeInsets.symmetric(
             horizontal: 14,
             vertical: 9,
           ),
-          decoration: BoxDecoration(
-            color:
-                Colors.black.withOpacity(0.48),
+          decoration:
+              BoxDecoration(
+            color: Colors.black
+                .withOpacity(0.48),
             borderRadius:
-                BorderRadius.circular(25),
+                BorderRadius.circular(
+                    25),
           ),
           child: const Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize:
+                MainAxisSize.min,
             children: [
               Icon(
                 Icons.music_note,
                 color: Colors.white,
                 size: 20,
               ),
-
               SizedBox(width: 7),
-
               Text(
                 'Original Sound - PALOK',
                 style: TextStyle(
@@ -1237,18 +1662,18 @@ class _HomeScreenState extends State<HomeScreen>
             MainAxisAlignment.spaceAround,
         children: [
           _bottomButton(
-            icon: Icons.home_filled,
+            icon:
+                Icons.home_filled,
             label: 'Home',
             index: 0,
           ),
-
           _bottomButton(
-            icon: Icons.people_outline,
+            icon:
+                Icons.people_outline,
             label: 'Friends',
             index: 1,
           ),
 
-          // CREATE
           GestureDetector(
             onTap: () {
               _selectBottom(2);
@@ -1256,39 +1681,49 @@ class _HomeScreenState extends State<HomeScreen>
             child: Container(
               width: 58,
               height: 43,
-              decoration: BoxDecoration(
+              decoration:
+                  BoxDecoration(
                 color: Colors.white,
                 borderRadius:
-                    BorderRadius.circular(13),
-                boxShadow: const [
+                    BorderRadius.circular(
+                        13),
+                boxShadow:
+                    const [
                   BoxShadow(
-                    color: Color(0xFF00E5FF),
-                    offset: Offset(-3, 0),
+                    color:
+                        Color(0xFF00E5FF),
+                    offset:
+                        Offset(-3, 0),
                     blurRadius: 0,
                   ),
                   BoxShadow(
-                    color: Color(0xFFFF176B),
-                    offset: Offset(3, 0),
+                    color:
+                        Color(0xFFFF176B),
+                    offset:
+                        Offset(3, 0),
                     blurRadius: 0,
                   ),
                 ],
               ),
-              child: const Icon(
+              child:
+                  const Icon(
                 Icons.add,
-                color: Colors.black,
+                color:
+                    Colors.black,
                 size: 31,
               ),
             ),
           ),
 
           _bottomButton(
-            icon: Icons.chat_bubble_outline,
+            icon:
+                Icons.chat_bubble_outline,
             label: 'Inbox',
             index: 3,
           ),
-
           _bottomButton(
-            icon: Icons.person_outline,
+            icon:
+                Icons.person_outline,
             label: 'Profile',
             index: 4,
           ),
@@ -1305,7 +1740,7 @@ class _HomeScreenState extends State<HomeScreen>
     required String label,
     required int index,
   }) {
-    final bool selected =
+    final selected =
         _bottomIndex == index;
 
     return GestureDetector(
@@ -1321,11 +1756,10 @@ class _HomeScreenState extends State<HomeScreen>
             Icon(
               icon,
               color: Colors.white,
-              size: selected ? 28 : 26,
+              size:
+                  selected ? 28 : 26,
             ),
-
             const SizedBox(height: 4),
-
             Text(
               label,
               style: TextStyle(
@@ -1346,12 +1780,19 @@ class _HomeScreenState extends State<HomeScreen>
   // VIDEO
   // ================================================================
   Widget _buildVideo(int index) {
+    if (index >=
+        _videoControllers.length) {
+      return const SizedBox();
+    }
+
     final controller =
         _videoControllers[index];
 
-    if (!controller.value.isInitialized) {
+    if (!controller
+        .value.isInitialized) {
       return const Center(
-        child: CircularProgressIndicator(
+        child:
+            CircularProgressIndicator(
           color: Colors.white,
         ),
       );
@@ -1359,13 +1800,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     return GestureDetector(
       onTap: () {
-        setState(() {
-          if (controller.value.isPlaying) {
-            controller.pause();
-          } else {
-            controller.play();
-          }
-        });
+        _toggleVideo(index);
       },
       child: SizedBox.expand(
         child: FittedBox(
@@ -1375,7 +1810,8 @@ class _HomeScreenState extends State<HomeScreen>
                 controller.value.size.width,
             height:
                 controller.value.size.height,
-            child: VideoPlayer(controller),
+            child:
+                VideoPlayer(controller),
           ),
         ),
       ),
@@ -1420,7 +1856,9 @@ class _CommentItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding:
-          const EdgeInsets.only(bottom: 20),
+          const EdgeInsets.only(
+        bottom: 20,
+      ),
       child: Row(
         crossAxisAlignment:
             CrossAxisAlignment.start,
@@ -1433,14 +1871,13 @@ class _CommentItem extends StatelessWidget {
               shape: BoxShape.circle,
               color: Colors.white12,
             ),
-            child: const Icon(
+            child:
+                const Icon(
               Icons.person,
               color: Colors.white,
             ),
           ),
-
           const SizedBox(width: 12),
-
           Expanded(
             child: Column(
               crossAxisAlignment:
@@ -1448,20 +1885,22 @@ class _CommentItem extends StatelessWidget {
               children: [
                 Text(
                   username,
-                  style: const TextStyle(
-                    color: Colors.white70,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white70,
                     fontSize: 13,
                     fontWeight:
                         FontWeight.w600,
                   ),
                 ),
-
                 const SizedBox(height: 4),
-
                 Text(
                   comment,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white,
                     fontSize: 15,
                   ),
                 ),
