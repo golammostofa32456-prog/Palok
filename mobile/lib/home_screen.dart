@@ -13,7 +13,6 @@ class _HomeScreenState extends State<HomeScreen> {
   int _topIndex = 0;
 
   final List<String> videoUrls = [
-    // তোমার ভিডিও URL এখানে দাও
     'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
   ];
 
@@ -31,13 +30,13 @@ class _HomeScreenState extends State<HomeScreen> {
       _controllers.add(controller);
 
       controller.initialize().then((_) {
+        if (!mounted) return;
+
         controller
           ..setLooping(true)
           ..play();
 
-        if (mounted) {
-          setState(() {});
-        }
+        setState(() {});
       });
     }
   }
@@ -47,15 +46,18 @@ class _HomeScreenState extends State<HomeScreen> {
     for (final controller in _controllers) {
       controller?.dispose();
     }
+
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+
     return Scaffold(
       backgroundColor: Colors.black,
 
-      // ভিডিওকে bottom navigation-এর নিচ পর্যন্ত যেতে দিচ্ছি
+      // ভিডিও পুরো স্ক্রিনে থাকবে
       extendBody: true,
       extendBodyBehindAppBar: true,
 
@@ -79,7 +81,8 @@ class _HomeScreenState extends State<HomeScreen> {
             itemBuilder: (context, index) {
               final controller = _controllers[index];
 
-              if (controller == null || !controller.value.isInitialized) {
+              if (controller == null ||
+                  !controller.value.isInitialized) {
                 return const Center(
                   child: CircularProgressIndicator(
                     color: Colors.white,
@@ -97,7 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // TOP BAR
           // =========================================================
           Positioned(
-            top: MediaQuery.of(context).padding.top + 15,
+            top: media.padding.top + 10,
             left: 0,
             right: 0,
             child: _buildTopBar(),
@@ -107,18 +110,18 @@ class _HomeScreenState extends State<HomeScreen> {
           // RIGHT SIDE BUTTONS
           // =========================================================
           Positioned(
-            right: 10,
-            bottom: MediaQuery.of(context).padding.bottom + 105,
+            right: 8,
+            bottom: media.padding.bottom + 92,
             child: _buildRightButtons(),
           ),
 
           // =========================================================
-          // USERNAME + CAPTION
+          // USER INFO / CAPTION
           // =========================================================
           Positioned(
-            left: 18,
-            right: 90,
-            bottom: MediaQuery.of(context).padding.bottom + 100,
+            left: 16,
+            right: 92,
+            bottom: media.padding.bottom + 88,
             child: _buildVideoInfo(),
           ),
 
@@ -141,59 +144,121 @@ class _HomeScreenState extends State<HomeScreen> {
   // ===============================================================
 
   Widget _buildTopBar() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        GestureDetector(
-          onTap: () {
-            setState(() {
-              _topIndex = 0;
-            });
-          },
-          child: Text(
-            'For You',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight:
-                  _topIndex == 0 ? FontWeight.bold : FontWeight.normal,
+    return SizedBox(
+      height: 50,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // For You
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _topIndex = 0;
+              });
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'For You',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 19,
+                    fontWeight: _topIndex == 0
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    shadows: const [
+                      Shadow(
+                        color: Colors.black54,
+                        blurRadius: 5,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 5),
+
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: _topIndex == 0 ? 28 : 0,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
 
-        const SizedBox(width: 28),
+          const SizedBox(width: 30),
 
-        GestureDetector(
-          onTap: () {
-            setState(() {
-              _topIndex = 1;
-            });
-          },
-          child: Text(
-            'Following',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight:
-                  _topIndex == 1 ? FontWeight.bold : FontWeight.normal,
+          // Following
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _topIndex = 1;
+              });
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Following',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 19,
+                    fontWeight: _topIndex == 1
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    shadows: const [
+                      Shadow(
+                        color: Colors.black54,
+                        blurRadius: 5,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 5),
+
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: _topIndex == 1 ? 28 : 0,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
 
-        const SizedBox(width: 25),
+          const SizedBox(width: 25),
 
-        // Search
-        const Icon(
-          Icons.search,
-          color: Colors.white,
-          size: 34,
-        ),
-      ],
+          // Search
+          GestureDetector(
+            onTap: () {},
+            child: const Icon(
+              Icons.search,
+              color: Colors.white,
+              size: 34,
+              shadows: [
+                Shadow(
+                  color: Colors.black54,
+                  blurRadius: 5,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   // ===============================================================
-  // RIGHT SIDE
+  // RIGHT SIDE BUTTONS
   // ===============================================================
 
   Widget _buildRightButtons() {
@@ -201,36 +266,42 @@ class _HomeScreenState extends State<HomeScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         // Profile
-        _ProfileButton(),
+        _ProfileButton(
+          onTap: () {},
+        ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
 
+        // Like
         _ActionButton(
           icon: Icons.favorite_border,
           label: '11.7K',
           onTap: () {},
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
 
+        // Comment
         _ActionButton(
           icon: Icons.chat_bubble_outline,
           label: '234',
           onTap: () {},
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
 
+        // Bookmark
         _ActionButton(
           icon: Icons.bookmark_border,
           label: '811',
           onTap: () {},
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
 
+        // Share
         _ActionButton(
-          icon: Icons.share,
+          icon: Icons.share_outlined,
           label: '431',
           onTap: () {},
         ),
@@ -247,14 +318,24 @@ class _HomeScreenState extends State<HomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Username
         Row(
           children: [
-            const Text(
-              '@palok_user',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
+            const Flexible(
+              child: Text(
+                '@palok_user',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black87,
+                      blurRadius: 5,
+                    ),
+                  ],
+                ),
               ),
             ),
 
@@ -268,14 +349,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: Colors.white,
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black87,
+                      blurRadius: 5,
+                    ),
+                  ],
                 ),
               ),
             ),
           ],
         ),
 
-        const SizedBox(height: 8),
+        const SizedBox(height: 7),
 
+        // Caption
         const Text(
           'Welcome to PALOK 🎬',
           maxLines: 2,
@@ -283,16 +371,68 @@ class _HomeScreenState extends State<HomeScreen> {
           style: TextStyle(
             color: Colors.white,
             fontSize: 16,
+            fontWeight: FontWeight.w400,
+            shadows: [
+              Shadow(
+                color: Colors.black87,
+                blurRadius: 5,
+              ),
+            ],
           ),
         ),
 
-        const SizedBox(height: 5),
+        const SizedBox(height: 4),
 
+        // Hashtags
         const Text(
           '#Palok #ShortVideo #Bangladesh',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: Colors.white,
             fontSize: 14,
+            shadows: [
+              Shadow(
+                color: Colors.black87,
+                blurRadius: 5,
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 7),
+
+        // Original Sound
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 6,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.35),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.music_note,
+                color: Colors.white,
+                size: 17,
+              ),
+              SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  'Original Sound - PALOK',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -305,15 +445,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildBottomNavigation() {
     return Container(
-      height: 78,
+      height: 72,
       decoration: const BoxDecoration(
         color: Colors.black,
       ),
       child: SafeArea(
         top: false,
+        bottom: true,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
+            // Home
             _BottomItem(
               icon: Icons.home_outlined,
               activeIcon: Icons.home,
@@ -326,6 +468,7 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
 
+            // Friends
             _BottomItem(
               icon: Icons.people_outline,
               activeIcon: Icons.people,
@@ -346,20 +489,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 });
               },
               child: Container(
-                width: 52,
-                height: 38,
+                width: 56,
+                height: 42,
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(11),
                 ),
                 child: const Icon(
                   Icons.add,
                   color: Colors.black,
-                  size: 30,
+                  size: 32,
                 ),
               ),
             ),
 
+            // Inbox
             _BottomItem(
               icon: Icons.chat_bubble_outline,
               activeIcon: Icons.chat_bubble,
@@ -372,6 +516,7 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
 
+            // Profile
             _BottomItem(
               icon: Icons.person_outline,
               activeIcon: Icons.person,
@@ -424,65 +569,80 @@ class _FullScreenVideo extends StatelessWidget {
 // ===================================================================
 
 class _ProfileButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _ProfileButton({
+    required this.onTap,
+  });
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: 58,
-              height: 58,
-              padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white,
-                  width: 2,
-                ),
-              ),
-              child: const CircleAvatar(
-                backgroundColor: Colors.grey,
-                child: Icon(
-                  Icons.person,
-                  color: Colors.white,
-                  size: 35,
-                ),
-              ),
-            ),
-
-            Positioned(
-              bottom: -10,
-              left: 17,
-              child: Container(
-                width: 25,
-                height: 25,
-                decoration: const BoxDecoration(
-                  color: Colors.red,
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Transparent circular profile
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
                   shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.10),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.90),
+                    width: 2,
+                  ),
                 ),
                 child: const Icon(
-                  Icons.add,
+                  Icons.person,
                   color: Colors.white,
-                  size: 19,
+                  size: 34,
                 ),
               ),
-            ),
-          ],
-        ),
 
-        const SizedBox(height: 13),
-
-        const Text(
-          'Follow',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
+              // Red +
+              Positioned(
+                bottom: -7,
+                left: 16,
+                child: Container(
+                  width: 24,
+                  height: 24,
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.add,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ),
-      ],
+
+          const SizedBox(height: 10),
+
+          const Text(
+            'Follow',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              shadows: [
+                Shadow(
+                  color: Colors.black87,
+                  blurRadius: 5,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -507,21 +667,46 @@ class _ActionButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            color: Colors.white,
-            size: 42,
+          // Transparent circular button
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+
+              // Transparent black overlay
+              color: Colors.black.withOpacity(0.12),
+
+              // White circular border
+              border: Border.all(
+                color: Colors.white.withOpacity(0.85),
+                width: 1.5,
+              ),
+            ),
+            child: Icon(
+              icon,
+              color: Colors.white,
+              size: 29,
+            ),
           ),
 
-          const SizedBox(height: 3),
+          const SizedBox(height: 4),
 
+          // Count
           Text(
             label,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              shadows: [
+                Shadow(
+                  color: Colors.black87,
+                  blurRadius: 5,
+                ),
+              ],
             ),
           ),
         ],
@@ -554,7 +739,8 @@ class _BottomItem extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
-        width: 65,
+        width: 62,
+        height: 58,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -564,15 +750,16 @@ class _BottomItem extends StatelessWidget {
               size: 27,
             ),
 
-            const SizedBox(height: 3),
+            const SizedBox(height: 2),
 
             Text(
               label,
               style: TextStyle(
                 color: selected ? Colors.white : Colors.grey,
                 fontSize: 11,
-                fontWeight:
-                    selected ? FontWeight.bold : FontWeight.normal,
+                fontWeight: selected
+                    ? FontWeight.bold
+                    : FontWeight.normal,
               ),
             ),
           ],
