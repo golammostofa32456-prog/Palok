@@ -9,15 +9,31 @@ import 'home_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  String? firebaseError;
 
-  runApp(const PalokApp());
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    firebaseError = e.toString();
+    debugPrint('Firebase initialization error: $e');
+  }
+
+  runApp(
+    PalokApp(
+      firebaseError: firebaseError,
+    ),
+  );
 }
 
 class PalokApp extends StatelessWidget {
-  const PalokApp({super.key});
+  final String? firebaseError;
+
+  const PalokApp({
+    super.key,
+    this.firebaseError,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +44,11 @@ class PalokApp extends StatelessWidget {
         brightness: Brightness.dark,
         useMaterial3: true,
       ),
-      home: const AuthGate(),
+      home: firebaseError != null
+          ? FirebaseErrorScreen(
+              error: firebaseError!,
+            )
+          : const AuthGate(),
     );
   }
 }
@@ -41,7 +61,6 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // Firebase এখনো Login status পরীক্ষা করছে
         if (snapshot.connectionState ==
             ConnectionState.waiting) {
           return const Scaffold(
@@ -54,14 +73,73 @@ class AuthGate extends StatelessWidget {
           );
         }
 
-        // Login করা নেই
         if (snapshot.data == null) {
           return const LoginScreen();
         }
 
-        // Login করা আছে
         return const HomeScreen();
       },
+    );
+  }
+}
+
+class FirebaseErrorScreen extends StatelessWidget {
+  final String error;
+
+  const FirebaseErrorScreen({
+    super.key,
+    required this.error,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  color: Colors.redAccent,
+                  size: 64,
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'PALOK শুরু হতে পারেনি',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Firebase সংযোগে সমস্যা হয়েছে।',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 16,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  error,
+                  style: const TextStyle(
+                    color: Colors.white54,
+                    fontSize: 12,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
