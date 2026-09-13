@@ -2,6 +2,9 @@ name: Build PALOK Android
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -23,6 +26,10 @@ jobs:
       - name: Get Flutter dependencies
         working-directory: mobile
         run: flutter pub get
+
+      - name: Generate PALOK app icon
+        working-directory: mobile
+        run: dart run flutter_launcher_icons
 
       - name: Build debug APK
         working-directory: mobile
