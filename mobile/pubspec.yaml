@@ -48,9 +48,9 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  flutter_launcher_icons:
-    android: true
-    ios: false
-    image_path: "assets/icon/palok_icon.png"
-    adaptive_icon_background: "#000000"
-    adaptive_icon_foreground: "assets/icon/palok_icon.png"
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/palok_icon.png"
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: "assets/icon/palok_icon.png"
