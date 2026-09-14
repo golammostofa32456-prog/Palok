@@ -31,25 +31,38 @@ jobs:
         working-directory: mobile
         run: dart run flutter_launcher_icons
 
+      - name: Repair Android project and Gradle wrapper
+        working-directory: mobile
+        run: |
+          set -e
+
+          echo "Repairing Android project..."
+
+          flutter create \
+            --platforms=android \
+            --org com.palok \
+            --project-name palok \
+            .
+
+          echo ""
+          echo "Android project files:"
+          ls -la android
+
+          echo ""
+          echo "Gradle wrapper:"
+          ls -la android/gradlew
+
+          chmod +x android/gradlew
+
       - name: Show Android signing fingerprints
         working-directory: mobile/android
         shell: bash
         run: |
           set -e
 
-          echo "Checking Android Gradle files..."
-
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-          else
-            echo "gradlew not found. Listing Android directory:"
-            ls -la
-            exit 1
-          fi
-
-          echo ""
-          echo "===== SHA-1 / SHA-256 ====="
-          echo ""
+          echo "========================================"
+          echo "PALOK Android SHA-1 / SHA-256"
+          echo "========================================"
 
           ./gradlew signingReport
 
