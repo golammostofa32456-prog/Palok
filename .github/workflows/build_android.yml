@@ -33,8 +33,24 @@ jobs:
 
       - name: Show Android signing fingerprints
         working-directory: mobile/android
+        shell: bash
         run: |
-          chmod +x gradlew
+          set -e
+
+          echo "Checking Android Gradle files..."
+
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+          else
+            echo "gradlew not found. Listing Android directory:"
+            ls -la
+            exit 1
+          fi
+
+          echo ""
+          echo "===== SHA-1 / SHA-256 ====="
+          echo ""
+
           ./gradlew signingReport
 
       - name: Build debug APK
