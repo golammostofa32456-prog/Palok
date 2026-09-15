@@ -22,13 +22,13 @@ dependencies:
   # Image / Video picking
   image_picker: ^1.1.2
 
-  # HTTP / Cloudinary upload
+  # Cloudinary upload
   http: ^1.6.0
 
-  # Native share
+  # Share
   share_plus: ^11.0.0
 
-  # SVG icons
+  # SVG
   flutter_svg: ^2.0.17
 
   # Google Login
@@ -42,11 +42,14 @@ dev_dependencies:
 
   flutter_lints: ^5.0.0
 
-  # App icon generator
   flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/videos/
+    - assets/icon/
 
 flutter_launcher_icons:
   android: true
