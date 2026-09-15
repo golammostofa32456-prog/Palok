@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
@@ -22,20 +22,29 @@ class _HomeScreenState extends State<HomeScreen>
   static const Color _pink = Color(0xFFFF2D75);
   static const Color _cyan = Color(0xFF00E5FF);
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final ImagePicker _picker = ImagePicker();
+  final FirebaseFirestore _firestore =
+      FirebaseFirestore.instance;
+
+  final FirebaseAuth _auth =
+      FirebaseAuth.instance;
+
+  final ImagePicker _picker =
+      ImagePicker();
 
   late final AnimationController _logoController;
   late final Animation<double> _logoScale;
   late final Animation<double> _logoOpacity;
 
-  final PageController _pageController = PageController();
+  final PageController _pageController =
+      PageController();
 
   final List<VideoItem> _videos = [];
 
-  final Map<int, VideoPlayerController> _controllers = {};
-  final Map<int, Future<void>> _initializing = {};
+  final Map<int, VideoPlayerController>
+      _controllers = {};
+
+  final Map<int, Future<void>>
+      _initializing = {};
 
   final Set<String> _likedIds = {};
   final Set<String> _savedIds = {};
@@ -54,15 +63,18 @@ class _HomeScreenState extends State<HomeScreen>
   bool _isUploading = false;
   bool _isPlaying = true;
 
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+  StreamSubscription<
+          QuerySnapshot<Map<String, dynamic>>>?
       _videoSubscription;
 
   User? get _user => _auth.currentUser;
 
   VideoItem? get _currentVideo {
-    if (_currentIndex < 0 || _currentIndex >= _videos.length) {
+    if (_currentIndex < 0 ||
+        _currentIndex >= _videos.length) {
       return null;
     }
+
     return _videos[_currentIndex];
   }
 
@@ -72,7 +84,8 @@ class _HomeScreenState extends State<HomeScreen>
 
     _logoController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
+      duration:
+          const Duration(milliseconds: 1800),
     )..repeat(reverse: true);
 
     _logoScale = Tween<double>(
@@ -109,6 +122,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _loadFollowing() async {
     final user = _user;
+
     if (user == null) return;
 
     try {
@@ -123,14 +137,22 @@ class _HomeScreenState extends State<HomeScreen>
       setState(() {
         _followingIds
           ..clear()
-          ..addAll(snapshot.docs.map((doc) => doc.id));
+          ..addAll(
+            snapshot.docs.map(
+              (doc) => doc.id,
+            ),
+          );
       });
     } catch (e) {
-      debugPrint('Following load error: $e');
+      debugPrint(
+        'Following load error: $e',
+      );
     }
   }
 
-  String _interactionKey(VideoItem video) {
+  String _interactionKey(
+    VideoItem video,
+  ) {
     final raw = video.id ?? video.url;
 
     return raw.replaceAll(
@@ -139,7 +161,9 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  CollectionReference<Map<String, dynamic>> _interactionCollection(
+  CollectionReference<
+          Map<String, dynamic>>
+      _interactionCollection(
     String uid,
   ) {
     return _firestore
@@ -150,11 +174,14 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _loadUserInteractions() async {
     final user = _user;
+
     if (user == null) return;
 
     try {
       final interactionSnapshot =
-          await _interactionCollection(user.uid).get();
+          await _interactionCollection(
+        user.uid,
+      ).get();
 
       final savedSnapshot = await _firestore
           .collection('users')
@@ -170,10 +197,15 @@ class _HomeScreenState extends State<HomeScreen>
 
       final liked = <String>{};
       final saved = <String>{};
-      final likeDeltas = <String, int>{};
-      final saveDeltas = <String, int>{};
 
-      for (final doc in interactionSnapshot.docs) {
+      final likeDeltas =
+          <String, int>{};
+
+      final saveDeltas =
+          <String, int>{};
+
+      for (final doc
+          in interactionSnapshot.docs) {
         final data = doc.data();
 
         if (data['liked'] == true) {
@@ -184,19 +216,36 @@ class _HomeScreenState extends State<HomeScreen>
           saved.add(doc.id);
         }
 
-        final likeDelta = data['likeDelta'];
-        if (likeDelta is num && likeDelta != 0) {
-          likeDeltas[doc.id] = likeDelta.toInt();
+        final likeDelta =
+            data['likeDelta'];
+
+        if (likeDelta is num &&
+            likeDelta != 0) {
+          likeDeltas[doc.id] =
+              likeDelta.toInt();
         }
 
-        final saveDelta = data['saveDelta'];
-        if (saveDelta is num && saveDelta != 0) {
-          saveDeltas[doc.id] = saveDelta.toInt();
+        final saveDelta =
+            data['saveDelta'];
+
+        if (saveDelta is num &&
+            saveDelta != 0) {
+          saveDeltas[doc.id] =
+              saveDelta.toInt();
         }
       }
 
-      liked.addAll(likedSnapshot.docs.map((doc) => doc.id));
-      saved.addAll(savedSnapshot.docs.map((doc) => doc.id));
+      liked.addAll(
+        likedSnapshot.docs.map(
+          (doc) => doc.id,
+        ),
+      );
+
+      saved.addAll(
+        savedSnapshot.docs.map(
+          (doc) => doc.id,
+        ),
+      );
 
       if (!mounted) return;
 
@@ -218,7 +267,9 @@ class _HomeScreenState extends State<HomeScreen>
           ..addAll(saveDeltas);
       });
     } catch (e) {
-      debugPrint('Interaction load error: $e');
+      debugPrint(
+        'Interaction load error: $e',
+      );
     }
   }
 
@@ -240,7 +291,8 @@ class _HomeScreenState extends State<HomeScreen>
       (snapshot) {
         final remoteVideos = snapshot.docs
             .map(
-              (doc) => VideoItem.fromFirestore(
+              (doc) =>
+                  VideoItem.fromFirestore(
                 doc.id,
                 doc.data(),
               ),
@@ -251,8 +303,10 @@ class _HomeScreenState extends State<HomeScreen>
           VideoItem.demo(
             url: 'assets/videos/video.mp4',
             username: '@palok_user',
-            caption: 'Welcome to PALOK 🎬',
-            hashtags: '#PALOK #ForYou',
+            caption:
+                'Welcome to PALOK 🎬',
+            hashtags:
+                '#PALOK #ForYou',
             likes: 11700,
             comments: 234,
             saves: 811,
@@ -261,8 +315,10 @@ class _HomeScreenState extends State<HomeScreen>
           VideoItem.demo(
             url: 'assets/videos/video1.mp4',
             username: '@palok_creator',
-            caption: 'Create. Share. Connect. ✨',
-            hashtags: '#PALOK #Creator',
+            caption:
+                'Create. Share. Connect. ✨',
+            hashtags:
+                '#PALOK #Creator',
             likes: 8500,
             comments: 128,
             saves: 452,
@@ -271,8 +327,10 @@ class _HomeScreenState extends State<HomeScreen>
           VideoItem.demo(
             url: 'assets/videos/video2.mp4',
             username: '@palok_world',
-            caption: 'Your short-video world starts here.',
-            hashtags: '#PALOK #ShortVideo',
+            caption:
+                'Your short-video world starts here.',
+            hashtags:
+                '#PALOK #ShortVideo',
             likes: 6200,
             comments: 96,
             saves: 317,
@@ -298,7 +356,9 @@ class _HomeScreenState extends State<HomeScreen>
         _prepareCurrentVideo();
       },
       onError: (Object error) {
-        debugPrint('Video stream error: $error');
+        debugPrint(
+          'Video stream error: $error',
+        );
 
         if (!mounted) return;
 
@@ -308,20 +368,27 @@ class _HomeScreenState extends State<HomeScreen>
           if (_videos.isEmpty) {
             _videos.addAll([
               VideoItem.demo(
-                url: 'assets/videos/video.mp4',
+                url:
+                    'assets/videos/video.mp4',
                 username: '@palok_user',
-                caption: 'Welcome to PALOK 🎬',
-                hashtags: '#PALOK #ForYou',
+                caption:
+                    'Welcome to PALOK 🎬',
+                hashtags:
+                    '#PALOK #ForYou',
                 likes: 11700,
                 comments: 234,
                 saves: 811,
                 shares: 431,
               ),
               VideoItem.demo(
-                url: 'assets/videos/video1.mp4',
-                username: '@palok_creator',
-                caption: 'Create. Share. Connect. ✨',
-                hashtags: '#PALOK #Creator',
+                url:
+                    'assets/videos/video1.mp4',
+                username:
+                    '@palok_creator',
+                caption:
+                    'Create. Share. Connect. ✨',
+                hashtags:
+                    '#PALOK #Creator',
                 likes: 8500,
                 comments: 128,
                 saves: 452,
@@ -347,7 +414,8 @@ class _HomeScreenState extends State<HomeScreen>
 
     if (!mounted) return;
 
-    for (final entry in _controllers.entries) {
+    for (final entry
+        in _controllers.entries) {
       if (entry.key == index) {
         await entry.value.play();
         await entry.value.setLooping(true);
@@ -356,16 +424,27 @@ class _HomeScreenState extends State<HomeScreen>
       }
     }
 
+    if (!mounted) return;
+
     setState(() {
       _isPlaying = true;
     });
   }
 
-  Future<void> _initializeVideo(int index) async {
-    if (_controllers[index] != null) return;
+  Future<void> _initializeVideo(
+    int index,
+  ) async {
+    if (_controllers[index] != null) {
+      return;
+    }
 
     if (_initializing[index] != null) {
       await _initializing[index];
+      return;
+    }
+
+    if (index < 0 ||
+        index >= _videos.length) {
       return;
     }
 
@@ -374,14 +453,19 @@ class _HomeScreenState extends State<HomeScreen>
     late VideoPlayerController controller;
 
     if (video.isAsset) {
-      controller = VideoPlayerController.asset(video.url);
+      controller =
+          VideoPlayerController.asset(
+        video.url,
+      );
     } else {
-      controller = VideoPlayerController.networkUrl(
+      controller =
+          VideoPlayerController.networkUrl(
         Uri.parse(video.url),
       );
     }
 
-    final future = controller.initialize();
+    final future =
+        controller.initialize();
 
     _initializing[index] = future;
 
@@ -409,8 +493,13 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  Future<void> _onPageChanged(int index) async {
-    if (index < 0 || index >= _videos.length) return;
+  Future<void> _onPageChanged(
+    int index,
+  ) async {
+    if (index < 0 ||
+        index >= _videos.length) {
+      return;
+    }
 
     setState(() {
       _currentIndex = index;
@@ -422,19 +511,26 @@ class _HomeScreenState extends State<HomeScreen>
     _disposeUnusedControllers(index);
   }
 
-  void _disposeUnusedControllers(int currentIndex) {
-    final keys = _controllers.keys.toList();
+  void _disposeUnusedControllers(
+    int currentIndex,
+  ) {
+    final keys =
+        _controllers.keys.toList();
 
     for (final index in keys) {
-      if ((index - currentIndex).abs() > 2) {
-        final controller = _controllers.remove(index);
+      if ((index - currentIndex).abs() >
+          2) {
+        final controller =
+            _controllers.remove(index);
+
         controller?.dispose();
       }
     }
   }
 
   Future<void> _togglePlayPause() async {
-    final controller = _controllers[_currentIndex];
+    final controller =
+        _controllers[_currentIndex];
 
     if (controller == null ||
         !controller.value.isInitialized) {
@@ -473,14 +569,19 @@ class _HomeScreenState extends State<HomeScreen>
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF171717),
+          backgroundColor:
+              const Color(0xFF171717),
           title: const Text(
             'Login required',
-            style: TextStyle(color: Colors.white),
+            style: TextStyle(
+              color: Colors.white,
+            ),
           ),
           content: const Text(
             'এই কাজটি করতে আগে PALOK-এ login করুন।',
-            style: TextStyle(color: Colors.white70),
+            style: TextStyle(
+              color: Colors.white70,
+            ),
           ),
           actions: [
             TextButton(
@@ -489,7 +590,9 @@ class _HomeScreenState extends State<HomeScreen>
               },
               child: const Text(
                 'OK',
-                style: TextStyle(color: _pink),
+                style: TextStyle(
+                  color: _pink,
+                ),
               ),
             ),
           ],
@@ -506,9 +609,11 @@ class _HomeScreenState extends State<HomeScreen>
     bool? liked,
     bool? saved,
   }) async {
-    final data = <String, dynamic>{
+    final data =
+        <String, dynamic>{
       'videoKey': key,
-      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedAt':
+          FieldValue.serverTimestamp(),
     };
 
     if (liked != null) {
@@ -519,20 +624,29 @@ class _HomeScreenState extends State<HomeScreen>
       data['saved'] = saved;
     }
 
-    await _interactionCollection(uid).doc(key).set(
+    await _interactionCollection(uid)
+        .doc(key)
+        .set(
           data,
           SetOptions(merge: true),
         );
   }
 
   Future<void> _toggleLike() async {
-    final user = await _requireLogin();
+    final user =
+        await _requireLogin();
+
     final video = _currentVideo;
 
-    if (user == null || video == null) return;
+    if (user == null || video == null) {
+      return;
+    }
 
-    final key = _interactionKey(video);
-    final liked = !_likedIds.contains(key);
+    final key =
+        _interactionKey(video);
+
+    final liked =
+        !_likedIds.contains(key);
 
     final previousLikeDelta =
         _demoLikeDeltas[key] ?? 0;
@@ -545,14 +659,17 @@ class _HomeScreenState extends State<HomeScreen>
       }
 
       if (video.id == null) {
-        _demoLikeDeltas[key] = liked ? 1 : 0;
+        _demoLikeDeltas[key] =
+            liked ? 1 : 0;
       }
     });
 
     try {
-      final batch = _firestore.batch();
+      final batch =
+          _firestore.batch();
 
-      final interactionRef = _interactionCollection(
+      final interactionRef =
+          _interactionCollection(
         user.uid,
       ).doc(key);
 
@@ -562,9 +679,11 @@ class _HomeScreenState extends State<HomeScreen>
           .collection('likedVideos')
           .doc(key);
 
-      final interactionData = <String, dynamic>{
+      final interactionData =
+          <String, dynamic>{
         'videoKey': key,
-        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedAt':
+            FieldValue.serverTimestamp(),
         'liked': liked,
       };
 
@@ -597,13 +716,15 @@ class _HomeScreenState extends State<HomeScreen>
       }
 
       if (video.id != null) {
-        final videoRef = _firestore
-            .collection('videos')
-            .doc(video.id);
+        final videoRef =
+            _firestore
+                .collection('videos')
+                .doc(video.id);
 
-        final likeRef = videoRef
-            .collection('likes')
-            .doc(user.uid);
+        final likeRef =
+            videoRef
+                .collection('likes')
+                .doc(user.uid);
 
         batch.update(
           videoRef,
@@ -650,7 +771,9 @@ class _HomeScreenState extends State<HomeScreen>
         }
       });
 
-      debugPrint('Like save error: $e');
+      debugPrint(
+        'Like save error: $e',
+      );
 
       _showMessage(
         'Like সংরক্ষণ করা যায়নি।',
@@ -659,13 +782,20 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _toggleSave() async {
-    final user = await _requireLogin();
+    final user =
+        await _requireLogin();
+
     final video = _currentVideo;
 
-    if (user == null || video == null) return;
+    if (user == null || video == null) {
+      return;
+    }
 
-    final key = _interactionKey(video);
-    final saved = !_savedIds.contains(key);
+    final key =
+        _interactionKey(video);
+
+    final saved =
+        !_savedIds.contains(key);
 
     final previousSaveDelta =
         _demoSaveDeltas[key] ?? 0;
@@ -678,14 +808,17 @@ class _HomeScreenState extends State<HomeScreen>
       }
 
       if (video.id == null) {
-        _demoSaveDeltas[key] = saved ? 1 : 0;
+        _demoSaveDeltas[key] =
+            saved ? 1 : 0;
       }
     });
 
     try {
-      final batch = _firestore.batch();
+      final batch =
+          _firestore.batch();
 
-      final interactionRef = _interactionCollection(
+      final interactionRef =
+          _interactionCollection(
         user.uid,
       ).doc(key);
 
@@ -695,9 +828,11 @@ class _HomeScreenState extends State<HomeScreen>
           .collection('saved')
           .doc(key);
 
-      final interactionData = <String, dynamic>{
+      final interactionData =
+          <String, dynamic>{
         'videoKey': key,
-        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedAt':
+            FieldValue.serverTimestamp(),
         'saved': saved,
       };
 
@@ -771,25 +906,34 @@ class _HomeScreenState extends State<HomeScreen>
         });
       }
 
-    debugPrint('Save error: $e');
+      debugPrint(
+        'Save error: $e',
+      );
 
-if (e is FirebaseException) {
-  debugPrint('Save Firebase code: ${e.code}');
-  debugPrint('Save Firebase message: ${e.message}');
+      if (e is FirebaseException) {
+        debugPrint(
+          'Save Firebase code: ${e.code}',
+        );
 
-  _showMessage(
-    'Save error: ${e.code}',
-  );
-} else {
-  _showMessage(
-    'Save error: $e',
-  );
-}
+        debugPrint(
+          'Save Firebase message: ${e.message}',
+        );
+
+        _showMessage(
+          'Save error: ${e.code}',
+        );
+      } else {
+        _showMessage(
+          'Save error: $e',
+        );
+      }
     }
   }
 
   Future<void> _toggleFollow() async {
-    final user = await _requireLogin();
+    final user =
+        await _requireLogin();
+
     final video = _currentVideo;
 
     if (user == null ||
@@ -805,7 +949,8 @@ if (e is FirebaseException) {
       return;
     }
 
-    final owner = video.ownerId!;
+    final owner =
+        video.ownerId!;
 
     final following =
         !_followingIds.contains(owner);
@@ -819,26 +964,30 @@ if (e is FirebaseException) {
     });
 
     try {
-      final batch = _firestore.batch();
+      final batch =
+          _firestore.batch();
 
-      final followingRef = _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('following')
-          .doc(owner);
+      final followingRef =
+          _firestore
+              .collection('users')
+              .doc(user.uid)
+              .collection('following')
+              .doc(owner);
 
-      final followerRef = _firestore
-          .collection('users')
-          .doc(owner)
-          .collection('followers')
-          .doc(user.uid);
+      final followerRef =
+          _firestore
+              .collection('users')
+              .doc(owner)
+              .collection('followers')
+              .doc(user.uid);
 
       if (following) {
         batch.set(
           followingRef,
           {
             'userId': owner,
-            'username': video.username,
+            'username':
+                video.username,
             'createdAt':
                 FieldValue.serverTimestamp(),
           },
@@ -897,7 +1046,9 @@ if (e is FirebaseException) {
   Future<void> _addComment(
     String text,
   ) async {
-    final user = await _requireLogin();
+    final user =
+        await _requireLogin();
+
     final video = _currentVideo;
 
     if (user == null ||
@@ -906,19 +1057,26 @@ if (e is FirebaseException) {
       return;
     }
 
-    final commentText = text.trim();
-    final key = _interactionKey(video);
+    final commentText =
+        text.trim();
+
+    final key =
+        _interactionKey(video);
 
     try {
       if (video.id != null) {
-        final videoRef = _firestore
-            .collection('videos')
-            .doc(video.id);
+        final videoRef =
+            _firestore
+                .collection('videos')
+                .doc(video.id);
 
         final commentRef =
-            videoRef.collection('comments').doc();
+            videoRef
+                .collection('comments')
+                .doc();
 
-        final batch = _firestore.batch();
+        final batch =
+            _firestore.batch();
 
         batch.set(
           commentRef,
@@ -947,13 +1105,14 @@ if (e is FirebaseException) {
 
         await batch.commit();
       } else {
-        final commentRef = _firestore
-            .collection('users')
-            .doc(user.uid)
-            .collection('demoComments')
-            .doc(key)
-            .collection('items')
-            .doc();
+        final commentRef =
+            _firestore
+                .collection('users')
+                .doc(user.uid)
+                .collection('demoComments')
+                .doc(key)
+                .collection('items')
+                .doc();
 
         await commentRef.set(
           {
@@ -979,7 +1138,9 @@ if (e is FirebaseException) {
         if (mounted) {
           setState(() {
             _demoCommentCounts[key] =
-                (_demoCommentCounts[key] ?? 0) + 1;
+                (_demoCommentCounts[key] ??
+                        0) +
+                    1;
           });
         }
       }
@@ -999,12 +1160,17 @@ if (e is FirebaseException) {
   }
 
   Future<void> _shareVideo() async {
-    final user = await _requireLogin();
+    final user =
+        await _requireLogin();
+
     final video = _currentVideo;
 
-    if (user == null || video == null) return;
+    if (user == null || video == null) {
+      return;
+    }
 
-    final key = _interactionKey(video);
+    final key =
+        _interactionKey(video);
 
     try {
       final link = video.id != null
@@ -1015,9 +1181,11 @@ if (e is FirebaseException) {
         'দেখুন PALOK-এ 🎬\n$link',
       );
 
-      final batch = _firestore.batch();
+      final batch =
+          _firestore.batch();
 
-      final interactionRef = _interactionCollection(
+      final interactionRef =
+          _interactionCollection(
         user.uid,
       ).doc(key);
 
@@ -1032,11 +1200,12 @@ if (e is FirebaseException) {
         SetOptions(merge: true),
       );
 
-      final sharedRef = _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('sharedVideos')
-          .doc(key);
+      final sharedRef =
+          _firestore
+              .collection('users')
+              .doc(user.uid)
+              .collection('sharedVideos')
+              .doc(key);
 
       batch.set(
         sharedRef,
@@ -1062,7 +1231,8 @@ if (e is FirebaseException) {
         );
       } else {
         _demoShareDeltas[key] =
-            (_demoShareDeltas[key] ?? 0) + 1;
+            (_demoShareDeltas[key] ?? 0) +
+                1;
       }
 
       await batch.commit();
@@ -1081,7 +1251,9 @@ if (e is FirebaseException) {
     }
   }
 
-  void _showMessage(String message) {
+  void _showMessage(
+    String message,
+  ) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context)
@@ -1089,21 +1261,28 @@ if (e is FirebaseException) {
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          behavior: SnackBarBehavior.floating,
+          behavior:
+              SnackBarBehavior.floating,
           duration:
-              const Duration(milliseconds: 1800),
+              const Duration(
+            milliseconds: 1800,
+          ),
         ),
       );
   }
 
   String _format(int number) {
     if (number >= 1000000) {
-      final value = number / 1000000;
+      final value =
+          number / 1000000;
+
       return '${value.toStringAsFixed(value >= 10 ? 0 : 1)}M';
     }
 
     if (number >= 1000) {
-      final value = number / 1000;
+      final value =
+          number / 1000;
+
       return '${value.toStringAsFixed(value >= 10 ? 0 : 1)}K';
     }
 
@@ -1125,9 +1304,11 @@ if (e is FirebaseException) {
             height: 43,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.black.withOpacity(.38),
+              color:
+                  Colors.black.withOpacity(.38),
               border: Border.all(
-                color: Colors.white.withOpacity(.12),
+                color:
+                    Colors.white.withOpacity(.12),
               ),
             ),
             child: Icon(
@@ -1142,7 +1323,8 @@ if (e is FirebaseException) {
             style: const TextStyle(
               color: Colors.white,
               fontSize: 10,
-              fontWeight: FontWeight.w600,
+              fontWeight:
+                  FontWeight.w600,
               shadows: [
                 Shadow(
                   color: Colors.black,
@@ -1163,52 +1345,67 @@ if (e is FirebaseException) {
       return const SizedBox.shrink();
     }
 
-    final key = _interactionKey(video);
+    final key =
+        _interactionKey(video);
 
-    final liked = _likedIds.contains(key);
-    final saved = _savedIds.contains(key);
+    final liked =
+        _likedIds.contains(key);
 
-    final following =
-        video.ownerId != null &&
-        _followingIds.contains(video.ownerId);
+    final saved =
+        _savedIds.contains(key);
 
-    final likeCount = video.likes +
-        (video.id == null
-            ? (_demoLikeDeltas[key] ?? 0)
-            : 0);
+    final likeCount =
+        video.likes +
+            (video.id == null
+                ? (_demoLikeDeltas[key] ??
+                    0)
+                : 0);
 
-    final saveCount = video.saves +
-        (video.id == null
-            ? (_demoSaveDeltas[key] ?? 0)
-            : 0);
+    final saveCount =
+        video.saves +
+            (video.id == null
+                ? (_demoSaveDeltas[key] ??
+                    0)
+                : 0);
 
-    final commentCount = video.comments +
-        (video.id == null
-            ? (_demoCommentCounts[key] ?? 0)
-            : 0);
+    final commentCount =
+        video.comments +
+            (video.id == null
+                ? (_demoCommentCounts[key] ??
+                    0)
+                : 0);
 
-    final shareCount = video.shares +
-        (video.id == null
-            ? (_demoShareDeltas[key] ?? 0)
-            : 0);
+    final shareCount =
+        video.shares +
+            (video.id == null
+                ? (_demoShareDeltas[key] ??
+                    0)
+                : 0);
 
     return Column(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize:
+          MainAxisSize.min,
       children: [
         _buildActionButton(
           Icons.favorite,
-          liked ? _pink : Colors.white,
+          liked
+              ? _pink
+              : Colors.white,
           _format(likeCount),
           _toggleLike,
         ),
+
         const SizedBox(height: 13),
+
         _buildActionButton(
           Icons.comment,
           Colors.white,
           _format(commentCount),
           _openComments,
         ),
+
         const SizedBox(height: 13),
+
         _buildActionButton(
           Icons.bookmark,
           saved
@@ -1217,56 +1414,105 @@ if (e is FirebaseException) {
           _format(saveCount),
           _toggleSave,
         ),
+
         const SizedBox(height: 13),
+
         _buildActionButton(
           Icons.share,
           Colors.white,
           _format(shareCount),
           _shareVideo,
         ),
+
         const SizedBox(height: 24),
+
         GestureDetector(
-          onTap: _toggleFollow,
+          onTap: () {
+            // Profile UI only.
+            // Functionality পরে যোগ করা যাবে।
+          },
           child: Stack(
-            clipBehavior: Clip.none,
-            alignment: Alignment.center,
+            clipBehavior:
+                Clip.none,
+            alignment:
+                Alignment.center,
             children: [
               Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white12,
-                  border: Border.all(
-                    color: Colors.white24,
+                width: 46,
+                height: 46,
+                decoration:
+                    BoxDecoration(
+                  shape:
+                      BoxShape.circle,
+                  color: Colors.black
+                      .withOpacity(.42),
+                  border:
+                      Border.all(
+                    color: Colors.white
+                        .withOpacity(.25),
+                    width: 1,
                   ),
                 ),
-                child: const Icon(
-                  Icons.person,
-                  color: Colors.white,
-                  size: 25,
+                child: Container(
+                  margin:
+                      const EdgeInsets.all(3),
+                  decoration:
+                      BoxDecoration(
+                    shape:
+                        BoxShape.circle,
+                    gradient:
+                        const LinearGradient(
+                      begin:
+                          Alignment.topLeft,
+                      end:
+                          Alignment.bottomRight,
+                      colors: [
+                        Color(0xFF444444),
+                        Color(0xFF181818),
+                      ],
+                    ),
+                    border:
+                        Border.all(
+                      color: Colors.white
+                          .withOpacity(.18),
+                    ),
+                  ),
+                  child:
+                      const Icon(
+                    Icons.person,
+                    color:
+                        Colors.white,
+                    size: 23,
+                  ),
                 ),
               ),
-              if (!following &&
-                  video.ownerId != null &&
-                  video.ownerId != _user?.uid)
-                Positioned(
-                  bottom: -5,
-                  child: Container(
-                    width: 20,
-                    height: 20,
-                    decoration:
-                        const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: _pink,
-                    ),
-                    child: const Icon(
-                      Icons.add,
-                      color: Colors.white,
-                      size: 15,
+
+              Positioned(
+                bottom: -5,
+                child: Container(
+                  width: 19,
+                  height: 19,
+                  decoration:
+                      BoxDecoration(
+                    shape:
+                        BoxShape.circle,
+                    color: _pink,
+                    border:
+                        Border.all(
+                      color:
+                          Colors.black,
+                      width: 2,
                     ),
                   ),
+                  child:
+                      const Icon(
+                    Icons.add,
+                    color:
+                        Colors.white,
+                    size: 13,
+                  ),
                 ),
+              ),
             ],
           ),
         ),
@@ -1279,14 +1525,17 @@ if (e is FirebaseException) {
       width: 43,
       height: 43,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        gradient: const LinearGradient(
+        borderRadius:
+            BorderRadius.circular(14),
+        gradient:
+            const LinearGradient(
           colors: [
             _pink,
             Color(0xFF8B5CF6),
           ],
         ),
-        boxShadow: const [
+        boxShadow:
+            const [
           BoxShadow(
             color: _pink,
             blurRadius: 16,
@@ -1299,7 +1548,8 @@ if (e is FirebaseException) {
           style: TextStyle(
             color: Colors.white,
             fontSize: 27,
-            fontWeight: FontWeight.w900,
+            fontWeight:
+                FontWeight.w900,
           ),
         ),
       ),
@@ -1315,20 +1565,25 @@ if (e is FirebaseException) {
         Text(
           text,
           style: TextStyle(
-            color:
-                active ? Colors.white : Colors.white54,
+            color: active
+                ? Colors.white
+                : Colors.white54,
             fontSize: 14,
-            fontWeight:
-                active ? FontWeight.bold : FontWeight.w500,
+            fontWeight: active
+                ? FontWeight.bold
+                : FontWeight.w500,
           ),
         ),
         const SizedBox(height: 5),
         AnimatedContainer(
           duration:
-              const Duration(milliseconds: 180),
+              const Duration(
+            milliseconds: 180,
+          ),
           width: active ? 22 : 0,
           height: 2,
-          decoration: BoxDecoration(
+          decoration:
+              BoxDecoration(
             color: Colors.white,
             borderRadius:
                 BorderRadius.circular(5),
@@ -1343,48 +1598,73 @@ if (e is FirebaseException) {
       bottom: false,
       child: Padding(
         padding:
-            const EdgeInsets.fromLTRB(14, 8, 10, 0),
+            const EdgeInsets.fromLTRB(
+          14,
+          8,
+          10,
+          0,
+        ),
         child: Row(
           crossAxisAlignment:
               CrossAxisAlignment.center,
           children: [
             AnimatedBuilder(
-              animation: _logoController,
+              animation:
+                  _logoController,
               builder: (_, child) {
                 return Opacity(
-                  opacity: _logoOpacity.value,
-                  child: Transform.scale(
-                    scale: _logoScale.value,
+                  opacity:
+                      _logoOpacity.value,
+                  child:
+                      Transform.scale(
+                    scale:
+                        _logoScale.value,
                     child: child,
                   ),
                 );
               },
-              child: _buildLogo(),
+              child:
+                  _buildLogo(),
             ),
+
             const Spacer(),
+
             GestureDetector(
-              onTap: () => _selectTop(0),
+              onTap: () =>
+                  _selectTop(0),
               child: _topTab(
                 'For You',
                 _topIndex == 0,
               ),
             ),
-            const SizedBox(width: 18),
+
+            const SizedBox(
+              width: 18,
+            ),
+
             GestureDetector(
-              onTap: () => _selectTop(1),
+              onTap: () =>
+                  _selectTop(1),
               child: _topTab(
                 'Following',
                 _topIndex == 1,
               ),
             ),
-            const SizedBox(width: 12),
+
+            const SizedBox(
+              width: 12,
+            ),
+
             GestureDetector(
               onTap: _openSearch,
-              child: const Padding(
-                padding: EdgeInsets.all(8),
+              child:
+                  const Padding(
+                padding:
+                    EdgeInsets.all(8),
                 child: Icon(
                   Icons.search,
-                  color: Colors.white,
+                  color:
+                      Colors.white,
                   size: 27,
                 ),
               ),
@@ -1405,7 +1685,8 @@ if (e is FirebaseException) {
     return Column(
       crossAxisAlignment:
           CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize:
+          MainAxisSize.min,
       children: [
         Row(
           children: [
@@ -1415,13 +1696,16 @@ if (e is FirebaseException) {
                 maxLines: 1,
                 overflow:
                     TextOverflow.ellipsis,
-                style: const TextStyle(
+                style:
+                    const TextStyle(
                   color: Colors.white,
                   fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  fontWeight:
+                      FontWeight.bold,
                   shadows: [
                     Shadow(
-                      color: Colors.black,
+                      color:
+                          Colors.black,
                       blurRadius: 5,
                     ),
                   ],
@@ -1430,12 +1714,16 @@ if (e is FirebaseException) {
             ),
           ],
         ),
+
         const SizedBox(height: 8),
+
         Text(
           video.caption,
           maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
+          overflow:
+              TextOverflow.ellipsis,
+          style:
+              const TextStyle(
             color: Colors.white,
             fontSize: 14,
             height: 1.3,
@@ -1447,19 +1735,26 @@ if (e is FirebaseException) {
             ],
           ),
         ),
-        if (video.hashtags.trim().isNotEmpty) ...[
+
+        if (video.hashtags
+            .trim()
+            .isNotEmpty) ...[
           const SizedBox(height: 5),
           Text(
             video.hashtags,
             maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            overflow:
+                TextOverflow.ellipsis,
+            style:
+                const TextStyle(
               color: Colors.white,
               fontSize: 13,
-              fontWeight: FontWeight.w600,
+              fontWeight:
+                  FontWeight.w600,
               shadows: [
                 Shadow(
-                  color: Colors.black,
+                  color:
+                      Colors.black,
                   blurRadius: 5,
                 ),
               ],
@@ -1474,65 +1769,88 @@ if (e is FirebaseException) {
     int index,
     VideoItem video,
   ) {
-    final controller = _controllers[index];
+    final controller =
+        _controllers[index];
 
     if (controller == null ||
-        !controller.value.isInitialized) {
+        !controller
+            .value
+            .isInitialized) {
       return const Center(
-        child: CircularProgressIndicator(
+        child:
+            CircularProgressIndicator(
           color: _pink,
           strokeWidth: 2.5,
         ),
       );
     }
 
-    final size = controller.value.size;
+    final size =
+        controller.value.size;
 
     return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: _togglePlayPause,
+      behavior:
+          HitTestBehavior.opaque,
+      onTap:
+          _togglePlayPause,
       child: Stack(
         fit: StackFit.expand,
         children: [
           Container(
             color: Colors.black,
           ),
+
           FittedBox(
             fit: BoxFit.cover,
             child: SizedBox(
               width: size.width,
               height: size.height,
-              child: VideoPlayer(controller),
+              child:
+                  VideoPlayer(
+                controller,
+              ),
             ),
           ),
+
           if (!_isPlaying &&
-              index == _currentIndex)
+              index ==
+                  _currentIndex)
             Center(
               child: Container(
                 width: 62,
                 height: 62,
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(.42),
-                  shape: BoxShape.circle,
+                decoration:
+                    BoxDecoration(
+                  color: Colors.black
+                      .withOpacity(.42),
+                  shape:
+                      BoxShape.circle,
                 ),
-                child: const Icon(
+                child:
+                    const Icon(
                   Icons.play_arrow,
-                  color: Colors.white,
+                  color:
+                      Colors.white,
                   size: 40,
                 ),
               ),
             ),
-          if (index == _currentIndex)
+
+          if (index ==
+              _currentIndex)
             Positioned(
               right: 10,
               bottom: 116,
-              child: _buildRightButtons(),
+              child:
+                  _buildRightButtons(),
             ),
+
           Positioned(
             left: 18,
             right: 92,
             bottom: 124,
-            child: _buildVideoInformation(),
+            child:
+                _buildVideoInformation(),
           ),
         ],
       ),
@@ -1552,11 +1870,16 @@ if (e is FirebaseException) {
     }
 
     return PageView.builder(
-      controller: _pageController,
-      scrollDirection: Axis.vertical,
-      itemCount: _videos.length,
-      onPageChanged: _onPageChanged,
-      itemBuilder: (context, index) {
+      controller:
+          _pageController,
+      scrollDirection:
+          Axis.vertical,
+      itemCount:
+          _videos.length,
+      onPageChanged:
+          _onPageChanged,
+      itemBuilder:
+          (context, index) {
         return _buildVideoItem(
           index,
           _videos[index],
@@ -1571,7 +1894,8 @@ if (e is FirebaseException) {
     int index,
   ) {
     return GestureDetector(
-      onTap: () => _selectBottom(index),
+      onTap: () =>
+          _selectBottom(index),
       child: SizedBox(
         width: 58,
         child: Column(
@@ -1580,18 +1904,20 @@ if (e is FirebaseException) {
           children: [
             Icon(
               icon,
-              color: _bottomIndex == index
-                  ? Colors.white
-                  : Colors.white54,
+              color:
+                  _bottomIndex == index
+                      ? Colors.white
+                      : Colors.white54,
               size: 24,
             ),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
-                color: _bottomIndex == index
-                    ? Colors.white
-                    : Colors.white54,
+                color:
+                    _bottomIndex == index
+                        ? Colors.white
+                        : Colors.white54,
                 fontSize: 10,
               ),
             ),
@@ -1619,35 +1945,45 @@ if (e is FirebaseException) {
             'Friends',
             1,
           ),
+
           GestureDetector(
-            onTap: () => _selectBottom(2),
+            onTap: () =>
+                _selectBottom(2),
             child: Container(
               width: 52,
               height: 38,
-              decoration: BoxDecoration(
+              decoration:
+                  BoxDecoration(
                 borderRadius:
-                    BorderRadius.circular(12),
-                gradient: const LinearGradient(
+                    BorderRadius.circular(
+                  12,
+                ),
+                gradient:
+                    const LinearGradient(
                   colors: [
                     _cyan,
                     _pink,
                   ],
                 ),
               ),
-              child: const Center(
+              child:
+                  const Center(
                 child: Icon(
                   Icons.add,
-                  color: Colors.white,
+                  color:
+                      Colors.white,
                   size: 29,
                 ),
               ),
             ),
           ),
+
           _bottomButton(
             Icons.chat_bubble_outline,
             'Inbox',
             3,
           ),
+
           _bottomButton(
             Icons.person_outline,
             'Profile',
@@ -1711,94 +2047,306 @@ if (e is FirebaseException) {
     final controller =
         TextEditingController();
 
-    await showDialog<void>(
+    await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
+      backgroundColor:
+          Colors.transparent,
       builder: (context) {
-        return AlertDialog(
-          backgroundColor:
-              const Color(0xFF171717),
-          title: const Text(
-            'Search PALOK',
-            style: TextStyle(
-              color: Colors.white,
-            ),
-          ),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            style: const TextStyle(
-              color: Colors.white,
-            ),
-            decoration:
-                InputDecoration(
-              hintText:
-                  'Search videos, users...',
-              hintStyle:
-                  const TextStyle(
-                color: Colors.white38,
-              ),
-              enabledBorder:
-                  OutlineInputBorder(
+        int selectedTab = 0;
+
+        return StatefulBuilder(
+          builder:
+              (context, setSheetState) {
+            return Container(
+              height:
+                  MediaQuery.of(context)
+                          .size
+                          .height *
+                      .88,
+              decoration:
+                  const BoxDecoration(
+                color:
+                    Color(0xFF101010),
                 borderRadius:
-                    BorderRadius.circular(12),
-                borderSide:
-                    const BorderSide(
-                  color: Colors.white24,
+                    BorderRadius.vertical(
+                  top: Radius.circular(
+                    24,
+                  ),
                 ),
               ),
-              focusedBorder:
-                  OutlineInputBorder(
-                borderRadius:
-                    BorderRadius.circular(12),
-                borderSide:
-                    const BorderSide(
-                  color: _pink,
-                ),
-              ),
-            ),
-            onSubmitted: (value) {
-              Navigator.pop(context);
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  children: [
+                    const SizedBox(
+                      height: 10,
+                    ),
 
-              if (value.trim().isNotEmpty) {
-                _showMessage(
-                  'Searching for "${value.trim()}"',
-                );
-              }
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text(
-                'Cancel',
-                style: TextStyle(
-                  color: Colors.white54,
+                    Container(
+                      width: 42,
+                      height: 4,
+                      decoration:
+                          BoxDecoration(
+                        color:
+                            Colors.white24,
+                        borderRadius:
+                            BorderRadius
+                                .circular(
+                          10,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(
+                      height: 16,
+                    ),
+
+                    Padding(
+                      padding:
+                          const EdgeInsets
+                              .symmetric(
+                        horizontal: 14,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child:
+                                Container(
+                              height: 46,
+                              decoration:
+                                  BoxDecoration(
+                                color:
+                                    Colors.white10,
+                                borderRadius:
+                                    BorderRadius
+                                        .circular(
+                                  14,
+                                ),
+                                border:
+                                    Border.all(
+                                  color:
+                                      Colors.white12,
+                                ),
+                              ),
+                              child:
+                                  TextField(
+                                controller:
+                                    controller,
+                                autofocus:
+                                    true,
+                                style:
+                                    const TextStyle(
+                                  color:
+                                      Colors.white,
+                                  fontSize:
+                                      14,
+                                ),
+                                decoration:
+                                    const InputDecoration(
+                                  border:
+                                      InputBorder
+                                          .none,
+                                  prefixIcon:
+                                      Icon(
+                                    Icons.search,
+                                    color:
+                                        Colors.white60,
+                                    size: 22,
+                                  ),
+                                  hintText:
+                                      'Search PALOK...',
+                                  hintStyle:
+                                      TextStyle(
+                                    color:
+                                        Colors.white38,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(
+                            width: 8,
+                          ),
+
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.pop(
+                                context,
+                              );
+                            },
+                            child:
+                                const Padding(
+                              padding:
+                                  EdgeInsets.all(
+                                8,
+                              ),
+                              child:
+                                  Text(
+                                'Cancel',
+                                style:
+                                    TextStyle(
+                                  color:
+                                      Colors.white70,
+                                  fontSize:
+                                      14,
+                                  fontWeight:
+                                      FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(
+                      height: 18,
+                    ),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child:
+                              GestureDetector(
+                            onTap: () {
+                              setSheetState(
+                                () {
+                                  selectedTab =
+                                      0;
+                                },
+                              );
+                            },
+                            child:
+                                _searchTab(
+                              'Top',
+                              selectedTab ==
+                                  0,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child:
+                              GestureDetector(
+                            onTap: () {
+                              setSheetState(
+                                () {
+                                  selectedTab =
+                                      1;
+                                },
+                              );
+                            },
+                            child:
+                                _searchTab(
+                              'Users',
+                              selectedTab ==
+                                  1,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child:
+                              GestureDetector(
+                            onTap: () {
+                              setSheetState(
+                                () {
+                                  selectedTab =
+                                      2;
+                                },
+                              );
+                            },
+                            child:
+                                _searchTab(
+                              'Videos',
+                              selectedTab ==
+                                  2,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const Divider(
+                      color:
+                          Colors.white10,
+                      height: 1,
+                    ),
+
+                    Expanded(
+                      child:
+                          Center(
+                        child:
+                            Column(
+                          mainAxisAlignment:
+                              MainAxisAlignment
+                                  .center,
+                          children: [
+                            Container(
+                              width: 64,
+                              height: 64,
+                              decoration:
+                                  BoxDecoration(
+                                shape:
+                                    BoxShape
+                                        .circle,
+                                color:
+                                    Colors.white10,
+                                border:
+                                    Border.all(
+                                  color:
+                                      Colors.white12,
+                                ),
+                              ),
+                              child:
+                                  const Icon(
+                                Icons.search,
+                                color:
+                                    Colors.white38,
+                                size: 30,
+                              ),
+                            ),
+
+                            const SizedBox(
+                              height: 14,
+                            ),
+
+                            const Text(
+                              'Search PALOK',
+                              style:
+                                  TextStyle(
+                                color:
+                                    Colors.white,
+                                fontSize:
+                                    17,
+                                fontWeight:
+                                    FontWeight.bold,
+                              ),
+                            ),
+
+                            const SizedBox(
+                              height: 6,
+                            ),
+
+                            const Text(
+                              'Find videos, creators and more',
+                              style:
+                                  TextStyle(
+                                color:
+                                    Colors.white38,
+                                fontSize:
+                                    13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-            TextButton(
-              onPressed: () {
-                final value =
-                    controller.text.trim();
-
-                Navigator.pop(context);
-
-                if (value.isNotEmpty) {
-                  _showMessage(
-                    'Searching for "$value"',
-                  );
-                }
-              },
-              child: const Text(
-                'Search',
-                style: TextStyle(
-                  color: _pink,
-                ),
-              ),
-            ),
-          ],
+            );
+          },
         );
       },
     );
@@ -1806,8 +2354,58 @@ if (e is FirebaseException) {
     controller.dispose();
   }
 
+  Widget _searchTab(
+    String text,
+    bool active,
+  ) {
+    return SizedBox(
+      height: 42,
+      child: Column(
+        mainAxisAlignment:
+            MainAxisAlignment.end,
+        children: [
+          Text(
+            text,
+            style: TextStyle(
+              color: active
+                  ? Colors.white
+                  : Colors.white54,
+              fontSize: 14,
+              fontWeight: active
+                  ? FontWeight.bold
+                  : FontWeight.w500,
+            ),
+          ),
+
+          const SizedBox(
+            height: 8,
+          ),
+
+          AnimatedContainer(
+            duration:
+                const Duration(
+              milliseconds: 180,
+            ),
+            width:
+                active ? 28 : 0,
+            height: 2,
+            decoration:
+                BoxDecoration(
+              color: _pink,
+              borderRadius:
+                  BorderRadius.circular(
+                4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _openComments() async {
-    final video = _currentVideo;
+    final video =
+        _currentVideo;
 
     if (video == null) return;
 
@@ -1817,11 +2415,13 @@ if (e is FirebaseException) {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor:
+          Colors.transparent,
       builder: (context) {
         return _CommentsSheet(
           video: video,
-          inputController: inputController,
+          inputController:
+              inputController,
           onSend: (text) async {
             await _addComment(text);
           },
@@ -1837,8 +2437,10 @@ if (e is FirebaseException) {
       context: context,
       backgroundColor:
           const Color(0xFF111111),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
+      shape:
+          const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(
           top: Radius.circular(24),
         ),
       ),
@@ -1862,48 +2464,77 @@ if (e is FirebaseException) {
                   height: 4,
                   decoration:
                       BoxDecoration(
-                    color: Colors.white24,
+                    color:
+                        Colors.white24,
                     borderRadius:
-                        BorderRadius.circular(4),
+                        BorderRadius.circular(
+                      4,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 22),
+
+                const SizedBox(
+                  height: 22,
+                ),
+
                 const Text(
                   'Create on PALOK',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                    fontWeight:
+                        FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 18),
+
+                const SizedBox(
+                  height: 18,
+                ),
+
                 _createOption(
                   Icons.videocam,
                   'Record Video',
                   () {
-                    Navigator.pop(context);
+                    Navigator.pop(
+                      context,
+                    );
+
                     _pickVideo(
                       ImageSource.camera,
                     );
                   },
                 ),
-                const SizedBox(height: 10),
+
+                const SizedBox(
+                  height: 10,
+                ),
+
                 _createOption(
                   Icons.video_library,
                   'Upload Video',
                   () {
-                    Navigator.pop(context);
+                    Navigator.pop(
+                      context,
+                    );
+
                     _pickVideo(
                       ImageSource.gallery,
                     );
                   },
                 ),
-                const SizedBox(height: 10),
+
+                const SizedBox(
+                  height: 10,
+                ),
+
                 _createOption(
                   Icons.music_note,
                   'Add Sound',
                   () {
-                    Navigator.pop(context);
+                    Navigator.pop(
+                      context,
+                    );
+
                     _showMessage(
                       'Sound feature শীঘ্রই আসছে।',
                     );
@@ -1931,8 +2562,10 @@ if (e is FirebaseException) {
           horizontal: 18,
           vertical: 15,
         ),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(.07),
+        decoration:
+            BoxDecoration(
+          color:
+              Colors.white.withOpacity(.07),
           borderRadius:
               BorderRadius.circular(15),
           border: Border.all(
@@ -1944,29 +2577,43 @@ if (e is FirebaseException) {
             Container(
               width: 42,
               height: 42,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _pink.withOpacity(.15),
+              decoration:
+                  BoxDecoration(
+                shape:
+                    BoxShape.circle,
+                color:
+                    _pink.withOpacity(.15),
               ),
               child: Icon(
                 icon,
-                color: Colors.white,
+                color:
+                    Colors.white,
                 size: 23,
               ),
             ),
-            const SizedBox(width: 14),
+
+            const SizedBox(
+              width: 14,
+            ),
+
             Text(
               title,
-              style: const TextStyle(
-                color: Colors.white,
+              style:
+                  const TextStyle(
+                color:
+                    Colors.white,
                 fontSize: 15,
-                fontWeight: FontWeight.w600,
+                fontWeight:
+                    FontWeight.w600,
               ),
             ),
+
             const Spacer(),
+
             const Icon(
               Icons.chevron_right,
-              color: Colors.white38,
+              color:
+                  Colors.white38,
             ),
           ],
         ),
@@ -1977,22 +2624,28 @@ if (e is FirebaseException) {
   Future<void> _pickVideo(
     ImageSource source,
   ) async {
-    final user = await _requireLogin();
+    final user =
+        await _requireLogin();
 
     if (user == null) return;
 
     try {
-      final picked = await _picker.pickVideo(
+      final picked =
+          await _picker.pickVideo(
         source: source,
         maxDuration:
-            const Duration(minutes: 5),
+            const Duration(
+          minutes: 5,
+        ),
       );
 
       if (picked == null) return;
 
       if (!mounted) return;
 
-      await _openPostComposer(picked);
+      await _openPostComposer(
+        picked,
+      );
     } catch (e) {
       debugPrint(
         'Pick video error: $e',
@@ -2018,7 +2671,8 @@ if (e is FirebaseException) {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.black,
+      backgroundColor:
+          Colors.black,
       builder: (context) {
         return _PostComposerSheet(
           file: file,
@@ -2028,12 +2682,18 @@ if (e is FirebaseException) {
               hashtagsController,
           onPost: () async {
             final caption =
-                captionController.text.trim();
+                captionController
+                    .text
+                    .trim();
 
             final hashtags =
-                hashtagsController.text.trim();
+                hashtagsController
+                    .text
+                    .trim();
 
-            Navigator.pop(context);
+            Navigator.pop(
+              context,
+            );
 
             await _uploadVideoToCloudinary(
               file,
@@ -2049,12 +2709,14 @@ if (e is FirebaseException) {
     hashtagsController.dispose();
   }
 
-  Future<void> _uploadVideoToCloudinary(
+  Future<void>
+      _uploadVideoToCloudinary(
     XFile file, {
     required String caption,
     required String hashtags,
   }) async {
-    final user = await _requireLogin();
+    final user =
+        await _requireLogin();
 
     if (user == null) return;
 
@@ -2065,7 +2727,9 @@ if (e is FirebaseException) {
     });
 
     try {
-      const cloudName = 'u0jufmrl';
+      const cloudName =
+          'u0jufmrl';
+
       const uploadPreset =
           'palok_video_upload';
 
@@ -2080,14 +2744,16 @@ if (e is FirebaseException) {
         uri,
       );
 
-      request.fields['upload_preset'] =
+      request.fields[
+              'upload_preset'] =
           uploadPreset;
 
       request.fields['folder'] =
           'palok/videos';
 
       request.files.add(
-        await http.MultipartFile.fromPath(
+        await http.MultipartFile
+            .fromPath(
           'file',
           file.path,
         ),
@@ -2097,10 +2763,13 @@ if (e is FirebaseException) {
           await request.send();
 
       final responseBody =
-          await response.stream.bytesToString();
+          await response.stream
+              .bytesToString();
 
-      if (response.statusCode < 200 ||
-          response.statusCode >= 300) {
+      if (response.statusCode <
+              200 ||
+          response.statusCode >=
+              300) {
         throw Exception(
           'Cloudinary upload failed: '
           '${response.statusCode} '
@@ -2113,7 +2782,8 @@ if (e is FirebaseException) {
               as Map<String, dynamic>;
 
       final videoUrl =
-          data['secure_url'] as String?;
+          data['secure_url']
+              as String?;
 
       if (videoUrl == null ||
           videoUrl.isEmpty) {
@@ -2140,8 +2810,10 @@ if (e is FirebaseException) {
                 ? user.displayName!.trim()
                 : '@palok_user',
         'videoUrl': videoUrl,
-        'cloudinaryPublicId': publicId,
-        'cloudinaryAssetId': assetId,
+        'cloudinaryPublicId':
+            publicId,
+        'cloudinaryAssetId':
+            assetId,
         'caption': caption,
         'hashtags': hashtags,
         'likeCount': 0,
@@ -2177,10 +2849,14 @@ if (e is FirebaseException) {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return Scaffold(
-      backgroundColor: Colors.black,
-      resizeToAvoidBottomInset: false,
+      backgroundColor:
+          Colors.black,
+      resizeToAvoidBottomInset:
+          false,
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -2198,7 +2874,8 @@ if (e is FirebaseException) {
             left: 0,
             right: 0,
             top: 0,
-            child: _buildTopBar(),
+            child:
+                _buildTopBar(),
           ),
 
           if (_isUploading)
@@ -2208,15 +2885,19 @@ if (e is FirebaseException) {
               bottom: 90,
               child: Container(
                 padding:
-                    const EdgeInsets.symmetric(
+                    const EdgeInsets
+                        .symmetric(
                   horizontal: 16,
                   vertical: 12,
                 ),
-                decoration: BoxDecoration(
+                decoration:
+                    BoxDecoration(
                   color: Colors.black
                       .withOpacity(.82),
                   borderRadius:
-                      BorderRadius.circular(14),
+                      BorderRadius.circular(
+                    14,
+                  ),
                   border: Border.all(
                     color: Colors.white12,
                   ),
@@ -2232,12 +2913,18 @@ if (e is FirebaseException) {
                         strokeWidth: 2,
                       ),
                     ),
-                    SizedBox(width: 12),
+
+                    SizedBox(
+                      width: 12,
+                    ),
+
                     Expanded(
                       child: Text(
                         'ভিডিও upload হচ্ছে...',
-                        style: TextStyle(
-                          color: Colors.white,
+                        style:
+                            TextStyle(
+                          color:
+                              Colors.white,
                           fontSize: 13,
                         ),
                       ),
@@ -2253,7 +2940,8 @@ if (e is FirebaseException) {
             bottom: 0,
             child: SafeArea(
               top: false,
-              child: _buildBottomNavigation(),
+              child:
+                  _buildBottomNavigation(),
             ),
           ),
         ],
@@ -2263,8 +2951,11 @@ if (e is FirebaseException) {
 
   @override
   void dispose() {
-    _videoSubscription?.cancel();
+    _videoSubscription
+        ?.cancel();
+
     _pageController.dispose();
+
     _logoController.dispose();
 
     for (final controller
@@ -2332,29 +3023,40 @@ class VideoItem {
   ) {
     return VideoItem(
       id: id,
-      url: (data['videoUrl'] ?? '').toString(),
+      url:
+          (data['videoUrl'] ?? '')
+              .toString(),
       username:
-          (data['username'] ?? '@palok_user')
+          (data['username'] ??
+                  '@palok_user')
               .toString(),
       caption:
-          (data['caption'] ?? '').toString(),
+          (data['caption'] ?? '')
+              .toString(),
       hashtags:
-          (data['hashtags'] ?? '').toString(),
+          (data['hashtags'] ?? '')
+              .toString(),
       likes:
           _number(data['likeCount']),
       comments:
-          _number(data['commentCount']),
+          _number(
+              data['commentCount']),
       saves:
-          _number(data['saveCount']),
+          _number(
+              data['saveCount']),
       shares:
-          _number(data['shareCount']),
+          _number(
+              data['shareCount']),
       ownerId:
-          data['ownerId']?.toString(),
+          data['ownerId']
+              ?.toString(),
       isAsset: false,
     );
   }
 
-  static int _number(dynamic value) {
+  static int _number(
+    dynamic value,
+  ) {
     if (value is num) {
       return value.toInt();
     }
@@ -2366,10 +3068,16 @@ class VideoItem {
   }
 }
 
-class _CommentsSheet extends StatefulWidget {
+class _CommentsSheet
+    extends StatefulWidget {
   final VideoItem video;
-  final TextEditingController inputController;
-  final Future<void> Function(String text) onSend;
+
+  final TextEditingController
+      inputController;
+
+  final Future<void> Function(
+    String text,
+  ) onSend;
 
   const _CommentsSheet({
     required this.video,
@@ -2388,9 +3096,13 @@ class _CommentsSheetState
 
   Future<void> _sendComment() async {
     final text =
-        widget.inputController.text.trim();
+        widget.inputController.text
+            .trim();
 
-    if (text.isEmpty || _sending) return;
+    if (text.isEmpty ||
+        _sending) {
+      return;
+    }
 
     setState(() {
       _sending = true;
@@ -2400,7 +3112,8 @@ class _CommentsSheetState
       await widget.onSend(text);
 
       if (mounted) {
-        widget.inputController.clear();
+        widget.inputController
+            .clear();
       }
     } catch (e) {
       debugPrint(
@@ -2421,7 +3134,9 @@ class _CommentsSheetState
   }) {
     return Padding(
       padding:
-          const EdgeInsets.only(bottom: 18),
+          const EdgeInsets.only(
+        bottom: 18,
+      ),
       child: Row(
         crossAxisAlignment:
             CrossAxisAlignment.start,
@@ -2432,11 +3147,16 @@ class _CommentsSheetState
                 Color(0xFF333333),
             child: Icon(
               Icons.person,
-              color: Colors.white54,
+              color:
+                  Colors.white54,
               size: 19,
             ),
           ),
-          const SizedBox(width: 10),
+
+          const SizedBox(
+            width: 10,
+          ),
+
           Expanded(
             child: Column(
               crossAxisAlignment:
@@ -2444,17 +3164,26 @@ class _CommentsSheetState
               children: [
                 Text(
                   username,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white,
                     fontSize: 13,
-                    fontWeight: FontWeight.bold,
+                    fontWeight:
+                        FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 4),
+
+                const SizedBox(
+                  height: 4,
+                ),
+
                 Text(
                   text,
-                  style: const TextStyle(
-                    color: Colors.white70,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white70,
                     fontSize: 14,
                     height: 1.3,
                   ),
@@ -2472,7 +3201,8 @@ class _CommentsSheetState
 
     if (video.id == null) {
       final user =
-          FirebaseAuth.instance.currentUser;
+          FirebaseAuth.instance
+              .currentUser;
 
       if (user == null) {
         return const Center(
@@ -2485,17 +3215,24 @@ class _CommentsSheetState
         );
       }
 
-      final key = video.url.replaceAll(
-        RegExp(r'[^A-Za-z0-9_-]'),
+      final key =
+          video.url.replaceAll(
+        RegExp(
+          r'[^A-Za-z0-9_-]',
+        ),
         '_',
       );
 
       return StreamBuilder<
-          QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
+          QuerySnapshot<
+              Map<String, dynamic>>>(
+        stream: FirebaseFirestore
+            .instance
             .collection('users')
             .doc(user.uid)
-            .collection('demoComments')
+            .collection(
+              'demoComments',
+            )
             .doc(key)
             .collection('items')
             .orderBy(
@@ -2503,38 +3240,46 @@ class _CommentsSheetState
               descending: false,
             )
             .snapshots(),
-        builder: (context, snapshot) {
+        builder:
+            (context, snapshot) {
           if (snapshot.hasError) {
             return const Center(
               child: Text(
                 'Comments unavailable',
                 style: TextStyle(
-                  color: Colors.white54,
+                  color:
+                      Colors.white54,
                 ),
               ),
             );
           }
 
-          if (snapshot.connectionState ==
-                  ConnectionState.waiting &&
+          if (snapshot
+                      .connectionState ==
+                  ConnectionState
+                      .waiting &&
               !snapshot.hasData) {
             return const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFFFF2D75),
+              child:
+                  CircularProgressIndicator(
+                color:
+                    Color(0xFFFF2D75),
                 strokeWidth: 2,
               ),
             );
           }
 
           final docs =
-              snapshot.data?.docs ?? [];
+              snapshot.data?.docs ??
+                  [];
 
           if (docs.isEmpty) {
             return const Center(
               child: Text(
                 'Be the first to comment',
                 style: TextStyle(
-                  color: Colors.white54,
+                  color:
+                      Colors.white54,
                 ),
               ),
             );
@@ -2542,17 +3287,17 @@ class _CommentsSheetState
 
           return ListView.builder(
             padding:
-                const EdgeInsets.fromLTRB(
+                const EdgeInsets
+                    .fromLTRB(
               16,
               16,
               16,
               8,
             ),
-            itemCount: docs.length,
-            itemBuilder: (
-              context,
-              index,
-            ) {
+            itemCount:
+                docs.length,
+            itemBuilder:
+                (context, index) {
               final data =
                   docs[index].data();
 
@@ -2573,8 +3318,10 @@ class _CommentsSheetState
     }
 
     return StreamBuilder<
-        QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+        QuerySnapshot<
+            Map<String, dynamic>>>(
+      stream: FirebaseFirestore
+          .instance
           .collection('videos')
           .doc(video.id)
           .collection('comments')
@@ -2583,38 +3330,46 @@ class _CommentsSheetState
             descending: false,
           )
           .snapshots(),
-      builder: (context, snapshot) {
+      builder:
+          (context, snapshot) {
         if (snapshot.hasError) {
           return const Center(
             child: Text(
               'Comments unavailable',
               style: TextStyle(
-                color: Colors.white54,
+                color:
+                    Colors.white54,
               ),
             ),
           );
         }
 
-        if (snapshot.connectionState ==
-                ConnectionState.waiting &&
+        if (snapshot
+                    .connectionState ==
+                ConnectionState
+                    .waiting &&
             !snapshot.hasData) {
           return const Center(
-            child: CircularProgressIndicator(
-              color: Color(0xFFFF2D75),
+            child:
+                CircularProgressIndicator(
+              color:
+                  Color(0xFFFF2D75),
               strokeWidth: 2,
             ),
           );
         }
 
         final docs =
-            snapshot.data?.docs ?? [];
+            snapshot.data?.docs ??
+                [];
 
         if (docs.isEmpty) {
           return const Center(
             child: Text(
               'Be the first to comment',
               style: TextStyle(
-                color: Colors.white54,
+                color:
+                    Colors.white54,
               ),
             ),
           );
@@ -2622,17 +3377,17 @@ class _CommentsSheetState
 
         return ListView.builder(
           padding:
-              const EdgeInsets.fromLTRB(
+              const EdgeInsets
+                  .fromLTRB(
             16,
             16,
             16,
             8,
           ),
-          itemCount: docs.length,
-          itemBuilder: (
-            context,
-            index,
-          ) {
+          itemCount:
+              docs.length,
+          itemBuilder:
+              (context, index) {
             final data =
                 docs[index].data();
 
@@ -2653,27 +3408,37 @@ class _CommentsSheetState
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     final keyboard =
         MediaQuery.of(context)
             .viewInsets
             .bottom;
 
     final screenHeight =
-        MediaQuery.of(context).size.height;
+        MediaQuery.of(context)
+            .size
+            .height;
 
     return AnimatedPadding(
       duration:
-          const Duration(milliseconds: 180),
+          const Duration(
+        milliseconds: 180,
+      ),
       padding:
-          EdgeInsets.only(bottom: keyboard),
+          EdgeInsets.only(
+        bottom: keyboard,
+      ),
       child: SafeArea(
         top: false,
         child: Container(
-          height: screenHeight * .62,
+          height:
+              screenHeight * .62,
           decoration:
               const BoxDecoration(
-            color: Color(0xFF101010),
+            color:
+                Color(0xFF101010),
             borderRadius:
                 BorderRadius.vertical(
               top: Radius.circular(22),
@@ -2681,22 +3446,28 @@ class _CommentsSheetState
           ),
           child: Column(
             children: [
-              const SizedBox(height: 10),
+              const SizedBox(
+                height: 10,
+              ),
 
               Container(
                 width: 42,
                 height: 4,
                 decoration:
                     BoxDecoration(
-                  color: Colors.white24,
+                  color:
+                      Colors.white24,
                   borderRadius:
-                      BorderRadius.circular(10),
+                      BorderRadius.circular(
+                    10,
+                  ),
                 ),
               ),
 
               Padding(
                 padding:
-                    const EdgeInsets.fromLTRB(
+                    const EdgeInsets
+                        .fromLTRB(
                   18,
                   12,
                   10,
@@ -2709,22 +3480,26 @@ class _CommentsSheetState
                         '${widget.video.comments} Comments',
                         style:
                             const TextStyle(
-                          color: Colors.white,
+                          color:
+                              Colors.white,
                           fontSize: 16,
                           fontWeight:
                               FontWeight.bold,
                         ),
                       ),
                     ),
+
                     IconButton(
                       onPressed: () {
                         Navigator.pop(
                           context,
                         );
                       },
-                      icon: const Icon(
+                      icon:
+                          const Icon(
                         Icons.close,
-                        color: Colors.white,
+                        color:
+                            Colors.white,
                       ),
                     ),
                   ],
@@ -2732,17 +3507,20 @@ class _CommentsSheetState
               ),
 
               const Divider(
-                color: Colors.white10,
+                color:
+                    Colors.white10,
                 height: 1,
               ),
 
               Expanded(
-                child: _buildComments(),
+                child:
+                    _buildComments(),
               ),
 
               Padding(
                 padding:
-                    const EdgeInsets.fromLTRB(
+                    const EdgeInsets
+                        .fromLTRB(
                   12,
                   8,
                   12,
@@ -2750,21 +3528,25 @@ class _CommentsSheetState
                 ),
                 child: Row(
                   crossAxisAlignment:
-                      CrossAxisAlignment.end,
+                      CrossAxisAlignment
+                          .end,
                   children: [
                     Expanded(
-                      child: TextField(
+                      child:
+                          TextField(
                         controller:
                             widget.inputController,
                         textInputAction:
-                            TextInputAction.send,
+                            TextInputAction
+                                .send,
                         onSubmitted: (_) =>
                             _sendComment(),
                         minLines: 1,
                         maxLines: 4,
                         style:
                             const TextStyle(
-                          color: Colors.white,
+                          color:
+                              Colors.white,
                           fontSize: 14,
                         ),
                         decoration:
@@ -2773,7 +3555,8 @@ class _CommentsSheetState
                               'Add comment...',
                           hintStyle:
                               const TextStyle(
-                            color: Colors.white38,
+                            color:
+                                Colors.white38,
                           ),
                           filled: true,
                           fillColor:
@@ -2791,23 +3574,30 @@ class _CommentsSheetState
                           contentPadding:
                               const EdgeInsets
                                   .symmetric(
-                            horizontal: 18,
-                            vertical: 12,
+                            horizontal:
+                                18,
+                            vertical:
+                                12,
                           ),
                         ),
                       ),
                     ),
 
-                    const SizedBox(width: 8),
+                    const SizedBox(
+                      width: 8,
+                    ),
 
                     GestureDetector(
-                      onTap: _sendComment,
-                      child: Container(
+                      onTap:
+                          _sendComment,
+                      child:
+                          Container(
                         width: 46,
                         height: 46,
                         decoration:
                             const BoxDecoration(
-                          shape: BoxShape.circle,
+                          shape:
+                              BoxShape.circle,
                           color:
                               Color(0xFFFF2D75),
                         ),
@@ -2819,7 +3609,8 @@ class _CommentsSheetState
                                 ),
                                 child:
                                     CircularProgressIndicator(
-                                  strokeWidth: 2,
+                                  strokeWidth:
+                                      2,
                                   color:
                                       Colors.white,
                                 ),
@@ -2846,10 +3637,13 @@ class _CommentsSheetState
 class _PostComposerSheet
     extends StatefulWidget {
   final XFile file;
+
   final TextEditingController
       captionController;
+
   final TextEditingController
       hashtagsController;
+
   final VoidCallback onPost;
 
   const _PostComposerSheet({
@@ -2866,7 +3660,8 @@ class _PostComposerSheet
 
 class _PostComposerSheetState
     extends State<_PostComposerSheet> {
-  VideoPlayerController? _controller;
+  VideoPlayerController?
+      _controller;
 
   bool _loading = true;
   bool _failed = false;
@@ -2874,10 +3669,12 @@ class _PostComposerSheetState
   @override
   void initState() {
     super.initState();
+
     _initializePreview();
   }
 
-  Future<void> _initializePreview() async {
+  Future<void>
+      _initializePreview() async {
     try {
       final controller =
           VideoPlayerController.file(
@@ -2888,7 +3685,10 @@ class _PostComposerSheetState
 
       await controller.initialize();
 
-      await controller.setLooping(true);
+      await controller.setLooping(
+        true,
+      );
+
       await controller.play();
 
       if (!mounted) return;
@@ -2916,14 +3716,18 @@ class _PostComposerSheetState
         height: 340,
         decoration:
             BoxDecoration(
-          color: Colors.white10,
+          color:
+              Colors.white10,
           borderRadius:
-              BorderRadius.circular(16),
+              BorderRadius.circular(
+            16,
+          ),
         ),
         child: const Center(
           child:
               CircularProgressIndicator(
-            color: Color(0xFFFF2D75),
+            color:
+                Color(0xFFFF2D75),
             strokeWidth: 2,
           ),
         ),
@@ -2932,30 +3736,42 @@ class _PostComposerSheetState
 
     if (_failed ||
         _controller == null ||
-        !_controller!.value.isInitialized) {
+        !_controller!
+            .value
+            .isInitialized) {
       return Container(
         height: 340,
         decoration:
             BoxDecoration(
-          color: Colors.white10,
+          color:
+              Colors.white10,
           borderRadius:
-              BorderRadius.circular(16),
+              BorderRadius.circular(
+            16,
+          ),
         ),
-        child: const Center(
+        child:
+            const Center(
           child: Column(
             mainAxisAlignment:
-                MainAxisAlignment.center,
+                MainAxisAlignment
+                    .center,
             children: [
               Icon(
                 Icons.error_outline,
-                color: Colors.white54,
+                color:
+                    Colors.white54,
                 size: 42,
               ),
-              SizedBox(height: 10),
+              SizedBox(
+                height: 10,
+              ),
               Text(
                 'Video preview unavailable',
-                style: TextStyle(
-                  color: Colors.white54,
+                style:
+                    TextStyle(
+                  color:
+                      Colors.white54,
                 ),
               ),
             ],
@@ -2964,7 +3780,8 @@ class _PostComposerSheetState
       );
     }
 
-    final controller = _controller!;
+    final controller =
+        _controller!;
 
     return Container(
       constraints:
@@ -2975,14 +3792,19 @@ class _PostComposerSheetState
           BoxDecoration(
         color: Colors.black,
         borderRadius:
-            BorderRadius.circular(16),
+            BorderRadius.circular(
+          16,
+        ),
       ),
       clipBehavior:
           Clip.antiAlias,
       child: AspectRatio(
         aspectRatio:
-            controller.value.aspectRatio,
-        child: VideoPlayer(
+            controller
+                .value
+                .aspectRatio,
+        child:
+            VideoPlayer(
           controller,
         ),
       ),
@@ -2990,25 +3812,35 @@ class _PostComposerSheetState
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     final keyboard =
         MediaQuery.of(context)
             .viewInsets
             .bottom;
 
     final screenHeight =
-        MediaQuery.of(context).size.height;
+        MediaQuery.of(context)
+            .size
+            .height;
 
     return AnimatedPadding(
       duration:
-          const Duration(milliseconds: 200),
+          const Duration(
+        milliseconds: 200,
+      ),
       padding:
-          EdgeInsets.only(bottom: keyboard),
+          EdgeInsets.only(
+        bottom: keyboard,
+      ),
       child: Container(
-        height: screenHeight * .88,
+        height:
+            screenHeight * .88,
         decoration:
             const BoxDecoration(
-          color: Color(0xFF101010),
+          color:
+              Color(0xFF101010),
           borderRadius:
               BorderRadius.vertical(
             top: Radius.circular(24),
@@ -3016,24 +3848,32 @@ class _PostComposerSheetState
         ),
         child: Column(
           children: [
-            const SizedBox(height: 12),
+            const SizedBox(
+              height: 12,
+            ),
 
             Container(
               width: 42,
               height: 4,
               decoration:
                   BoxDecoration(
-                color: Colors.white24,
+                color:
+                    Colors.white24,
                 borderRadius:
-                    BorderRadius.circular(10),
+                    BorderRadius.circular(
+                  10,
+                ),
               ),
             ),
 
-            const SizedBox(height: 12),
+            const SizedBox(
+              height: 12,
+            ),
 
             Padding(
               padding:
-                  const EdgeInsets.symmetric(
+                  const EdgeInsets
+                      .symmetric(
                 horizontal: 18,
               ),
               child: Row(
@@ -3041,23 +3881,28 @@ class _PostComposerSheetState
                   const Expanded(
                     child: Text(
                       'Post Video',
-                      style: TextStyle(
-                        color: Colors.white,
+                      style:
+                          TextStyle(
+                        color:
+                            Colors.white,
                         fontSize: 20,
                         fontWeight:
                             FontWeight.bold,
                       ),
                     ),
                   ),
+
                   IconButton(
                     onPressed: () {
                       Navigator.pop(
                         context,
                       );
                     },
-                    icon: const Icon(
+                    icon:
+                        const Icon(
                       Icons.close,
-                      color: Colors.white,
+                      color:
+                          Colors.white,
                     ),
                   ),
                 ],
@@ -3070,7 +3915,8 @@ class _PostComposerSheetState
                     ScrollViewKeyboardDismissBehavior
                         .onDrag,
                 padding:
-                    const EdgeInsets.fromLTRB(
+                    const EdgeInsets
+                        .fromLTRB(
                   16,
                   4,
                   16,
@@ -3079,7 +3925,9 @@ class _PostComposerSheetState
                 children: [
                   _buildPreview(),
 
-                  const SizedBox(height: 14),
+                  const SizedBox(
+                    height: 14,
+                  ),
 
                   TextField(
                     controller:
@@ -3088,7 +3936,8 @@ class _PostComposerSheetState
                     minLines: 2,
                     style:
                         const TextStyle(
-                      color: Colors.white,
+                      color:
+                          Colors.white,
                       fontSize: 14,
                     ),
                     decoration:
@@ -3097,7 +3946,8 @@ class _PostComposerSheetState
                           'Write a caption...',
                       hintStyle:
                           const TextStyle(
-                        color: Colors.white38,
+                        color:
+                            Colors.white38,
                       ),
                       filled: true,
                       fillColor:
@@ -3105,27 +3955,32 @@ class _PostComposerSheetState
                       border:
                           OutlineInputBorder(
                         borderRadius:
-                            BorderRadius.circular(
+                            BorderRadius
+                                .circular(
                           14,
                         ),
                         borderSide:
                             BorderSide.none,
                       ),
                       contentPadding:
-                          const EdgeInsets.all(
+                          const EdgeInsets
+                              .all(
                         14,
                       ),
                     ),
                   ),
 
-                  const SizedBox(height: 10),
+                  const SizedBox(
+                    height: 10,
+                  ),
 
                   TextField(
                     controller:
                         widget.hashtagsController,
                     style:
                         const TextStyle(
-                      color: Colors.white,
+                      color:
+                          Colors.white,
                       fontSize: 14,
                     ),
                     decoration:
@@ -3134,12 +3989,14 @@ class _PostComposerSheetState
                           'Hashtags: PALOK ForYou',
                       hintStyle:
                           const TextStyle(
-                        color: Colors.white38,
+                        color:
+                            Colors.white38,
                       ),
                       prefixIcon:
                           const Icon(
                         Icons.tag,
-                        color: Colors.white54,
+                        color:
+                            Colors.white54,
                       ),
                       filled: true,
                       fillColor:
@@ -3147,7 +4004,8 @@ class _PostComposerSheetState
                       border:
                           OutlineInputBorder(
                         borderRadius:
-                            BorderRadius.circular(
+                            BorderRadius
+                                .circular(
                           14,
                         ),
                         borderSide:
@@ -3156,36 +4014,46 @@ class _PostComposerSheetState
                     ),
                   ),
 
-                  const SizedBox(height: 10),
+                  const SizedBox(
+                    height: 10,
+                  ),
 
                   Container(
                     padding:
-                        const EdgeInsets.all(
+                        const EdgeInsets
+                            .all(
                       14,
                     ),
                     decoration:
                         BoxDecoration(
-                      color: Colors.white10,
+                      color:
+                          Colors.white10,
                       borderRadius:
-                          BorderRadius.circular(
+                          BorderRadius
+                              .circular(
                         14,
                       ),
                     ),
-                    child: const Row(
+                    child:
+                        const Row(
                       children: [
                         Icon(
                           Icons.public,
                           color:
                               Colors.white70,
                         ),
-                        SizedBox(width: 10),
+                        SizedBox(
+                          width: 10,
+                        ),
                         Expanded(
                           child: Text(
                             'Everyone can view this video',
-                            style: TextStyle(
+                            style:
+                                TextStyle(
                               color:
                                   Colors.white70,
-                              fontSize: 13,
+                              fontSize:
+                                  13,
                             ),
                           ),
                         ),
@@ -3198,29 +4066,36 @@ class _PostComposerSheetState
                     ),
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(
+                    height: 20,
+                  ),
                 ],
               ),
             ),
 
             Padding(
               padding:
-                  const EdgeInsets.fromLTRB(
+                  const EdgeInsets
+                      .fromLTRB(
                 16,
                 6,
                 16,
                 12,
               ),
               child: SizedBox(
-                width: double.infinity,
+                width:
+                    double.infinity,
                 height: 52,
-                child: ElevatedButton(
+                child:
+                    ElevatedButton(
                   onPressed:
-                      _loading || _failed
+                      _loading ||
+                              _failed
                           ? null
                           : widget.onPost,
                   style:
-                      ElevatedButton.styleFrom(
+                      ElevatedButton
+                          .styleFrom(
                     backgroundColor:
                         const Color(
                       0xFFFF2D75,
@@ -3233,14 +4108,17 @@ class _PostComposerSheetState
                     shape:
                         RoundedRectangleBorder(
                       borderRadius:
-                          BorderRadius.circular(
+                          BorderRadius
+                              .circular(
                         14,
                       ),
                     ),
                   ),
-                  child: const Text(
+                  child:
+                      const Text(
                     'Post to PALOK',
-                    style: TextStyle(
+                    style:
+                        TextStyle(
                       fontSize: 16,
                       fontWeight:
                           FontWeight.bold,
@@ -3258,6 +4136,7 @@ class _PostComposerSheetState
   @override
   void dispose() {
     _controller?.dispose();
+
     super.dispose();
   }
 }
