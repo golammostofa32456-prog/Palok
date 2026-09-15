@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'login_screen.dart';
 import 'home_screen.dart';
+import 'splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -11,8 +12,6 @@ Future<void> main() async {
   String? firebaseError;
 
   try {
-    // Firebase Android native configuration
-    // google-services.json থেকে configuration নেওয়া হবে।
     await Firebase.initializeApp();
   } catch (e) {
     firebaseError = e.toString();
@@ -48,14 +47,10 @@ class PalokApp extends StatelessWidget {
           ? FirebaseErrorScreen(
               error: firebaseError!,
             )
-          : const AuthGate(),
+          : const SplashScreen(),
     );
   }
 }
-
-// ------------------------------------------------------------
-// AUTH GATE
-// ------------------------------------------------------------
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -65,7 +60,6 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // Firebase এখনো user status check করছে
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             backgroundColor: Colors.black,
@@ -77,21 +71,15 @@ class AuthGate extends StatelessWidget {
           );
         }
 
-        // Login করা নেই
         if (snapshot.data == null) {
           return const LoginScreen();
         }
 
-        // Login করা আছে
         return const HomeScreen();
       },
     );
   }
 }
-
-// ------------------------------------------------------------
-// FIREBASE ERROR SCREEN
-// ------------------------------------------------------------
 
 class FirebaseErrorScreen extends StatelessWidget {
   final String error;
@@ -117,9 +105,7 @@ class FirebaseErrorScreen extends StatelessWidget {
                   color: Colors.redAccent,
                   size: 64,
                 ),
-
                 const SizedBox(height: 20),
-
                 const Text(
                   'PALOK শুরু হতে পারেনি',
                   style: TextStyle(
@@ -129,9 +115,7 @@ class FirebaseErrorScreen extends StatelessWidget {
                   ),
                   textAlign: TextAlign.center,
                 ),
-
                 const SizedBox(height: 14),
-
                 const Text(
                   'Firebase সংযোগে সমস্যা হয়েছে।',
                   style: TextStyle(
@@ -140,9 +124,7 @@ class FirebaseErrorScreen extends StatelessWidget {
                   ),
                   textAlign: TextAlign.center,
                 ),
-
                 const SizedBox(height: 20),
-
                 Text(
                   error,
                   style: const TextStyle(
