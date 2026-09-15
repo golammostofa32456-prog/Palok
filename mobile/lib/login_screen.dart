@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -14,7 +14,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
 
   bool _isLogin = true;
-  bool _isLoading = false;
+  bool _loading = false;
   bool _obscurePassword = true;
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -24,18 +24,16 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = _passwordController.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
-      _showMessage('Email এবং Password দিন');
+      _message('Email এবং Password দিন');
       return;
     }
 
     if (password.length < 6) {
-      _showMessage('Password কমপক্ষে ৬ অক্ষরের হতে হবে');
+      _message('Password কমপক্ষে ৬ অক্ষরের হতে হবে');
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _loading = true);
 
     try {
       if (_isLogin) {
@@ -43,64 +41,49 @@ class _LoginScreenState extends State<LoginScreen> {
           email: email,
           password: password,
         );
-
-        _showMessage('Login সফল হয়েছে 🎉');
       } else {
-        final credential =
-            await _auth.createUserWithEmailAndPassword(
+        await _auth.createUserWithEmailAndPassword(
           email: email,
           password: password,
         );
-
-        await credential.user?.updateDisplayName(
-          email.split('@').first,
-        );
-
-        _showMessage('Account তৈরি হয়েছে 🎉');
       }
     } on FirebaseAuthException catch (e) {
-      String message;
+      String message = 'Login করা যায়নি';
 
       switch (e.code) {
-        case 'user-not-found':
-          message = 'এই Email দিয়ে কোনো Account নেই';
-          break;
-        case 'wrong-password':
         case 'invalid-credential':
+        case 'wrong-password':
+        case 'user-not-found':
           message = 'Email অথবা Password ভুল';
           break;
         case 'email-already-in-use':
-          message = 'এই Email দিয়ে আগে থেকেই Account আছে';
-          break;
-        case 'invalid-email':
-          message = 'সঠিক Email দিন';
+          message = 'এই Email দিয়ে Account আছে';
           break;
         case 'weak-password':
           message = 'Password আরও শক্তিশালী দিন';
           break;
-        case 'too-many-requests':
-          message = 'অনেকবার চেষ্টা হয়েছে। কিছুক্ষণ পরে আবার চেষ্টা করুন';
+        case 'invalid-email':
+          message = 'সঠিক Email দিন';
+          break;
+        case 'network-request-failed':
+          message = 'Internet connection পরীক্ষা করুন';
           break;
         default:
-          message = e.message ?? 'Login করা যায়নি';
+          message = e.message ?? message;
       }
 
-      _showMessage(message);
+      _message(message);
     } catch (e) {
-      _showMessage('কিছু একটা সমস্যা হয়েছে');
+      _message('সমস্যা হয়েছে: $e');
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _loading = false);
       }
     }
   }
 
   Future<void> _googleLogin() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _loading = true);
 
     try {
       final GoogleSignIn googleSignIn = GoogleSignIn(
@@ -111,9 +94,6 @@ class _LoginScreenState extends State<LoginScreen> {
           await googleSignIn.signIn();
 
       if (googleUser == null) {
-        setState(() {
-          _isLoading = false;
-        });
         return;
       }
 
@@ -126,17 +106,13 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       await _auth.signInWithCredential(credential);
-
-      _showMessage('Google Login সফল হয়েছে 🎉');
     } on FirebaseAuthException catch (e) {
-      _showMessage(e.message ?? 'Google Login করা যায়নি');
+      _message(e.message ?? 'Google Login করা যায়নি');
     } catch (e) {
-      _showMessage('Google Login করা যায়নি');
+      _message('Google Login করা যায়নি');
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _loading = false);
       }
     }
   }
@@ -145,34 +121,29 @@ class _LoginScreenState extends State<LoginScreen> {
     final email = _emailController.text.trim();
 
     if (email.isEmpty) {
-      _showMessage('আগে আপনার Email লিখুন');
+      _message('আগে Email লিখুন');
       return;
     }
 
     try {
-      await _auth.sendPasswordResetEmail(
-        email: email,
-      );
-
-      _showMessage(
-        'Password reset link আপনার Email-এ পাঠানো হয়েছে',
-      );
+      await _auth.sendPasswordResetEmail(email: email);
+      _message('Password reset link আপনার Email-এ পাঠানো হয়েছে');
     } on FirebaseAuthException catch (e) {
-      _showMessage(e.message ?? 'Reset Email পাঠানো যায়নি');
+      _message(e.message ?? 'Reset Email পাঠানো যায়নি');
     }
   }
 
-  void _showMessage(String message) {
+  void _message(String text) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(text),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 
   @override
@@ -194,42 +165,49 @@ class _LoginScreenState extends State<LoginScreen> {
               vertical: 24,
             ),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // PALOK Logo
+                // PALOK LOGO
                 Container(
-                  width: 82,
-                  height: 82,
+                  width: 86,
+                  height: 86,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(26),
                     gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFF8E2DE2),
-                        Color(0xFFFF2D75),
-                      ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFFFF2D75),
+                        Color(0xFF8B5CF6),
+                      ],
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF2D75)
+                            .withOpacity(0.25),
+                        blurRadius: 30,
+                        spreadRadius: 2,
+                      ),
+                    ],
                   ),
                   child: const Center(
                     child: Text(
                       'P',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 48,
+                        fontSize: 52,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 22),
+                const SizedBox(height: 20),
 
                 const Text(
                   'PALOK',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 32,
+                    fontSize: 34,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 3,
                   ),
@@ -239,135 +217,91 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 Text(
                   _isLogin
-                      ? 'Login করে PALOK-এ প্রবেশ করুন'
-                      : 'আপনার PALOK Account তৈরি করুন',
+                      ? 'Login করুন এবং PALOK উপভোগ করুন'
+                      : 'PALOK-এ আপনার Account তৈরি করুন',
                   style: const TextStyle(
                     color: Colors.white60,
-                    fontSize: 15,
+                    fontSize: 14,
                   ),
                   textAlign: TextAlign.center,
                 ),
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 34),
 
-                // Email
-                TextField(
+                _input(
                   controller: _emailController,
+                  hint: 'Email',
+                  icon: Icons.email_outlined,
                   keyboardType: TextInputType.emailAddress,
-                  style: const TextStyle(
-                    color: Colors.white,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Email',
-                    hintStyle: const TextStyle(
-                      color: Colors.white54,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.email_outlined,
-                      color: Colors.white70,
-                    ),
-                    filled: true,
-                    fillColor: const Color(0xFF171717),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
                 ),
 
                 const SizedBox(height: 14),
 
-                // Password
-                TextField(
+                _input(
                   controller: _passwordController,
+                  hint: 'Password',
+                  icon: Icons.lock_outline,
                   obscureText: _obscurePassword,
-                  style: const TextStyle(
-                    color: Colors.white,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Password',
-                    hintStyle: const TextStyle(
+                  suffix: IconButton(
+                    onPressed: () {
+                      setState(() {
+                        _obscurePassword = !_obscurePassword;
+                      });
+                    },
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
                       color: Colors.white54,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.lock_outline,
-                      color: Colors.white70,
-                    ),
-                    suffixIcon: IconButton(
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword =
-                              !_obscurePassword;
-                        });
-                      },
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_off_outlined
-                            : Icons.visibility_outlined,
-                        color: Colors.white70,
-                      ),
-                    ),
-                    filled: true,
-                    fillColor: const Color(0xFF171717),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
                     ),
                   ),
                 ),
 
-                if (_isLogin) ...[
-                  const SizedBox(height: 8),
-
+                if (_isLogin)
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed:
-                          _isLoading ? null : _forgotPassword,
+                          _loading ? null : _forgotPassword,
                       child: const Text(
                         'Forgot Password?',
                         style: TextStyle(
-                          color: Color(0xFFFF3D81),
+                          color: Color(0xFFFF4F8B),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  )
+                else
+                  const SizedBox(height: 14),
 
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
 
-                // Login / Create Account
                 SizedBox(
                   width: double.infinity,
                   height: 54,
                   child: ElevatedButton(
-                    onPressed:
-                        _isLoading ? null : _emailAuth,
+                    onPressed: _loading ? null : _emailAuth,
                     style: ElevatedButton.styleFrom(
                       backgroundColor:
                           const Color(0xFFFF2D75),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    child: _isLoading
+                    child: _loading
                         ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child:
-                                CircularProgressIndicator(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
                               strokeWidth: 2.5,
                               color: Colors.white,
                             ),
                           )
                         : Text(
-                            _isLogin
-                                ? 'Login'
-                                : 'Create Account',
+                            _isLogin ? 'Login' : 'Create Account',
                             style: const TextStyle(
-                              fontSize: 17,
+                              fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -378,27 +312,26 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 Row(
                   children: [
-                    const Expanded(
-                      child: Divider(
-                        color: Colors.white24,
+                    Expanded(
+                      child: Container(
+                        height: 1,
+                        color: Colors.white12,
                       ),
                     ),
-                    Padding(
-                      padding:
-                          const EdgeInsets.symmetric(
-                        horizontal: 14,
-                      ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 14),
                       child: Text(
                         'OR',
                         style: TextStyle(
-                          color: Colors.white54,
-                          fontWeight: FontWeight.w600,
+                          color: Colors.white38,
+                          fontSize: 12,
                         ),
                       ),
                     ),
-                    const Expanded(
-                      child: Divider(
-                        color: Colors.white24,
+                    Expanded(
+                      child: Container(
+                        height: 1,
+                        color: Colors.white12,
                       ),
                     ),
                   ],
@@ -406,23 +339,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 20),
 
-                // Google
                 SizedBox(
                   width: double.infinity,
                   height: 54,
                   child: OutlinedButton.icon(
                     onPressed:
-                        _isLoading ? null : _googleLogin,
+                        _loading ? null : _googleLogin,
                     icon: const Icon(
                       Icons.g_mobiledata,
-                      color: Colors.white,
                       size: 30,
+                      color: Colors.white,
                     ),
                     label: const Text(
                       'Continue with Google',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -431,30 +363,27 @@ class _LoginScreenState extends State<LoginScreen> {
                         color: Colors.white24,
                       ),
                       shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 22),
 
-                // Switch Login / Sign Up
                 Row(
-                  mainAxisAlignment:
-                      MainAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
                       _isLogin
-                          ? "PALOK-এ নতুন?"
-                          : "আগে থেকেই Account আছে?",
+                          ? 'Account নেই?'
+                          : 'আগে থেকেই Account আছে?',
                       style: const TextStyle(
-                        color: Colors.white60,
+                        color: Colors.white54,
                       ),
                     ),
                     TextButton(
-                      onPressed: _isLoading
+                      onPressed: _loading
                           ? null
                           : () {
                               setState(() {
@@ -462,11 +391,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               });
                             },
                       child: Text(
-                        _isLogin
-                            ? 'Create Account'
-                            : 'Login',
+                        _isLogin ? 'Sign Up' : 'Login',
                         style: const TextStyle(
-                          color: Color(0xFFFF3D81),
+                          color: Color(0xFFFF4F8B),
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -475,6 +402,51 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _input({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    TextInputType? keyboardType,
+    bool obscureText = false,
+    Widget? suffix,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      obscureText: obscureText,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(
+          color: Colors.white38,
+        ),
+        prefixIcon: Icon(
+          icon,
+          color: Colors.white54,
+        ),
+        suffixIcon: suffix,
+        filled: true,
+        fillColor: const Color(0xFF151515),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(
+            color: Colors.white10,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(
+            color: Color(0xFFFF2D75),
           ),
         ),
       ),
