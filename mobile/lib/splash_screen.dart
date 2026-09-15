@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'home_screen.dart';
+import 'main.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -50,9 +50,11 @@ class _SplashScreenState extends State<SplashScreen>
     Timer(const Duration(milliseconds: 2200), () {
       if (!mounted) return;
 
+      // Route through AuthGate, not straight to HomeScreen, so a
+      // logged-out user still lands on LoginScreen.
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => const HomeScreen(),
+          builder: (_) => const AuthGate(),
         ),
       );
     });
