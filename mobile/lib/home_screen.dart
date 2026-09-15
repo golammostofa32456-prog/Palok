@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -18,34 +19,35 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
-  // =========================================================
-  // LOCKED UI
-  // =========================================================
+  // ============================================================
+  // LOCKED UI STATE
+  // ============================================================
 
   int _bottomIndex = 0;
   int _topIndex = 0;
 
-  final PageController _pageController =
-      PageController();
+  final PageController _pageController = PageController();
 
   final FirebaseFirestore _firestore =
       FirebaseFirestore.instance;
 
   final ImagePicker _picker = ImagePicker();
 
-  // =========================================================
+  // ============================================================
   // CLOUDINARY
-  // =========================================================
+  // ============================================================
 
-  static const String _cloudinaryCloudName =
-      'u0jufmrl';
+  static const String _cloudinaryCloudName = 'u0jufmrl';
 
   static const String _cloudinaryUploadPreset =
       'palok_video_upload';
 
-  // =========================================================
-  // LOCAL VIDEOS
-  // =========================================================
+  static const int _maxVideoBytes =
+      100 * 1024 * 1024;
+
+  // ============================================================
+  // VIDEO FEED
+  // ============================================================
 
   final List<String> videoUrls = [
     'assets/videos/video.mp4',
@@ -53,8 +55,7 @@ class _HomeScreenState extends State<HomeScreen>
     'assets/videos/video2.mp4',
   ];
 
-  final List<VideoPlayerController?> _videoControllers =
-      [];
+  final List<VideoPlayerController?> _videoControllers = [];
 
   final List<String?> _videoIds = [
     null,
@@ -151,16 +152,29 @@ class _HomeScreenState extends State<HomeScreen>
 
   int _currentVideoIndex = 0;
 
+  // ============================================================
+  // UPLOAD STATE
+  // ============================================================
+
   bool _isUploading = false;
+
   double _uploadProgress = 0;
 
+  String _uploadStatus = '';
+
+  // ============================================================
+  // LOGO ANIMATION
+  // ============================================================
+
   late AnimationController _logoController;
+
   late Animation<double> _logoScale;
+
   late Animation<double> _logoOpacity;
 
-  // =========================================================
+  // ============================================================
   // INIT
-  // =========================================================
+  // ============================================================
 
   @override
   void initState() {
@@ -196,15 +210,15 @@ class _HomeScreenState extends State<HomeScreen>
     _prepareVideos();
   }
 
-  // =========================================================
+  // ============================================================
   // PREPARE VIDEOS
-  // =========================================================
+  // ============================================================
 
   Future<void> _prepareVideos() async {
     for (int i = 0; i < videoUrls.length; i++) {
-      final url = videoUrls[i];
+      final String url = videoUrls[i];
 
-      late VideoPlayerController controller;
+      final VideoPlayerController controller;
 
       if (url.startsWith('http')) {
         controller =
@@ -220,6 +234,7 @@ class _HomeScreenState extends State<HomeScreen>
 
       try {
         await controller.initialize();
+
         await controller.setLooping(true);
 
         if (i == 0) {
@@ -237,15 +252,15 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  // =========================================================
-  // AUTH
-  // =========================================================
+  // ============================================================
+  // USER
+  // ============================================================
 
   Future<User?> _ensureUser() async {
-    final user =
+    final User? user =
         FirebaseAuth.instance.currentUser;
 
-    if (user == null && mounted) {
+    if (user == null) {
       _showMessage(
         'আগে Login করুন!',
       );
@@ -254,18 +269,20 @@ class _HomeScreenState extends State<HomeScreen>
     return user;
   }
 
-  // =========================================================
+  // ============================================================
   // PAGE CHANGE
-  // =========================================================
+  // ============================================================
 
   Future<void> _onPageChanged(
     int index,
   ) async {
     _currentVideoIndex = index;
 
-    for (int i = 0;
-        i < _videoControllers.length;
-        i++) {
+    for (
+      int i = 0;
+      i < _videoControllers.length;
+      i++
+    ) {
       final controller =
           _videoControllers[i];
 
@@ -274,13 +291,20 @@ class _HomeScreenState extends State<HomeScreen>
         continue;
       }
 
-      if (i == index) {
-        await controller.seekTo(
-          Duration.zero,
+      try {
+        if (i == index) {
+          await controller.seekTo(
+            Duration.zero,
+          );
+
+          await controller.play();
+        } else {
+          await controller.pause();
+        }
+      } catch (e) {
+        debugPrint(
+          'Page video error: $e',
         );
-        await controller.play();
-      } else {
-        await controller.pause();
       }
     }
 
@@ -289,10 +313,15 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  // ============================================================
+  // PLAY / PAUSE
+  // ============================================================
+
   Future<void> _toggleVideo(
     int index,
   ) async {
-    if (index >= _videoControllers.length) {
+    if (index >=
+        _videoControllers.length) {
       return;
     }
 
@@ -304,20 +333,26 @@ class _HomeScreenState extends State<HomeScreen>
       return;
     }
 
-    if (controller.value.isPlaying) {
-      await controller.pause();
-    } else {
-      await controller.play();
-    }
+    try {
+      if (controller.value.isPlaying) {
+        await controller.pause();
+      } else {
+        await controller.play();
+      }
 
-    if (mounted) {
-      setState(() {});
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      debugPrint(
+        'Play pause error: $e',
+      );
     }
   }
 
-  // =========================================================
+  // ============================================================
   // LIKE
-  // =========================================================
+  // ============================================================
 
   Future<void> _toggleLike(
     int index,
@@ -332,31 +367,34 @@ class _HomeScreenState extends State<HomeScreen>
       if (_liked[index]) {
         _likeCounts[index]++;
       } else {
-        _likeCounts[index]--;
+        if (_likeCounts[index] > 0) {
+          _likeCounts[index]--;
+        }
       }
     });
 
-    final videoId = _videoIds[index];
+    final videoId =
+        _videoIds[index];
 
-    if (videoId != null) {
-      try {
-        await _firestore
-            .collection('videos')
-            .doc(videoId)
-            .update({
-          'likeCount': _likeCounts[index],
-        });
-      } catch (e) {
-        debugPrint(
-          'Like save error: $e',
-        );
-      }
+    if (videoId == null) return;
+
+    try {
+      await _firestore
+          .collection('videos')
+          .doc(videoId)
+          .update({
+        'likeCount': _likeCounts[index],
+      });
+    } catch (e) {
+      debugPrint(
+        'Like save error: $e',
+      );
     }
   }
 
-  // =========================================================
+  // ============================================================
   // SAVE
-  // =========================================================
+  // ============================================================
 
   Future<void> _toggleSave(
     int index,
@@ -371,7 +409,9 @@ class _HomeScreenState extends State<HomeScreen>
       if (_saved[index]) {
         _saveCounts[index]++;
       } else {
-        _saveCounts[index]--;
+        if (_saveCounts[index] > 0) {
+          _saveCounts[index]--;
+        }
       }
     });
 
@@ -381,27 +421,28 @@ class _HomeScreenState extends State<HomeScreen>
           : 'ভিডিওটি Unsave করা হয়েছে',
     );
 
-    final videoId = _videoIds[index];
+    final videoId =
+        _videoIds[index];
 
-    if (videoId != null) {
-      try {
-        await _firestore
-            .collection('videos')
-            .doc(videoId)
-            .update({
-          'saveCount': _saveCounts[index],
-        });
-      } catch (e) {
-        debugPrint(
-          'Save error: $e',
-        );
-      }
+    if (videoId == null) return;
+
+    try {
+      await _firestore
+          .collection('videos')
+          .doc(videoId)
+          .update({
+        'saveCount': _saveCounts[index],
+      });
+    } catch (e) {
+      debugPrint(
+        'Save error: $e',
+      );
     }
   }
 
-  // =========================================================
+  // ============================================================
   // FOLLOW
-  // =========================================================
+  // ============================================================
 
   Future<void> _toggleFollow(
     int index,
@@ -410,10 +451,17 @@ class _HomeScreenState extends State<HomeScreen>
 
     if (user == null) return;
 
-    final owner = _videoOwners[index];
+    final owner =
+        _videoOwners[index];
 
-    if (owner == null ||
-        owner == user.uid) {
+    if (owner == null) {
+      _showMessage(
+        'এই demo video-এর owner পাওয়া যায়নি',
+      );
+      return;
+    }
+
+    if (owner == user.uid) {
       _showMessage(
         'এটি আপনার নিজের ভিডিও',
       );
@@ -436,9 +484,9 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // =========================================================
+  // ============================================================
   // SHARE
-  // =========================================================
+  // ============================================================
 
   Future<void> _shareVideo(
     int index,
@@ -447,7 +495,8 @@ class _HomeScreenState extends State<HomeScreen>
 
     if (user == null) return;
 
-    final url = videoUrls[index];
+    final String url =
+        videoUrls[index];
 
     try {
       await SharePlus.instance.share(
@@ -458,11 +507,14 @@ class _HomeScreenState extends State<HomeScreen>
         ),
       );
 
+      if (!mounted) return;
+
       setState(() {
         _shareCounts[index]++;
       });
 
-      final videoId = _videoIds[index];
+      final videoId =
+          _videoIds[index];
 
       if (videoId != null) {
         try {
@@ -486,9 +538,9 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  // =========================================================
+  // ============================================================
   // COMMENTS
-  // =========================================================
+  // ============================================================
 
   void _openComments(
     int index,
@@ -509,16 +561,21 @@ class _HomeScreenState extends State<HomeScreen>
 
             if (user == null) return;
 
-            final username =
+            final displayName =
                 user.displayName
-                            ?.trim()
-                            .isNotEmpty ==
-                        true
-                    ? '@${user.displayName!.trim()}'
+                        ?.trim() ??
+                    '';
+
+            final username =
+                displayName.isNotEmpty
+                    ? '@$displayName'
                     : '@palok_user';
 
+            if (!mounted) return;
+
             setState(() {
-              _localComments[index].add(
+              _localComments[index]
+                  .add(
                 '$username: $text',
               );
 
@@ -539,7 +596,7 @@ class _HomeScreenState extends State<HomeScreen>
                 });
               } catch (e) {
                 debugPrint(
-                  'Comment error: $e',
+                  'Comment count error: $e',
                 );
               }
             }
@@ -549,9 +606,9 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // =========================================================
+  // ============================================================
   // SEARCH
-  // =========================================================
+  // ============================================================
 
   void _openSearch() {
     showModalBottomSheet(
@@ -595,9 +652,9 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // =========================================================
-  // CREATE
-  // =========================================================
+  // ============================================================
+  // CREATE MENU
+  // ============================================================
 
   void _openCreate() {
     showModalBottomSheet(
@@ -630,19 +687,16 @@ class _HomeScreenState extends State<HomeScreen>
                   height: 4,
                   decoration:
                       BoxDecoration(
-                    color:
-                        Colors.white24,
+                    color: Colors.white24,
                     borderRadius:
                         BorderRadius.circular(
                       20,
                     ),
                   ),
                 ),
-
                 const SizedBox(
                   height: 24,
                 ),
-
                 const Text(
                   'Create on PALOK',
                   style: TextStyle(
@@ -652,14 +706,13 @@ class _HomeScreenState extends State<HomeScreen>
                         FontWeight.bold,
                   ),
                 ),
-
                 const SizedBox(
                   height: 22,
                 ),
 
                 _createOption(
-                  icon: Icons
-                      .videocam_outlined,
+                  icon:
+                      Icons.videocam_outlined,
                   title:
                       'Record Video',
                   onTap: () {
@@ -688,10 +741,9 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
 
                 _createOption(
-                  icon: Icons
-                      .music_note_outlined,
-                  title:
-                      'Add Sound',
+                  icon:
+                      Icons.music_note_outlined,
+                  title: 'Add Sound',
                   onTap: () {
                     Navigator.pop(
                       context,
@@ -720,10 +772,13 @@ class _HomeScreenState extends State<HomeScreen>
       leading: Container(
         width: 46,
         height: 46,
-        decoration: BoxDecoration(
+        decoration:
+            BoxDecoration(
           color: Colors.white10,
           borderRadius:
-              BorderRadius.circular(14),
+              BorderRadius.circular(
+            14,
+          ),
         ),
         child: Icon(
           icon,
@@ -746,11 +801,12 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // =========================================================
+  // ============================================================
   // PICK VIDEO
-  // =========================================================
+  // ============================================================
 
-  Future<void> _pickAndUploadVideo() async {
+  Future<void>
+      _pickAndUploadVideo() async {
     final user =
         await _ensureUser();
 
@@ -767,37 +823,72 @@ class _HomeScreenState extends State<HomeScreen>
         return;
       }
 
-      final draft =
+      final File file =
+          File(pickedVideo.path);
+
+      if (!await file.exists()) {
+        _showMessage(
+          'ভিডিও ফাইল পাওয়া যায়নি',
+        );
+        return;
+      }
+
+      final int size =
+          await file.length();
+
+      if (size > _maxVideoBytes) {
+        _showMessage(
+          'ভিডিও 100 MB বা তার কম হতে হবে।',
+        );
+        return;
+      }
+
+      if (size <= 0) {
+        _showMessage(
+          'ভিডিও ফাইলটি খালি।',
+        );
+        return;
+      }
+
+      if (!mounted) return;
+
+      final VideoPostDraft? draft =
           await showModalBottomSheet<
               VideoPostDraft>(
         context: context,
         isScrollControlled: true,
+        useSafeArea: true,
         backgroundColor:
             Colors.transparent,
         builder: (context) {
           return _VideoUploadSheet(
-            videoFile:
-                File(pickedVideo.path),
+            videoFile: file,
           );
         },
       );
 
-      if (draft == null) return;
+      if (draft == null) {
+        return;
+      }
 
       await _uploadVideo(
         pickedVideo,
         draft,
       );
     } catch (e) {
+      debugPrint(
+        'Pick video error: $e',
+      );
+
       _showMessage(
         'ভিডিও নির্বাচন করা যায়নি',
       );
     }
   }
 
-  // =========================================================
-  // CLOUDINARY UPLOAD
-  // =========================================================
+  // ============================================================
+  // UPLOAD VIDEO
+  // ============================================================
 
   Future<void> _uploadVideo(
     XFile pickedVideo,
@@ -812,91 +903,214 @@ class _HomeScreenState extends State<HomeScreen>
 
     setState(() {
       _isUploading = true;
-      _uploadProgress = 0;
+      _uploadProgress = 0.01;
+      _uploadStatus =
+          'ভিডিও প্রস্তুত করা হচ্ছে...';
     });
 
     try {
-      final file =
+      final File file =
           File(pickedVideo.path);
 
       if (!await file.exists()) {
         throw Exception(
-          'Selected video file does not exist.',
+          'ভিডিও ফাইল পাওয়া যায়নি।',
         );
       }
 
-      final fileLength =
+      final int fileLength =
           await file.length();
 
-      const maxBytes =
-          100 * 1024 * 1024;
+      if (fileLength <= 0) {
+        throw Exception(
+          'ভিডিও ফাইল খালি।',
+        );
+      }
 
-      if (fileLength > maxBytes) {
+      if (fileLength >
+          _maxVideoBytes) {
         throw Exception(
           'ভিডিও 100 MB বা তার কম হতে হবে।',
         );
       }
 
-      final videoId =
+      final String videoId =
           _firestore
               .collection('videos')
               .doc()
               .id;
 
-      final uri = Uri.parse(
+      final Uri uri = Uri.parse(
         'https://api.cloudinary.com/v1_1/'
         '$_cloudinaryCloudName/video/upload',
+      );
+
+      // --------------------------------------------------------
+      // REAL UPLOAD PROGRESS
+      // --------------------------------------------------------
+
+      int uploadedBytes = 0;
+
+      DateTime lastUpdate =
+          DateTime.now();
+
+      final Stream<List<int>>
+          fileStream =
+          file.openRead().map(
+        (chunk) {
+          uploadedBytes +=
+              chunk.length;
+
+          final now =
+              DateTime.now();
+
+          if (now
+                      .difference(
+                        lastUpdate,
+                      )
+                      .inMilliseconds >=
+                  80 ||
+              uploadedBytes ==
+                  fileLength) {
+            lastUpdate = now;
+
+            final double progress =
+                uploadedBytes /
+                    fileLength;
+
+            if (mounted) {
+              setState(() {
+                // 1% -> 88%
+                _uploadProgress =
+                    0.01 +
+                        (progress *
+                            0.87);
+
+                _uploadStatus =
+                    'ভিডিও upload হচ্ছে... '
+                    '${(_uploadProgress * 100).round()}%';
+              });
+            }
+          }
+
+          return chunk;
+        },
+      );
+
+      final multipartFile =
+          http.MultipartFile(
+        'file',
+        fileStream,
+        fileLength,
+        filename: pickedVideo.name,
       );
 
       final request =
           http.MultipartRequest(
         'POST',
         uri,
-      )
-            ..fields['upload_preset'] =
-                _cloudinaryUploadPreset
-            ..files.add(
-              await http.MultipartFile
-                  .fromPath(
-                'file',
-                file.path,
-              ),
-            );
+      );
+
+      request.fields[
+              'upload_preset'] =
+          _cloudinaryUploadPreset;
+
+      request.files.add(
+        multipartFile,
+      );
 
       if (mounted) {
         setState(() {
-          _uploadProgress = 0.05;
+          _uploadProgress = 0.03;
+          _uploadStatus =
+              'Cloudinary-তে upload শুরু হয়েছে...';
         });
       }
+
+      // --------------------------------------------------------
+      // SEND TO CLOUDINARY
+      // --------------------------------------------------------
 
       final response =
-          await request.send();
+          await request.send().timeout(
+        const Duration(
+          minutes: 15,
+        ),
+        onTimeout: () {
+          throw TimeoutException(
+            'Cloudinary upload timeout',
+          );
+        },
+      );
 
       if (mounted) {
         setState(() {
-          _uploadProgress = 0.90;
+          _uploadProgress = 0.91;
+          _uploadStatus =
+              'Upload শেষ হচ্ছে...';
         });
       }
 
-      final responseBody =
+      final String responseBody =
           await response
               .stream
               .bytesToString();
 
-      if (response.statusCode < 200 ||
-          response.statusCode >= 300) {
+      if (response.statusCode <
+              200 ||
+          response.statusCode >=
+              300) {
+        String errorMessage =
+            'Cloudinary upload failed '
+            '(${response.statusCode})';
+
+        try {
+          final decoded =
+              jsonDecode(
+            responseBody,
+          );
+
+          if (decoded
+              is Map<String, dynamic>) {
+            final error =
+                decoded['error'];
+
+            if (error
+                is Map<String, dynamic>) {
+              final message =
+                  error['message'];
+
+              if (message != null) {
+                errorMessage =
+                    message.toString();
+              }
+            }
+          }
+        } catch (_) {}
+
         throw Exception(
-          'Cloudinary upload failed '
-          '(${response.statusCode})',
+          errorMessage,
         );
       }
 
-      final data =
-          jsonDecode(responseBody)
-              as Map<String, dynamic>;
+      final decoded =
+          jsonDecode(
+        responseBody,
+      );
 
-      final downloadUrl =
-          (data['secure_url'] ?? '')
+      if (decoded
+          is! Map<String, dynamic>) {
+        throw Exception(
+          'Cloudinary response সঠিক নয়।',
+        );
+      }
+
+      final Map<String, dynamic>
+          data = decoded;
+
+      final String downloadUrl =
+          (data['secure_url'] ??
+                  '')
               .toString();
 
       if (downloadUrl.isEmpty) {
@@ -905,34 +1119,70 @@ class _HomeScreenState extends State<HomeScreen>
         );
       }
 
-      final username =
-          user.displayName != null &&
-                  user.displayName!
-                      .trim()
-                      .isNotEmpty
-              ? '@${user.displayName!.trim()}'
+      if (mounted) {
+        setState(() {
+          _uploadProgress = 0.93;
+          _uploadStatus =
+              'ভিডিও তথ্য সংরক্ষণ করা হচ্ছে...';
+        });
+      }
+
+      // --------------------------------------------------------
+      // USERNAME
+      // --------------------------------------------------------
+
+      final String displayName =
+          user.displayName
+                  ?.trim() ??
+              '';
+
+      final String username =
+          displayName.isNotEmpty
+              ? '@$displayName'
               : '@palok_user';
 
-      final videoData = {
+      // --------------------------------------------------------
+      // FIRESTORE
+      // --------------------------------------------------------
+
+      final Map<String, dynamic>
+          videoData = {
         'ownerId': user.uid,
+
         'username': username,
+
         'videoUrl': downloadUrl,
+
         'cloudinaryPublicId':
-            (data['public_id'] ?? '')
+            (data['public_id'] ??
+                    '')
                 .toString(),
+
         'cloudinaryAssetId':
-            (data['asset_id'] ?? '')
+            (data['asset_id'] ??
+                    '')
                 .toString(),
-        'caption': draft.caption,
-        'hashtags': draft.hashtags,
+
+        'caption':
+            draft.caption,
+
+        'hashtags':
+            draft.hashtags,
+
         'soundName':
             'Original sound',
+
         'likeCount': 0,
+
         'commentCount': 0,
+
         'saveCount': 0,
+
         'shareCount': 0,
+
         'createdAt':
-            FieldValue.serverTimestamp(),
+            FieldValue
+                .serverTimestamp(),
       };
 
       await _firestore
@@ -943,25 +1193,63 @@ class _HomeScreenState extends State<HomeScreen>
       if (mounted) {
         setState(() {
           _uploadProgress = 0.96;
+          _uploadStatus =
+              'PALOK feed প্রস্তুত হচ্ছে...';
         });
       }
 
+      // --------------------------------------------------------
+      // PREPARE NETWORK VIDEO
+      // --------------------------------------------------------
+
       final controller =
-          VideoPlayerController.networkUrl(
-        Uri.parse(downloadUrl),
+          VideoPlayerController
+              .networkUrl(
+        Uri.parse(
+          downloadUrl,
+        ),
       );
 
-      await controller.initialize();
-      await controller.setLooping(true);
+      try {
+        await controller
+            .initialize();
 
-      final newIndex =
+        await controller
+            .setLooping(true);
+      } catch (e) {
+        await controller.dispose();
+
+        throw Exception(
+          'Uploaded video playback প্রস্তুত করা যায়নি।',
+        );
+      }
+
+      if (!mounted) {
+        await controller
+            .dispose();
+
+        return;
+      }
+
+      // --------------------------------------------------------
+      // ADD TO FEED
+      // --------------------------------------------------------
+
+      final int newIndex =
           videoUrls.length;
 
       setState(() {
-        _videoIds.add(videoId);
-        videoUrls.add(downloadUrl);
+        _videoIds.add(
+          videoId,
+        );
 
-        _videoOwners.add(user.uid);
+        videoUrls.add(
+          downloadUrl,
+        );
+
+        _videoOwners.add(
+          user.uid,
+        );
 
         _videoUsernames.add(
           username,
@@ -982,11 +1270,15 @@ class _HomeScreenState extends State<HomeScreen>
         );
 
         _likeCounts.add(0);
+
         _commentCounts.add(0);
+
         _saveCounts.add(0);
+
         _shareCounts.add(0);
 
         _liked.add(false);
+
         _saved.add(false);
 
         _localComments.add([]);
@@ -996,16 +1288,22 @@ class _HomeScreenState extends State<HomeScreen>
         );
 
         _followingUsers.add(
-          null,
+          user.uid,
         );
 
-        _isUploading = false;
-        _uploadProgress = 1;
+        _uploadProgress = 1.0;
+
+        _uploadStatus =
+            'ভিডিও সফলভাবে পোস্ট হয়েছে!';
       });
+
+      // --------------------------------------------------------
+      // MOVE TO NEW VIDEO
+      // --------------------------------------------------------
 
       await Future.delayed(
         const Duration(
-          milliseconds: 100,
+          milliseconds: 200,
         ),
       );
 
@@ -1020,7 +1318,8 @@ class _HomeScreenState extends State<HomeScreen>
               const Duration(
             milliseconds: 450,
           ),
-          curve: Curves.easeOut,
+          curve:
+              Curves.easeOut,
         );
       }
 
@@ -1030,37 +1329,54 @@ class _HomeScreenState extends State<HomeScreen>
       await controller.play();
 
       if (mounted) {
-        setState(() {});
+        setState(() {
+          _isUploading = false;
+          _uploadProgress = 1.0;
+          _uploadStatus = '';
+        });
 
         _showMessage(
           '🎉 ভিডিও সফলভাবে PALOK-এ পোস্ট হয়েছে!',
         );
       }
+    } on TimeoutException {
+      if (!mounted) return;
+
+      setState(() {
+        _isUploading = false;
+        _uploadProgress = 0;
+        _uploadStatus = '';
+      });
+
+      _showMessage(
+        'Upload করতে অনেক সময় লাগছে। Internet connection চেক করে আবার চেষ্টা করুন।',
+      );
     } catch (e) {
       debugPrint(
-        'Video upload error: $e',
+        'PALOK upload error: $e',
       );
 
-      if (mounted) {
-        setState(() {
-          _isUploading = false;
-          _uploadProgress = 0;
-        });
+      if (!mounted) return;
 
-        _showMessage(
-          'ভিডিও upload করা যায়নি: '
-          '${e.toString().replaceFirst(
-            'Exception: ',
-            '',
-          )}',
-        );
-      }
+      setState(() {
+        _isUploading = false;
+        _uploadProgress = 0;
+        _uploadStatus = '';
+      });
+
+      _showMessage(
+        'ভিডিও upload করা যায়নি: '
+        '${e.toString().replaceFirst(
+          'Exception: ',
+          '',
+        )}',
+      );
     }
   }
 
-  // =========================================================
+  // ============================================================
   // BOTTOM NAV
-  // =========================================================
+  // ============================================================
 
   void _selectBottom(
     int index,
@@ -1079,7 +1395,8 @@ class _HomeScreenState extends State<HomeScreen>
               const Duration(
             milliseconds: 350,
           ),
-          curve: Curves.easeOut,
+          curve:
+              Curves.easeOut,
         );
       }
 
@@ -1095,6 +1412,7 @@ class _HomeScreenState extends State<HomeScreen>
       _showMessage(
         'Friends section শীঘ্রই আসছে',
       );
+
       return;
     }
 
@@ -1102,6 +1420,7 @@ class _HomeScreenState extends State<HomeScreen>
       _showMessage(
         'Inbox section শীঘ্রই আসছে',
       );
+
       return;
     }
 
@@ -1112,9 +1431,9 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  // =========================================================
-  // TOP
-  // =========================================================
+  // ============================================================
+  // TOP NAV
+  // ============================================================
 
   void _selectTop(
     int index,
@@ -1123,34 +1442,38 @@ class _HomeScreenState extends State<HomeScreen>
       _topIndex = index;
     });
 
-    _showMessage(
-      index == 0
-          ? 'For You'
-          : 'Following',
-    );
+    if (index == 0) {
+      _showMessage('For You');
+    } else {
+      _showMessage('Following');
+    }
   }
 
-  // =========================================================
-  // RIGHT ACTIONS
-  // =========================================================
+  // ============================================================
+  // RIGHT ACTION BUTTONS
+  // ============================================================
 
   Widget _buildRightButtons() {
-    final index =
+    final int index =
         _currentVideoIndex;
+
+    if (index < 0 ||
+        index >= _liked.length) {
+      return const SizedBox();
+    }
 
     return Column(
       mainAxisSize:
           MainAxisSize.min,
       children: [
         _actionButton(
-          icon:
-              Icons.favorite,
-          active:
-              _liked[index],
+          icon: Icons.favorite,
+          active: _liked[index],
           activeColor:
-              const Color(0xFFFF2D75),
-          count:
-              _formatCount(
+              const Color(
+            0xFFFF2D75,
+          ),
+          count: _formatCount(
             _likeCounts[index],
           ),
           onTap: () =>
@@ -1162,10 +1485,8 @@ class _HomeScreenState extends State<HomeScreen>
         ),
 
         _actionButton(
-          icon:
-              Icons.comment,
-          count:
-              _formatCount(
+          icon: Icons.comment,
+          count: _formatCount(
             _commentCounts[index],
           ),
           onTap: () =>
@@ -1177,14 +1498,13 @@ class _HomeScreenState extends State<HomeScreen>
         ),
 
         _actionButton(
-          icon:
-              Icons.bookmark,
-          active:
-              _saved[index],
+          icon: Icons.bookmark,
+          active: _saved[index],
           activeColor:
-              const Color(0xFFFFC107),
-          count:
-              _formatCount(
+              const Color(
+            0xFFFFC107,
+          ),
+          count: _formatCount(
             _saveCounts[index],
           ),
           onTap: () =>
@@ -1196,10 +1516,8 @@ class _HomeScreenState extends State<HomeScreen>
         ),
 
         _actionButton(
-          icon:
-              Icons.share,
-          count:
-              _formatCount(
+          icon: Icons.share,
+          count: _formatCount(
             _shareCounts[index],
           ),
           onTap: () =>
@@ -1244,10 +1562,10 @@ class _HomeScreenState extends State<HomeScreen>
               ),
 
               if (_videoOwners[
-                          index] !=
-                      null &&
+                      index] !=
+                  null &&
                   _followingUsers[
-                          index] !=
+                      index] !=
                       _videoOwners[
                           index])
                 Positioned(
@@ -1261,7 +1579,9 @@ class _HomeScreenState extends State<HomeScreen>
                       shape:
                           BoxShape.circle,
                       color:
-                          Color(0xFFFF2D75),
+                          Color(
+                        0xFFFF2D75,
+                      ),
                     ),
                     child:
                         const Icon(
@@ -1312,8 +1632,8 @@ class _HomeScreenState extends State<HomeScreen>
             child: Icon(
               icon,
               color: active
-                  ? activeColor ??
-                      Colors.white
+                  ? (activeColor ??
+                      Colors.white)
                   : Colors.white,
               size: 23,
             ),
@@ -1327,15 +1647,13 @@ class _HomeScreenState extends State<HomeScreen>
             count,
             style:
                 const TextStyle(
-              color:
-                  Colors.white,
+              color: Colors.white,
               fontSize: 10,
               fontWeight:
                   FontWeight.w600,
               shadows: [
                 Shadow(
-                  color:
-                      Colors.black,
+                  color: Colors.black,
                   blurRadius: 4,
                 ),
               ],
@@ -1346,12 +1664,12 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // =========================================================
+  // ============================================================
   // VIDEO INFORMATION
-  // =========================================================
+  // ============================================================
 
   Widget _buildVideoInformation() {
-    final index =
+    final int index =
         _currentVideoIndex;
 
     return Column(
@@ -1362,23 +1680,25 @@ class _HomeScreenState extends State<HomeScreen>
       children: [
         Row(
           children: [
-            Text(
-              _videoUsernames[
-                  index],
-              style:
-                  const TextStyle(
-                color:
-                    Colors.white,
-                fontSize: 16,
-                fontWeight:
-                    FontWeight.bold,
-                shadows: [
-                  Shadow(
-                    color:
-                        Colors.black,
-                    blurRadius: 5,
-                  ),
-                ],
+            Flexible(
+              child: Text(
+                _videoUsernames[
+                    index],
+                overflow:
+                    TextOverflow.ellipsis,
+                style:
+                    const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight:
+                      FontWeight.bold,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black,
+                      blurRadius: 5,
+                    ),
+                  ],
+                ),
               ),
             ),
 
@@ -1388,11 +1708,8 @@ class _HomeScreenState extends State<HomeScreen>
 
             GestureDetector(
               onTap: () =>
-                  _toggleFollow(
-                index,
-              ),
-              child:
-                  Container(
+                  _toggleFollow(index),
+              child: Container(
                 padding:
                     const EdgeInsets
                         .symmetric(
@@ -1402,8 +1719,7 @@ class _HomeScreenState extends State<HomeScreen>
                 decoration:
                     BoxDecoration(
                   borderRadius:
-                      BorderRadius
-                          .circular(
+                      BorderRadius.circular(
                     7,
                   ),
                   border:
@@ -1416,13 +1732,15 @@ class _HomeScreenState extends State<HomeScreen>
                   _followingUsers[
                               index] ==
                           _videoOwners[
-                              index]
+                              index] &&
+                      _videoOwners[
+                              index] !=
+                          null
                       ? 'Following'
                       : 'Follow',
                   style:
                       const TextStyle(
-                    color:
-                        Colors.white,
+                    color: Colors.white,
                     fontSize: 11,
                     fontWeight:
                         FontWeight.bold,
@@ -1445,14 +1763,12 @@ class _HomeScreenState extends State<HomeScreen>
               TextOverflow.ellipsis,
           style:
               const TextStyle(
-            color:
-                Colors.white,
+            color: Colors.white,
             fontSize: 14,
             height: 1.3,
             shadows: [
               Shadow(
-                color:
-                    Colors.black,
+                color: Colors.black,
                 blurRadius: 5,
               ),
             ],
@@ -1467,15 +1783,15 @@ class _HomeScreenState extends State<HomeScreen>
                 index]
             .isNotEmpty)
           Text(
-            _videoHashtags[index]
+            _videoHashtags[
+                    index]
                 .map(
                   (e) => '#$e',
                 )
                 .join(' '),
             style:
                 const TextStyle(
-              color:
-                  Colors.white,
+              color: Colors.white,
               fontSize: 13,
               fontWeight:
                   FontWeight.w600,
@@ -1490,24 +1806,23 @@ class _HomeScreenState extends State<HomeScreen>
           children: [
             const Icon(
               Icons.music_note,
-              color:
-                  Colors.white,
+              color: Colors.white,
               size: 15,
             ),
+
             const SizedBox(
               width: 4,
             ),
+
             Expanded(
               child: Text(
                 _videoSounds[
                     index],
                 overflow:
-                    TextOverflow
-                        .ellipsis,
+                    TextOverflow.ellipsis,
                 style:
                     const TextStyle(
-                  color:
-                      Colors.white,
+                  color: Colors.white,
                   fontSize: 12,
                 ),
               ),
@@ -1518,9 +1833,9 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // =========================================================
+  // ============================================================
   // BOTTOM NAVIGATION
-  // =========================================================
+  // ============================================================
 
   Widget _buildBottomNavigation() {
     return Container(
@@ -1585,8 +1900,8 @@ class _HomeScreenState extends State<HomeScreen>
           ),
 
           _bottomButton(
-            icon: Icons
-                .chat_bubble_outline,
+            icon:
+                Icons.chat_bubble_outline,
             label: 'Inbox',
             index: 3,
           ),
@@ -1607,7 +1922,7 @@ class _HomeScreenState extends State<HomeScreen>
     required String label,
     required int index,
   }) {
-    final active =
+    final bool active =
         _bottomIndex == index;
 
     return GestureDetector(
@@ -1627,13 +1942,14 @@ class _HomeScreenState extends State<HomeScreen>
                   : Colors.white54,
               size: 24,
             ),
+
             const SizedBox(
               height: 4,
             ),
+
             Text(
               label,
-              style:
-                  TextStyle(
+              style: TextStyle(
                 color: active
                     ? Colors.white
                     : Colors.white54,
@@ -1646,9 +1962,9 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // =========================================================
+  // ============================================================
   // LOGO
-  // =========================================================
+  // ============================================================
 
   Widget _buildAnimatedLogo() {
     return AnimatedBuilder(
@@ -1691,26 +2007,20 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ],
           ),
-          boxShadow: [
+          boxShadow: const [
             BoxShadow(
               color:
-                  const Color(
-                0xFFFF2D75,
-              ).withOpacity(
-                0.30,
-              ),
+                  Color(0xFFFF2D75),
               blurRadius: 16,
             ),
           ],
         ),
-        child:
-            const Center(
+        child: const Center(
           child: Text(
             'P',
             style:
                 TextStyle(
-              color:
-                  Colors.white,
+              color: Colors.white,
               fontSize: 27,
               fontWeight:
                   FontWeight.w900,
@@ -1721,23 +2031,24 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // =========================================================
+  // ============================================================
   // TOP BAR
-  // =========================================================
+  // ============================================================
 
   Widget _buildTopBar() {
     return SafeArea(
       bottom: false,
       child: Padding(
         padding:
-            const EdgeInsets
-                .fromLTRB(
+            const EdgeInsets.fromLTRB(
           14,
           8,
           10,
           0,
         ),
         child: Row(
+          crossAxisAlignment:
+              CrossAxisAlignment.center,
           children: [
             _buildAnimatedLogo(),
 
@@ -1770,14 +2081,10 @@ class _HomeScreenState extends State<HomeScreen>
             ),
 
             GestureDetector(
-              onTap:
-                  _openSearch,
-              child:
-                  const Padding(
+              onTap: _openSearch,
+              child: const Padding(
                 padding:
-                    EdgeInsets.all(
-                  8,
-                ),
+                    EdgeInsets.all(8),
                 child: Icon(
                   Icons.search,
                   color:
@@ -1800,8 +2107,7 @@ class _HomeScreenState extends State<HomeScreen>
       children: [
         Text(
           text,
-          style:
-              TextStyle(
+          style: TextStyle(
             color: active
                 ? Colors.white
                 : Colors.white54,
@@ -1811,21 +2117,21 @@ class _HomeScreenState extends State<HomeScreen>
                 : FontWeight.w500,
           ),
         ),
+
         const SizedBox(
           height: 5,
         ),
+
         AnimatedContainer(
           duration:
               const Duration(
             milliseconds: 180,
           ),
-          width:
-              active ? 22 : 0,
+          width: active ? 22 : 0,
           height: 2,
           decoration:
               BoxDecoration(
-            color:
-                Colors.white,
+            color: Colors.white,
             borderRadius:
                 BorderRadius.circular(
               5,
@@ -1836,9 +2142,139 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // =========================================================
+  // ============================================================
+  // UPLOAD STATUS
+  // ============================================================
+
+  Widget _buildUploadOverlay() {
+    if (!_isUploading) {
+      return const SizedBox();
+    }
+
+    final int percentage =
+        (_uploadProgress * 100)
+            .clamp(0, 100)
+            .round();
+
+    return Positioned(
+      left: 18,
+      right: 18,
+
+      // LOCKED BOTTOM NAV-এর উপরে
+      bottom: 88,
+
+      child: Container(
+        padding:
+            const EdgeInsets.fromLTRB(
+          16,
+          14,
+          16,
+          14,
+        ),
+        decoration:
+            BoxDecoration(
+          color: Colors.black
+              .withOpacity(
+            0.88,
+          ),
+          borderRadius:
+              BorderRadius.circular(
+            16,
+          ),
+          border:
+              Border.all(
+            color: Colors.white10,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment:
+              CrossAxisAlignment
+                  .start,
+          children: [
+            Row(
+              children: [
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child:
+                      CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color:
+                        Color(
+                      0xFFFF2D75,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(
+                  width: 10,
+                ),
+
+                Expanded(
+                  child: Text(
+                    _uploadStatus
+                            .isEmpty
+                        ? 'Uploading video...'
+                        : _uploadStatus,
+                    maxLines: 1,
+                    overflow:
+                        TextOverflow.ellipsis,
+                    style:
+                        const TextStyle(
+                      color:
+                          Colors.white,
+                      fontSize: 14,
+                      fontWeight:
+                          FontWeight.bold,
+                    ),
+                  ),
+                ),
+
+                Text(
+                  '$percentage%',
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white,
+                    fontSize: 14,
+                    fontWeight:
+                        FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(
+              height: 10,
+            ),
+
+            ClipRRect(
+              borderRadius:
+                  BorderRadius.circular(
+                10,
+              ),
+              child:
+                  LinearProgressIndicator(
+                value:
+                    _uploadProgress,
+                minHeight: 5,
+                backgroundColor:
+                    Colors.white12,
+                color:
+                    const Color(
+                  0xFFFF2D75,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
   // MESSAGE
-  // =========================================================
+  // ============================================================
 
   void _showMessage(
     String text,
@@ -1851,11 +2287,9 @@ class _HomeScreenState extends State<HomeScreen>
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content:
-              Text(text),
+          content: Text(text),
           behavior:
-              SnackBarBehavior
-                  .floating,
+              SnackBarBehavior.floating,
           duration:
               const Duration(
             seconds: 2,
@@ -1863,6 +2297,10 @@ class _HomeScreenState extends State<HomeScreen>
         ),
       );
   }
+
+  // ============================================================
+  // COUNT FORMAT
+  // ============================================================
 
   String _formatCount(
     int count,
@@ -1878,9 +2316,9 @@ class _HomeScreenState extends State<HomeScreen>
     return count.toString();
   }
 
-  // =========================================================
+  // ============================================================
   // BUILD
-  // =========================================================
+  // ============================================================
 
   @override
   Widget build(
@@ -1891,7 +2329,10 @@ class _HomeScreenState extends State<HomeScreen>
           Colors.black,
       body: Stack(
         children: [
-          // FULL SCREEN VIDEO
+          // ======================================================
+          // FULL SCREEN VIDEO FEED
+          // ======================================================
+
           PageView.builder(
             controller:
                 _pageController,
@@ -1916,7 +2357,10 @@ class _HomeScreenState extends State<HomeScreen>
             },
           ),
 
-          // TOP
+          // ======================================================
+          // TOP BAR
+          // ======================================================
+
           Positioned(
             left: 0,
             right: 0,
@@ -1925,9 +2369,9 @@ class _HomeScreenState extends State<HomeScreen>
                 _buildTopBar(),
           ),
 
-          // =================================================
-          // LOCKED RIGHT POSITION
-          // =================================================
+          // ======================================================
+          // LOCKED RIGHT BUTTON POSITION
+          // ======================================================
 
           Positioned(
             right: 10,
@@ -1936,9 +2380,9 @@ class _HomeScreenState extends State<HomeScreen>
                 _buildRightButtons(),
           ),
 
-          // =================================================
-          // LOCKED VIDEO INFO
-          // =================================================
+          // ======================================================
+          // VIDEO INFORMATION
+          // ======================================================
 
           Positioned(
             left: 18,
@@ -1948,9 +2392,9 @@ class _HomeScreenState extends State<HomeScreen>
                 _buildVideoInformation(),
           ),
 
-          // =================================================
-          // LOCKED BOTTOM NAV
-          // =================================================
+          // ======================================================
+          // LOCKED BOTTOM NAVIGATION
+          // ======================================================
 
           Positioned(
             left: 0,
@@ -1963,95 +2407,19 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ),
 
-          // =================================================
+          // ======================================================
           // UPLOAD PROGRESS
-          // =================================================
+          // ======================================================
 
-          if (_isUploading)
-            Positioned(
-              left: 18,
-              right: 18,
-              bottom: 88,
-              child:
-                  Container(
-                padding:
-                    const EdgeInsets.all(
-                  14,
-                ),
-                decoration:
-                    BoxDecoration(
-                  color: Colors.black
-                      .withOpacity(
-                    0.82,
-                  ),
-                  borderRadius:
-                      BorderRadius.circular(
-                    16,
-                  ),
-                ),
-                child:
-                    Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment
-                          .start,
-                  children: [
-                    Row(
-                      children: [
-                        const Text(
-                          'Uploading video...',
-                          style:
-                              TextStyle(
-                            color:
-                                Colors.white,
-                            fontWeight:
-                                FontWeight
-                                    .bold,
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          '${(_uploadProgress * 100).toInt()}%',
-                          style:
-                              const TextStyle(
-                            color:
-                                Colors.white,
-                            fontWeight:
-                                FontWeight
-                                    .bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(
-                      height: 8,
-                    ),
-                    ClipRRect(
-                      borderRadius:
-                          BorderRadius
-                              .circular(
-                        10,
-                      ),
-                      child:
-                          LinearProgressIndicator(
-                        value:
-                            _uploadProgress,
-                        minHeight: 5,
-                        backgroundColor:
-                            Colors.white12,
-                        color:
-                            const Color(
-                          0xFFFF2D75,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          _buildUploadOverlay(),
         ],
       ),
     );
   }
+
+  // ============================================================
+  // VIDEO PAGE
+  // ============================================================
 
   Widget _buildVideoPage(
     int index,
@@ -2098,21 +2466,26 @@ class _HomeScreenState extends State<HomeScreen>
           height:
               controller.value.size.height,
           child:
-              VideoPlayer(
-            controller,
-          ),
+              VideoPlayer(controller),
         ),
       ),
     );
   }
 
+  // ============================================================
+  // DISPOSE
+  // ============================================================
+
   @override
   void dispose() {
     _logoController.dispose();
+
     _pageController.dispose();
 
-    for (final controller
-        in _videoControllers) {
+    for (
+      final controller
+          in _videoControllers
+    ) {
       controller?.dispose();
     }
 
@@ -2120,12 +2493,13 @@ class _HomeScreenState extends State<HomeScreen>
   }
 }
 
-// ===========================================================
+// =================================================================
 // VIDEO POST DRAFT
-// ===========================================================
+// =================================================================
 
 class VideoPostDraft {
   final String caption;
+
   final List<String> hashtags;
 
   const VideoPostDraft({
@@ -2134,9 +2508,9 @@ class VideoPostDraft {
   });
 }
 
-// ===========================================================
-// TIKTOK-STYLE VIDEO UPLOAD SHEET
-// ===========================================================
+// =================================================================
+// TIKTOK STYLE VIDEO UPLOAD SHEET
+// =================================================================
 
 class _VideoUploadSheet
     extends StatefulWidget {
@@ -2154,7 +2528,7 @@ class _VideoUploadSheet
 
 class _VideoUploadSheetState
     extends State<_VideoUploadSheet> {
-  late final VideoPlayerController
+  late VideoPlayerController
       _controller;
 
   final TextEditingController
@@ -2166,7 +2540,8 @@ class _VideoUploadSheetState
       TextEditingController();
 
   bool _initialized = false;
-  bool _isPlaying = false;
+
+  bool _isPosting = false;
 
   @override
   void initState() {
@@ -2180,7 +2555,8 @@ class _VideoUploadSheetState
     _prepareVideo();
   }
 
-  Future<void> _prepareVideo() async {
+  Future<void>
+      _prepareVideo() async {
     try {
       await _controller
           .initialize();
@@ -2190,12 +2566,11 @@ class _VideoUploadSheetState
 
       await _controller.play();
 
-      if (!mounted) return;
-
-      setState(() {
-        _initialized = true;
-        _isPlaying = true;
-      });
+      if (mounted) {
+        setState(() {
+          _initialized = true;
+        });
+      }
     } catch (e) {
       debugPrint(
         'Upload preview error: $e',
@@ -2203,35 +2578,24 @@ class _VideoUploadSheetState
     }
   }
 
-  Future<void> _togglePreview() async {
-    if (!_initialized) return;
+  // ============================================================
+  // CREATE DRAFT
+  // ============================================================
 
-    if (_controller
-        .value
-        .isPlaying) {
-      await _controller.pause();
-
-      if (mounted) {
-        setState(() {
-          _isPlaying = false;
-        });
-      }
-    } else {
-      await _controller.play();
-
-      if (mounted) {
-        setState(() {
-          _isPlaying = true;
-        });
-      }
+  void _post() {
+    if (!_initialized ||
+        _isPosting) {
+      return;
     }
-  }
 
-  void _postVideo() {
-    final caption =
-        _captionController
-            .text
-            .trim();
+    FocusManager
+        .instance
+        .primaryFocus
+        ?.unfocus();
+
+    setState(() {
+      _isPosting = true;
+    });
 
     final hashtags =
         _hashtagController.text
@@ -2242,15 +2606,23 @@ class _VideoUploadSheetState
               ),
             )
             .where(
-              (item) =>
-                  item.isNotEmpty,
+              (e) => e.isNotEmpty,
             )
+            .map(
+              (e) => e.startsWith('#')
+                  ? e.substring(1)
+                  : e,
+            )
+            .toSet()
             .toList();
 
     Navigator.pop(
       context,
       VideoPostDraft(
-        caption: caption,
+        caption:
+            _captionController
+                .text
+                .trim(),
         hashtags: hashtags,
       ),
     );
@@ -2269,42 +2641,32 @@ class _VideoUploadSheetState
     return AnimatedPadding(
       duration:
           const Duration(
-        milliseconds: 200,
+        milliseconds: 220,
       ),
-      curve:
-          Curves.easeOut,
+      curve: Curves.easeOut,
       padding:
           EdgeInsets.only(
-        bottom:
-            keyboardHeight,
+        bottom: keyboardHeight,
       ),
-      child:
-          Container(
+      child: Container(
         height:
             media.size.height *
-                0.86,
+                0.84,
         decoration:
             const BoxDecoration(
           color:
-              Color(0xFF101010),
+              Color(0xFF111111),
           borderRadius:
               BorderRadius.vertical(
-            top:
-                Radius.circular(
-              26,
+            top: Radius.circular(
+              24,
             ),
           ),
         ),
-        child:
-            SafeArea(
+        child: SafeArea(
           top: false,
-          child:
-              Column(
+          child: Column(
             children: [
-              // =================================================
-              // HANDLE
-              // =================================================
-
               const SizedBox(
                 height: 10,
               ),
@@ -2323,482 +2685,204 @@ class _VideoUploadSheetState
                 ),
               ),
 
-              const SizedBox(
-                height: 12,
-              ),
-
-              // =================================================
-              // HEADER
-              // =================================================
-
               Padding(
                 padding:
-                    const EdgeInsets
-                        .symmetric(
-                  horizontal: 12,
+                    const EdgeInsets.fromLTRB(
+                  16,
+                  12,
+                  16,
+                  8,
                 ),
-                child:
-                    Row(
+                child: Row(
                   children: [
-                    IconButton(
-                      onPressed: () {
-                        FocusScope.of(
-                          context,
-                        ).unfocus();
-
-                        Navigator.pop(
-                          context,
-                        );
-                      },
-                      icon:
-                          const Icon(
-                        Icons
-                            .close_rounded,
-                        color:
-                            Colors.white,
-                        size: 27,
-                      ),
-                    ),
-
                     const Expanded(
-                      child:
-                          Center(
-                        child:
-                            Text(
-                          'Post Video',
-                          style:
-                              TextStyle(
-                            color:
-                                Colors.white,
-                            fontSize:
-                                20,
-                            fontWeight:
-                                FontWeight
-                                    .w800,
-                          ),
+                      child: Text(
+                        'Post Video',
+                        style:
+                            TextStyle(
+                          color:
+                              Colors.white,
+                          fontSize: 20,
+                          fontWeight:
+                              FontWeight.bold,
                         ),
                       ),
                     ),
 
-                    const SizedBox(
-                      width: 48,
+                    GestureDetector(
+                      onTap: () =>
+                          Navigator.pop(
+                        context,
+                      ),
+                      child:
+                          const Icon(
+                        Icons.close,
+                        color:
+                            Colors.white70,
+                      ),
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(
-                height: 8,
-              ),
-
-              // =================================================
-              // CONTENT
-              // =================================================
-
               Expanded(
                 child:
                     SingleChildScrollView(
-                  physics:
-                      const BouncingScrollPhysics(),
                   padding:
-                      const EdgeInsets
-                          .fromLTRB(
+                      const EdgeInsets.fromLTRB(
                     16,
-                    0,
+                    4,
                     16,
-                    12,
+                    20,
                   ),
                   child:
                       Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment
+                            .stretch,
                     children: [
-                      // =================================================
+                      // ------------------------------------------
                       // VIDEO PREVIEW
-                      // =================================================
+                      // ------------------------------------------
 
-                      Container(
-                        width:
-                            double.infinity,
-                        decoration:
-                            BoxDecoration(
-                          color:
-                              Colors.black,
-                          borderRadius:
-                              BorderRadius.circular(
-                            20,
-                          ),
-                        ),
+                      AspectRatio(
+                        aspectRatio:
+                            _initialized
+                                ? _controller
+                                    .value
+                                    .aspectRatio
+                                : 9 / 16,
                         child:
                             ClipRRect(
                           borderRadius:
                               BorderRadius.circular(
-                            20,
+                            18,
                           ),
                           child:
-                              AspectRatio(
-                            aspectRatio:
-                                _initialized
-                                    ? _controller
-                                        .value
-                                        .aspectRatio
-                                    : 9 / 16,
-                            child:
-                                Stack(
-                              fit:
-                                  StackFit.expand,
-                              children: [
-                                // VIDEO
-                                if (_initialized)
-                                  FittedBox(
-                                    fit:
-                                        BoxFit.cover,
-                                    child:
-                                        SizedBox(
-                                      width:
-                                          _controller
-                                              .value
-                                              .size
-                                              .width,
-                                      height:
-                                          _controller
-                                              .value
-                                              .size
-                                              .height,
-                                      child:
-                                          VideoPlayer(
-                                        _controller,
-                                      ),
-                                    ),
-                                  )
-                                else
-                                  const Center(
-                                    child:
-                                        CircularProgressIndicator(
+                              _initialized
+                                  ? VideoPlayer(
+                                      _controller,
+                                    )
+                                  : const ColoredBox(
                                       color:
-                                          Color(0xFFFF2D75),
-                                    ),
-                                  ),
-
-                                // PLAY / PAUSE
-                                Center(
-                                  child:
-                                      GestureDetector(
-                                    onTap:
-                                        _togglePreview,
-                                    child:
-                                        AnimatedOpacity(
-                                      duration:
-                                          const Duration(
-                                        milliseconds:
-                                            180,
-                                      ),
-                                      opacity:
-                                          _isPlaying
-                                              ? 0
-                                              : 1,
+                                          Colors.black,
                                       child:
-                                          Container(
-                                        width:
-                                            58,
-                                        height:
-                                            58,
-                                        decoration:
-                                            BoxDecoration(
-                                          color:
-                                              Colors.black54,
-                                          shape:
-                                              BoxShape.circle,
-                                          border:
-                                              Border.all(
-                                            color:
-                                                Colors.white24,
-                                          ),
-                                        ),
+                                          Center(
                                         child:
-                                            const Icon(
-                                          Icons
-                                              .play_arrow_rounded,
+                                            CircularProgressIndicator(
                                           color:
-                                              Colors.white,
-                                          size:
-                                              35,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-
-                                // PALOK LABEL
-                                Positioned(
-                                  left:
-                                      12,
-                                  bottom:
-                                      12,
-                                  child:
-                                      Container(
-                                    padding:
-                                        const EdgeInsets
-                                            .symmetric(
-                                      horizontal:
-                                          10,
-                                      vertical:
-                                          6,
-                                    ),
-                                    decoration:
-                                        BoxDecoration(
-                                      color:
-                                          Colors.black54,
-                                      borderRadius:
-                                          BorderRadius.circular(
-                                        20,
-                                      ),
-                                    ),
-                                    child:
-                                        const Row(
-                                      mainAxisSize:
-                                          MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons
-                                              .play_circle_fill_rounded,
-                                          color:
-                                              Colors.white,
-                                          size:
-                                              16,
-                                        ),
-                                        SizedBox(
-                                          width:
-                                              5,
-                                        ),
-                                        Text(
-                                          'PALOK',
-                                          style:
-                                              TextStyle(
-                                            color:
-                                                Colors.white,
-                                            fontSize:
-                                                11,
-                                            fontWeight:
-                                                FontWeight.w700,
+                                              Color(
+                                            0xFFFF2D75,
                                           ),
                                         ),
-                                      ],
+                                      ),
                                     ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
                         ),
                       ),
 
                       const SizedBox(
-                        height: 17,
+                        height: 16,
                       ),
 
-                      // =================================================
-                      // CAPTION TITLE
-                      // =================================================
-
-                      const Align(
-                        alignment:
-                            Alignment.centerLeft,
-                        child:
-                            Text(
-                          'Caption',
-                          style:
-                              TextStyle(
-                            color:
-                                Colors.white70,
-                            fontSize:
-                                13,
-                            fontWeight:
-                                FontWeight.w600,
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(
-                        height: 7,
-                      ),
-
-                      // =================================================
+                      // ------------------------------------------
                       // CAPTION
-                      // =================================================
+                      // ------------------------------------------
 
-                      Container(
-                        decoration:
-                            BoxDecoration(
+                      TextField(
+                        controller:
+                            _captionController,
+                        maxLines: 4,
+                        maxLength: 2200,
+                        textInputAction:
+                            TextInputAction.newline,
+                        style:
+                            const TextStyle(
                           color:
-                              const Color(
-                            0xFF1C1C1E,
-                          ),
-                          borderRadius:
-                              BorderRadius.circular(
-                            17,
-                          ),
-                          border:
-                              Border.all(
-                            color: Colors
-                                .white
-                                .withOpacity(
-                              0.06,
-                            ),
-                          ),
+                              Colors.white,
+                          fontSize: 15,
                         ),
-                        child:
-                            TextField(
-                          controller:
-                              _captionController,
-                          maxLines:
-                              3,
-                          maxLength:
-                              220,
-                          textCapitalization:
-                              TextCapitalization
-                                  .sentences,
-                          style:
+                        decoration:
+                            InputDecoration(
+                          hintText:
+                              'Write a caption...',
+                          hintStyle:
                               const TextStyle(
                             color:
-                                Colors.white,
-                            fontSize:
-                                15,
+                                Colors.white38,
                           ),
-                          cursorColor:
-                              const Color(
-                            0xFFFF2D75,
-                          ),
-                          decoration:
-                              const InputDecoration(
-                            hintText:
-                                'Write a caption...',
-                            hintStyle:
-                                TextStyle(
-                              color:
-                                  Colors.white38,
-                            ),
-                            prefixIcon:
-                                Icon(
-                              Icons
-                                  .edit_rounded,
-                              color:
-                                  Colors.white54,
-                              size:
-                                  20,
-                            ),
-                            border:
-                                InputBorder.none,
-                            contentPadding:
-                                EdgeInsets.all(
-                              15,
-                            ),
-                            counterStyle:
-                                TextStyle(
-                              color:
-                                  Colors.white30,
-                              fontSize:
-                                  10,
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(
-                        height: 12,
-                      ),
-
-                      // =================================================
-                      // HASHTAG TITLE
-                      // =================================================
-
-                      const Align(
-                        alignment:
-                            Alignment.centerLeft,
-                        child:
-                            Text(
-                          'Hashtags',
-                          style:
-                              TextStyle(
+                          filled: true,
+                          fillColor:
+                              Colors.white10,
+                          counterStyle:
+                              const TextStyle(
                             color:
-                                Colors.white70,
-                            fontSize:
-                                13,
-                            fontWeight:
-                                FontWeight.w600,
+                                Colors.white38,
+                          ),
+                          border:
+                              OutlineInputBorder(
+                            borderRadius:
+                                BorderRadius.circular(
+                              14,
+                            ),
+                            borderSide:
+                                BorderSide.none,
+                          ),
+                          contentPadding:
+                              const EdgeInsets.all(
+                            16,
                           ),
                         ),
                       ),
 
                       const SizedBox(
-                        height: 7,
+                        height: 10,
                       ),
 
-                      // =================================================
+                      // ------------------------------------------
                       // HASHTAGS
-                      // =================================================
+                      // ------------------------------------------
 
-                      Container(
-                        decoration:
-                            BoxDecoration(
+                      TextField(
+                        controller:
+                            _hashtagController,
+                        maxLines: 2,
+                        style:
+                            const TextStyle(
                           color:
-                              const Color(
-                            0xFF1C1C1E,
-                          ),
-                          borderRadius:
-                              BorderRadius.circular(
-                            17,
-                          ),
-                          border:
-                              Border.all(
-                            color: Colors
-                                .white
-                                .withOpacity(
-                              0.06,
-                            ),
-                          ),
+                              Colors.white,
+                          fontSize: 15,
                         ),
-                        child:
-                            TextField(
-                          controller:
-                              _hashtagController,
-                          style:
+                        decoration:
+                            InputDecoration(
+                          hintText:
+                              'Hashtags: PALOK ForYou',
+                          hintStyle:
                               const TextStyle(
                             color:
-                                Colors.white,
-                            fontSize:
-                                15,
+                                Colors.white38,
                           ),
-                          cursorColor:
-                              const Color(
-                            0xFFFF2D75,
+                          prefixIcon:
+                              const Icon(
+                            Icons.tag,
+                            color:
+                                Colors.white54,
                           ),
-                          decoration:
-                              const InputDecoration(
-                            hintText:
-                                '#PALOK  #ForYou',
-                            hintStyle:
-                                TextStyle(
-                              color:
-                                  Colors.white38,
+                          filled: true,
+                          fillColor:
+                              Colors.white10,
+                          border:
+                              OutlineInputBorder(
+                            borderRadius:
+                                BorderRadius.circular(
+                              14,
                             ),
-                            prefixIcon:
-                                Icon(
-                              Icons
-                                  .tag_rounded,
-                              color:
-                                  Colors.white54,
-                              size:
-                                  22,
-                            ),
-                            border:
-                                InputBorder.none,
-                            contentPadding:
-                                EdgeInsets
-                                    .symmetric(
-                              horizontal:
-                                  14,
-                              vertical:
-                                  16,
-                            ),
+                            borderSide:
+                                BorderSide.none,
+                          ),
+                          contentPadding:
+                              const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 14,
                           ),
                         ),
                       ),
@@ -2807,64 +2891,40 @@ class _VideoUploadSheetState
                         height: 12,
                       ),
 
-                      // =================================================
-                      // SOUND
-                      // =================================================
+                      // ------------------------------------------
+                      // ORIGINAL SOUND
+                      // ------------------------------------------
 
                       Container(
-                        height: 54,
                         padding:
                             const EdgeInsets
                                 .symmetric(
                           horizontal: 14,
+                          vertical: 13,
                         ),
                         decoration:
                             BoxDecoration(
                           color:
-                              const Color(
-                            0xFF181818,
-                          ),
+                              Colors.white10,
                           borderRadius:
                               BorderRadius.circular(
-                            16,
+                            14,
                           ),
                         ),
-                        child:
-                            Row(
+                        child: const Row(
                           children: [
-                            Container(
-                              width:
-                                  34,
-                              height:
-                                  34,
-                              decoration:
-                                  const BoxDecoration(
-                                color:
-                                    Color(
-                                  0xFFFF2D75,
-                                ),
-                                shape:
-                                    BoxShape.circle,
-                              ),
-                              child:
-                                  const Icon(
-                                Icons
-                                    .music_note_rounded,
-                                color:
-                                    Colors.white,
-                                size:
-                                    18,
-                              ),
+                            Icon(
+                              Icons
+                                  .music_note,
+                              color:
+                                  Colors.white,
+                              size: 21,
                             ),
-
-                            const SizedBox(
-                              width:
-                                  10,
+                            SizedBox(
+                              width: 10,
                             ),
-
-                            const Expanded(
-                              child:
-                                  Text(
+                            Expanded(
+                              child: Text(
                                 'Original sound',
                                 style:
                                     TextStyle(
@@ -2873,173 +2933,89 @@ class _VideoUploadSheetState
                                   fontSize:
                                       14,
                                   fontWeight:
-                                      FontWeight.w600,
+                                      FontWeight.w500,
                                 ),
                               ),
                             ),
-
-                            const Icon(
+                            Icon(
                               Icons
-                                  .chevron_right_rounded,
+                                  .chevron_right,
                               color:
                                   Colors.white38,
                             ),
                           ],
                         ),
                       ),
-
-                      const SizedBox(
-                        height: 10,
-                      ),
                     ],
                   ),
                 ),
               ),
 
-              // =================================================
-              // TIKTOK STYLE POST BUTTON
-              // =================================================
+              // ==================================================
+              // POST BUTTON
+              // ==================================================
 
-              Container(
+              Padding(
                 padding:
-                    const EdgeInsets
-                        .fromLTRB(
+                    const EdgeInsets.fromLTRB(
                   16,
-                  10,
+                  8,
                   16,
-                  10,
-                ),
-                decoration:
-                    BoxDecoration(
-                  color:
-                      const Color(
-                    0xFF101010,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color:
-                          Colors.black
-                              .withOpacity(
-                        0.35,
-                      ),
-                      blurRadius:
-                          12,
-                      offset:
-                          const Offset(
-                        0,
-                        -4,
-                      ),
-                    ),
-                  ],
+                  14,
                 ),
                 child:
-                    SafeArea(
-                  top: false,
-                  minimum:
-                      const EdgeInsets
-                          .only(
-                    bottom: 2,
-                  ),
+                    SizedBox(
+                  width:
+                      double.infinity,
+                  height: 54,
                   child:
-                      SizedBox(
-                    width:
-                        double.infinity,
-                    height:
-                        55,
-                    child:
-                        ElevatedButton(
-                      onPressed:
-                          _initialized
-                              ? _postVideo
-                              : null,
-                      style:
-                          ElevatedButton.styleFrom(
-                        backgroundColor:
-                            const Color(
-                          0xFFFF2D75,
-                        ),
-                        disabledBackgroundColor:
-                            const Color(
-                          0xFF5C1932,
-                        ),
-                        foregroundColor:
-                            Colors.white,
-                        elevation:
-                            0,
-                        shape:
-                            RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(
-                            17,
-                          ),
+                      ElevatedButton(
+                    onPressed:
+                        _initialized &&
+                                !_isPosting
+                            ? _post
+                            : null,
+                    style:
+                        ElevatedButton.styleFrom(
+                      backgroundColor:
+                          const Color(
+                        0xFFFF2D75,
+                      ),
+                      disabledBackgroundColor:
+                          Colors.white12,
+                      foregroundColor:
+                          Colors.white,
+                      shape:
+                          RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(
+                          15,
                         ),
                       ),
-                      child:
-                          _initialized
-                              ? const Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment
-                                          .center,
-                                  children: [
-                                    Icon(
-                                      Icons
-                                          .publish_rounded,
-                                      size:
-                                          21,
-                                    ),
-                                    SizedBox(
-                                      width:
-                                          8,
-                                    ),
-                                    Text(
-                                      'Post to PALOK',
-                                      style:
-                                          TextStyle(
-                                        fontSize:
-                                            16,
-                                        fontWeight:
-                                            FontWeight
-                                                .w800,
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : const Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment
-                                          .center,
-                                  children: [
-                                    SizedBox(
-                                      width:
-                                          20,
-                                      height:
-                                          20,
-                                      child:
-                                          CircularProgressIndicator(
-                                        strokeWidth:
-                                            2.3,
-                                        color:
-                                            Colors.white,
-                                      ),
-                                    ),
-                                    SizedBox(
-                                      width:
-                                          10,
-                                    ),
-                                    Text(
-                                      'Preparing video...',
-                                      style:
-                                          TextStyle(
-                                        fontSize:
-                                            15,
-                                        fontWeight:
-                                            FontWeight
-                                                .w700,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                      elevation: 0,
                     ),
+                    child: _isPosting
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child:
+                                CircularProgressIndicator(
+                              strokeWidth:
+                                  2,
+                              color:
+                                  Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Post to PALOK',
+                            style:
+                                TextStyle(
+                              fontSize:
+                                  16,
+                              fontWeight:
+                                  FontWeight.bold,
+                            ),
+                          ),
                   ),
                 ),
               ),
@@ -3053,21 +3029,25 @@ class _VideoUploadSheetState
   @override
   void dispose() {
     _controller.dispose();
+
     _captionController.dispose();
+
     _hashtagController.dispose();
 
     super.dispose();
   }
 }
 
-// ===========================================================
+// =================================================================
 // COMMENTS SHEET
-// ===========================================================
+// =================================================================
 
 class _CommentsSheet
     extends StatefulWidget {
   final List<String> comments;
+
   final int count;
+
   final Future<void> Function(
     String text,
   ) onSend;
@@ -3093,7 +3073,7 @@ class _CommentsSheetState
   bool _sending = false;
 
   Future<void> _send() async {
-    final text =
+    final String text =
         _controller.text.trim();
 
     if (text.isEmpty ||
@@ -3124,250 +3104,264 @@ class _CommentsSheetState
   Widget build(
     BuildContext context,
   ) {
-    final bottom =
+    final keyboard =
         MediaQuery.of(context)
             .viewInsets
             .bottom;
 
     return SafeArea(
       top: false,
-      child:
-          Container(
-        height:
-            MediaQuery.of(context)
-                    .size
-                    .height *
-                0.62,
+      child: AnimatedPadding(
+        duration:
+            const Duration(
+          milliseconds: 200,
+        ),
         padding:
             EdgeInsets.only(
-          bottom: bottom,
+          bottom: keyboard,
         ),
-        decoration:
-            const BoxDecoration(
-          color:
-              Color(0xFF101010),
-          borderRadius:
-              BorderRadius.vertical(
-            top:
-                Radius.circular(
-              22,
+        child: Container(
+          height:
+              MediaQuery.of(context)
+                      .size
+                      .height *
+                  0.62,
+          decoration:
+              const BoxDecoration(
+            color:
+                Color(0xFF101010),
+            borderRadius:
+                BorderRadius.vertical(
+              top: Radius.circular(
+                22,
+              ),
             ),
           ),
-        ),
-        child:
-            Column(
-          children: [
-            const SizedBox(
-              height: 10,
-            ),
+          child:
+              Column(
+            children: [
+              const SizedBox(
+                height: 10,
+              ),
 
-            Container(
-              width: 42,
-              height: 4,
-              decoration:
-                  BoxDecoration(
-                color:
-                    Colors.white24,
-                borderRadius:
-                    BorderRadius.circular(
+              Container(
+                width: 42,
+                height: 4,
+                decoration:
+                    BoxDecoration(
+                  color:
+                      Colors.white24,
+                  borderRadius:
+                      BorderRadius.circular(
+                    10,
+                  ),
+                ),
+              ),
+
+              Padding(
+                padding:
+                    const EdgeInsets.fromLTRB(
+                  18,
+                  14,
+                  10,
                   10,
                 ),
-              ),
-            ),
-
-            Padding(
-              padding:
-                  const EdgeInsets
-                      .fromLTRB(
-                18,
-                14,
-                10,
-                10,
-              ),
-              child:
-                  Row(
-                children: [
-                  Expanded(
-                    child:
-                        Text(
-                      '${widget.count} Comments',
-                      style:
-                          const TextStyle(
-                        color:
-                            Colors.white,
-                        fontSize:
-                            16,
-                        fontWeight:
-                            FontWeight.bold,
-                      ),
-                    ),
-                  ),
-
-                  IconButton(
-                    onPressed: () =>
-                        Navigator.pop(
-                      context,
-                    ),
-                    icon:
-                        const Icon(
-                      Icons.close,
-                      color:
-                          Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const Divider(
-              color:
-                  Colors.white10,
-              height: 1,
-            ),
-
-            Expanded(
-              child:
-                  ListView.builder(
-                padding:
-                    const EdgeInsets
-                        .all(
-                  16,
-                ),
-                itemCount:
-                    widget
-                        .comments
-                        .length,
-                itemBuilder:
-                    (context, index) {
-                  return Padding(
-                    padding:
-                        const EdgeInsets
-                            .only(
-                      bottom: 18,
-                    ),
-                    child:
-                        Text(
-                      widget
-                          .comments[index],
-                      style:
-                          const TextStyle(
-                        color:
-                            Colors.white,
-                        fontSize:
-                            14,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            Padding(
-              padding:
-                  const EdgeInsets
-                      .fromLTRB(
-                12,
-                8,
-                12,
-                10,
-              ),
-              child:
-                  Row(
-                children: [
-                  Expanded(
-                    child:
-                        TextField(
-                      controller:
-                          _controller,
-                      style:
-                          const TextStyle(
-                        color:
-                            Colors.white,
-                      ),
-                      decoration:
-                          InputDecoration(
-                        hintText:
-                            'Add comment...',
-                        hintStyle:
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${widget.count} Comments',
+                        style:
                             const TextStyle(
                           color:
-                              Colors.white38,
-                        ),
-                        filled:
-                            true,
-                        fillColor:
-                            Colors.white10,
-                        border:
-                            OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(
-                            24,
-                          ),
-                          borderSide:
-                              BorderSide
-                                  .none,
-                        ),
-                        contentPadding:
-                            const EdgeInsets
-                                .symmetric(
-                          horizontal:
-                              18,
-                          vertical:
-                              12,
+                              Colors.white,
+                          fontSize:
+                              16,
+                          fontWeight:
+                              FontWeight.bold,
                         ),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(
-                    width: 8,
-                  ),
-
-                  GestureDetector(
-                    onTap:
-                        _send,
-                    child:
-                        Container(
-                      width: 46,
-                      height: 46,
-                      decoration:
-                          const BoxDecoration(
-                        shape:
-                            BoxShape.circle,
-                        color:
-                            Color(
-                          0xFFFF2D75,
-                        ),
+                    IconButton(
+                      onPressed:
+                          () =>
+                              Navigator.pop(
+                        context,
                       ),
-                      child:
-                          _sending
-                              ? const Padding(
-                                  padding:
-                                      EdgeInsets.all(
-                                    13,
-                                  ),
-                                  child:
-                                      CircularProgressIndicator(
-                                    strokeWidth:
-                                        2,
+                      icon:
+                          const Icon(
+                        Icons.close,
+                        color:
+                            Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const Divider(
+                color:
+                    Colors.white10,
+                height: 1,
+              ),
+
+              Expanded(
+                child:
+                    widget.comments
+                            .isEmpty
+                        ? const Center(
+                            child:
+                                Text(
+                              'No comments yet',
+                              style:
+                                  TextStyle(
+                                color:
+                                    Colors.white54,
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            padding:
+                                const EdgeInsets
+                                    .all(
+                              16,
+                            ),
+                            itemCount:
+                                widget.comments
+                                    .length,
+                            itemBuilder:
+                                (
+                              context,
+                              index,
+                            ) {
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.only(
+                                  bottom:
+                                      18,
+                                ),
+                                child:
+                                    Text(
+                                  widget.comments[
+                                      index],
+                                  style:
+                                      const TextStyle(
                                     color:
                                         Colors.white,
+                                    fontSize:
+                                        14,
                                   ),
-                                )
-                              : const Icon(
-                                  Icons
-                                      .send,
+                                ),
+                              );
+                            },
+                          ),
+              ),
+
+              Padding(
+                padding:
+                    const EdgeInsets.fromLTRB(
+                  12,
+                  8,
+                  12,
+                  10,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child:
+                          TextField(
+                        controller:
+                            _controller,
+                        minLines:
+                            1,
+                        maxLines:
+                            3,
+                        style:
+                            const TextStyle(
+                          color:
+                              Colors.white,
+                        ),
+                        decoration:
+                            InputDecoration(
+                          hintText:
+                              'Add comment...',
+                          hintStyle:
+                              const TextStyle(
+                            color:
+                                Colors.white38,
+                          ),
+                          filled: true,
+                          fillColor:
+                              Colors.white10,
+                          border:
+                              OutlineInputBorder(
+                            borderRadius:
+                                BorderRadius.circular(
+                              24,
+                            ),
+                            borderSide:
+                                BorderSide.none,
+                          ),
+                          contentPadding:
+                              const EdgeInsets
+                                  .symmetric(
+                            horizontal:
+                                18,
+                            vertical:
+                                12,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(
+                      width: 8,
+                    ),
+
+                    GestureDetector(
+                      onTap: _send,
+                      child:
+                          Container(
+                        width: 46,
+                        height: 46,
+                        decoration:
+                            const BoxDecoration(
+                          shape:
+                              BoxShape
+                                  .circle,
+                          color:
+                              Color(
+                            0xFFFF2D75,
+                          ),
+                        ),
+                        child: _sending
+                            ? const Padding(
+                                padding:
+                                    EdgeInsets.all(
+                                  13,
+                                ),
+                                child:
+                                    CircularProgressIndicator(
+                                  strokeWidth:
+                                      2,
                                   color:
                                       Colors.white,
-                                  size:
-                                      21,
                                 ),
+                              )
+                            : const Icon(
+                                Icons.send,
+                                color:
+                                    Colors.white,
+                                size: 21,
+                              ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -3376,19 +3370,23 @@ class _CommentsSheetState
   @override
   void dispose() {
     _controller.dispose();
+
     super.dispose();
   }
 }
 
-// ===========================================================
+// =================================================================
 // SEARCH SHEET
-// ===========================================================
+// =================================================================
 
 class _SearchSheet
     extends StatefulWidget {
   final List<String> usernames;
+
   final List<String> captions;
+
   final List<List<String>> hashtags;
+
   final void Function(
     int index,
   ) onSelect;
@@ -3418,14 +3416,14 @@ class _SearchSheetState
   void initState() {
     super.initState();
 
-    _results =
-        List.generate(
+    _results = List.generate(
       widget.captions.length,
       (index) => index,
     );
 
-    _controller
-        .addListener(_search);
+    _controller.addListener(
+      _search,
+    );
   }
 
   void _search() {
@@ -3433,6 +3431,8 @@ class _SearchSheetState
         _controller.text
             .trim()
             .toLowerCase();
+
+    if (!mounted) return;
 
     setState(() {
       if (query.isEmpty) {
@@ -3449,18 +3449,18 @@ class _SearchSheetState
         ).where(
           (index) {
             final caption =
-                widget
-                    .captions[index]
+                widget.captions[
+                        index]
                     .toLowerCase();
 
             final username =
-                widget
-                    .usernames[index]
+                widget.usernames[
+                        index]
                     .toLowerCase();
 
             final tags =
-                widget
-                    .hashtags[index]
+                widget.hashtags[
+                        index]
                     .join(' ')
                     .toLowerCase();
 
@@ -3487,8 +3487,7 @@ class _SearchSheetState
   ) {
     return SafeArea(
       top: false,
-      child:
-          Container(
+      child: Container(
         height:
             MediaQuery.of(context)
                     .size
@@ -3500,8 +3499,7 @@ class _SearchSheetState
               Color(0xFF101010),
           borderRadius:
               BorderRadius.vertical(
-            top:
-                Radius.circular(
+            top: Radius.circular(
               24,
             ),
           ),
@@ -3529,16 +3527,14 @@ class _SearchSheetState
 
             Padding(
               padding:
-                  const EdgeInsets
-                      .all(
+                  const EdgeInsets.all(
                 16,
               ),
               child:
                   TextField(
                 controller:
                     _controller,
-                autofocus:
-                    true,
+                autofocus: true,
                 style:
                     const TextStyle(
                   color:
@@ -3559,8 +3555,7 @@ class _SearchSheetState
                     color:
                         Colors.white54,
                   ),
-                  filled:
-                      true,
+                  filled: true,
                   fillColor:
                       Colors.white10,
                   border:
@@ -3577,98 +3572,95 @@ class _SearchSheetState
             ),
 
             Expanded(
-              child:
-                  _results.isEmpty
-                      ? const Center(
-                          child:
+              child: _results
+                      .isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No results found',
+                        style:
+                            TextStyle(
+                          color:
+                              Colors.white54,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount:
+                          _results.length,
+                      itemBuilder:
+                          (
+                        context,
+                        position,
+                      ) {
+                        final index =
+                            _results[
+                                position];
+
+                        return ListTile(
+                          onTap: () =>
+                              widget.onSelect(
+                            index,
+                          ),
+                          leading:
+                              Container(
+                            width: 46,
+                            height: 46,
+                            decoration:
+                                const BoxDecoration(
+                              shape:
+                                  BoxShape.circle,
+                              gradient:
+                                  LinearGradient(
+                                colors: [
+                                  Color(
+                                    0xFFFF2D75,
+                                  ),
+                                  Color(
+                                    0xFF8B5CF6,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            child:
+                                const Icon(
+                              Icons
+                                  .play_arrow,
+                              color:
+                                  Colors.white,
+                            ),
+                          ),
+                          title:
                               Text(
-                            'No results found',
+                            widget
+                                .usernames[
+                                    index],
                             style:
-                                TextStyle(
+                                const TextStyle(
+                              color:
+                                  Colors.white,
+                              fontWeight:
+                                  FontWeight.bold,
+                            ),
+                          ),
+                          subtitle:
+                              Text(
+                            widget
+                                .captions[
+                                    index],
+                            maxLines:
+                                1,
+                            overflow:
+                                TextOverflow
+                                    .ellipsis,
+                            style:
+                                const TextStyle(
                               color:
                                   Colors.white54,
                             ),
                           ),
-                        )
-                      : ListView.builder(
-                          itemCount:
-                              _results
-                                  .length,
-                          itemBuilder:
-                              (
-                            context,
-                            position,
-                          ) {
-                            final index =
-                                _results[
-                                    position];
-
-                            return ListTile(
-                              onTap: () =>
-                                  widget
-                                      .onSelect(
-                                index,
-                              ),
-                              leading:
-                                  Container(
-                                width:
-                                    46,
-                                height:
-                                    46,
-                                decoration:
-                                    const BoxDecoration(
-                                  shape:
-                                      BoxShape.circle,
-                                  gradient:
-                                      LinearGradient(
-                                    colors: [
-                                      Color(
-                                        0xFFFF2D75,
-                                      ),
-                                      Color(
-                                        0xFF8B5CF6,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                child:
-                                    const Icon(
-                                  Icons
-                                      .play_arrow,
-                                  color:
-                                      Colors.white,
-                                ),
-                              ),
-                              title:
-                                  Text(
-                                widget
-                                    .usernames[index],
-                                style:
-                                    const TextStyle(
-                                  color:
-                                      Colors.white,
-                                  fontWeight:
-                                      FontWeight.bold,
-                                ),
-                              ),
-                              subtitle:
-                                  Text(
-                                widget
-                                    .captions[index],
-                                maxLines:
-                                    1,
-                                overflow:
-                                    TextOverflow
-                                        .ellipsis,
-                                style:
-                                    const TextStyle(
-                                  color:
-                                      Colors.white54,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
+                        );
+                      },
+                    ),
             ),
           ],
         ),
@@ -3679,6 +3671,7 @@ class _SearchSheetState
   @override
   void dispose() {
     _controller.dispose();
+
     super.dispose();
   }
 }
