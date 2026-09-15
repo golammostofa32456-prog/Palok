@@ -771,11 +771,20 @@ class _HomeScreenState extends State<HomeScreen>
         });
       }
 
-      debugPrint('Save error: $e');
+    debugPrint('Save error: $e');
 
-      _showMessage(
-        'Save সংরক্ষণ করা যায়নি।',
-      );
+if (e is FirebaseException) {
+  debugPrint('Save Firebase code: ${e.code}');
+  debugPrint('Save Firebase message: ${e.message}');
+
+  _showMessage(
+    'Save error: ${e.code}',
+  );
+} else {
+  _showMessage(
+    'Save error: $e',
+  );
+}
     }
   }
 
