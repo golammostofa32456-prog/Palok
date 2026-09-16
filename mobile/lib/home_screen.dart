@@ -21,11 +21,17 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final ImagePicker _picker = ImagePicker();
+  final FirebaseFirestore _firestore =
+      FirebaseFirestore.instance;
 
-  final PageController _pageController = PageController();
+  final FirebaseAuth _auth =
+      FirebaseAuth.instance;
+
+  final ImagePicker _picker =
+      ImagePicker();
+
+  final PageController _pageController =
+      PageController();
 
   final List<String> _demoVideos = [
     'assets/videos/video.mp4',
@@ -63,7 +69,9 @@ class _HomeScreenState extends State<HomeScreen>
 
     _logoController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
+      duration: const Duration(
+        milliseconds: 1800,
+      ),
     )..repeat(reverse: true);
 
     _logoScale = Tween<double>(
@@ -93,7 +101,8 @@ class _HomeScreenState extends State<HomeScreen>
   void dispose() {
     _pageController.dispose();
 
-    for (final controller in _controllers.values) {
+    for (final controller
+        in _controllers.values) {
       controller.dispose();
     }
 
@@ -114,14 +123,15 @@ class _HomeScreenState extends State<HomeScreen>
       _loadDemoVideos();
     }
 
-    if (mounted) {
-      setState(() {
-        _loading = false;
-      });
-    }
+    if (!mounted) return;
+
+    setState(() {
+      _loading = false;
+    });
 
     if (_videos.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) {
         _initializeVideoForIndex(0);
       });
     }
@@ -141,7 +151,9 @@ class _HomeScreenState extends State<HomeScreen>
 
       _likedIds
         ..clear()
-        ..addAll(liked.docs.map((e) => e.id));
+        ..addAll(
+          liked.docs.map((doc) => doc.id),
+        );
     } catch (_) {}
 
     try {
@@ -153,7 +165,9 @@ class _HomeScreenState extends State<HomeScreen>
 
       _savedIds
         ..clear()
-        ..addAll(saved.docs.map((e) => e.id));
+        ..addAll(
+          saved.docs.map((doc) => doc.id),
+        );
     } catch (_) {}
 
     try {
@@ -165,7 +179,9 @@ class _HomeScreenState extends State<HomeScreen>
 
       _followingIds
         ..clear()
-        ..addAll(following.docs.map((e) => e.id));
+        ..addAll(
+          following.docs.map((doc) => doc.id),
+        );
     } catch (_) {}
   }
 
@@ -173,7 +189,10 @@ class _HomeScreenState extends State<HomeScreen>
     try {
       final snapshot = await _firestore
           .collection('videos')
-          .orderBy('createdAt', descending: true)
+          .orderBy(
+            'createdAt',
+            descending: true,
+          )
           .limit(50)
           .get();
 
@@ -197,7 +216,9 @@ class _HomeScreenState extends State<HomeScreen>
         if (videoUrl.isEmpty) continue;
 
         final userId = _stringValue(
-          data['userId'] ?? data['uid'] ?? data['ownerId'],
+          data['userId'] ??
+              data['uid'] ??
+              data['ownerId'],
         );
 
         final username = _stringValue(
@@ -208,23 +229,28 @@ class _HomeScreenState extends State<HomeScreen>
         );
 
         final caption = _stringValue(
-          data['caption'] ?? data['description'],
+          data['caption'] ??
+              data['description'],
         );
 
         final likes = _intValue(
-          data['likes'] ?? data['likeCount'],
+          data['likes'] ??
+              data['likeCount'],
         );
 
         final comments = _intValue(
-          data['comments'] ?? data['commentCount'],
+          data['comments'] ??
+              data['commentCount'],
         );
 
         final saves = _intValue(
-          data['saves'] ?? data['saveCount'],
+          data['saves'] ??
+              data['saveCount'],
         );
 
         final shares = _intValue(
-          data['shares'] ?? data['shareCount'],
+          data['shares'] ??
+              data['shareCount'],
         );
 
         _videos.add(
@@ -232,7 +258,9 @@ class _HomeScreenState extends State<HomeScreen>
             id: doc.id,
             videoUrl: videoUrl,
             userId: userId,
-            username: username.isEmpty ? '@palok_user' : username,
+            username: username.isEmpty
+                ? '@palok_user'
+                : username,
             caption: caption,
             likes: likes,
             comments: comments,
@@ -284,7 +312,8 @@ class _HomeScreenState extends State<HomeScreen>
         videoUrl: _demoVideos[2],
         userId: 'demo_user_3',
         username: '@palok_video',
-        caption: 'Discover something new on PALOK ✨',
+        caption:
+            'Discover something new on PALOK ✨',
         likes: 6200,
         comments: 91,
         saves: 300,
@@ -303,15 +332,23 @@ class _HomeScreenState extends State<HomeScreen>
     if (value is int) return value;
     if (value is num) return value.toInt();
 
-    return int.tryParse(value?.toString() ?? '') ?? 0;
+    return int.tryParse(
+          value?.toString() ?? '',
+        ) ??
+        0;
   }
 
   // ============================================================
   // VIDEO
   // ============================================================
 
-  Future<void> _initializeVideoForIndex(int index) async {
-    if (index < 0 || index >= _videos.length) return;
+  Future<void> _initializeVideoForIndex(
+    int index,
+  ) async {
+    if (index < 0 ||
+        index >= _videos.length) {
+      return;
+    }
 
     final video = _videos[index];
 
@@ -319,10 +356,13 @@ class _HomeScreenState extends State<HomeScreen>
       try {
         await _controllers[video.id]!.play();
       } catch (_) {}
+
       return;
     }
 
-    if (_initializing[video.id] == true) return;
+    if (_initializing[video.id] == true) {
+      return;
+    }
 
     _initializing[video.id] = true;
 
@@ -330,9 +370,13 @@ class _HomeScreenState extends State<HomeScreen>
       late VideoPlayerController controller;
 
       if (video.isAsset) {
-        controller = VideoPlayerController.asset(video.videoUrl);
+        controller =
+            VideoPlayerController.asset(
+          video.videoUrl,
+        );
       } else {
-        controller = VideoPlayerController.networkUrl(
+        controller =
+            VideoPlayerController.networkUrl(
           Uri.parse(video.videoUrl),
         );
       }
@@ -342,9 +386,8 @@ class _HomeScreenState extends State<HomeScreen>
       await controller.initialize();
 
       await controller.setLooping(true);
-      await controller.setVolume(1.0);
 
-      if (index == _currentIndex && mounted) {
+      if (index == _currentIndex) {
         await controller.play();
       }
 
@@ -365,16 +408,23 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _disposeFarControllers(int index) {
-    final idsToKeep = <String>{};
+    final keepIds = <String>{};
 
-    for (int i = index - 1; i <= index + 1; i++) {
-      if (i >= 0 && i < _videos.length) {
-        idsToKeep.add(_videos[i].id);
+    for (int i = index - 1;
+        i <= index + 1;
+        i++) {
+      if (i >= 0 &&
+          i < _videos.length) {
+        keepIds.add(
+          _videos[i].id,
+        );
       }
     }
 
     final removeIds = _controllers.keys
-        .where((id) => !idsToKeep.contains(id))
+        .where(
+          (id) => !keepIds.contains(id),
+        )
         .toList();
 
     for (final id in removeIds) {
@@ -383,16 +433,23 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  Future<void> _onPageChanged(int index) async {
-    if (index < 0 || index >= _videos.length) return;
+  Future<void> _onPageChanged(
+    int index,
+  ) async {
+    if (index < 0 ||
+        index >= _videos.length) {
+      return;
+    }
 
-    final oldIndex = _currentIndex;
-
-    if (oldIndex >= 0 && oldIndex < _videos.length) {
-      final oldVideo = _videos[oldIndex];
+    if (_currentIndex >= 0 &&
+        _currentIndex < _videos.length) {
+      final oldVideo =
+          _videos[_currentIndex];
 
       try {
-        await _controllers[oldVideo.id]?.pause();
+        await _controllers[
+          oldVideo.id
+        ]?.pause();
       } catch (_) {}
     }
 
@@ -403,11 +460,17 @@ class _HomeScreenState extends State<HomeScreen>
     await _initializeVideoForIndex(index);
   }
 
-  Future<void> _toggleVideoPlay(VideoPost video) async {
-    final controller = _controllers[video.id];
+  Future<void> _toggleVideoPlay(
+    VideoPost video,
+  ) async {
+    final controller =
+        _controllers[video.id];
 
-    if (controller == null || !controller.value.isInitialized) {
-      await _initializeVideoForIndex(_currentIndex);
+    if (controller == null ||
+        !controller.value.isInitialized) {
+      await _initializeVideoForIndex(
+        _currentIndex,
+      );
       return;
     }
 
@@ -426,25 +489,32 @@ class _HomeScreenState extends State<HomeScreen>
   // LIKE
   // ============================================================
 
-  Future<void> _toggleLike(VideoPost video) async {
+  Future<void> _toggleLike(
+    VideoPost video,
+  ) async {
     final user = _auth.currentUser;
 
-    final isLiked = _likedIds.contains(video.id);
+    final isLiked =
+        _likedIds.contains(video.id);
 
     setState(() {
       if (isLiked) {
         _likedIds.remove(video.id);
-        _likeDeltas[video.id] = (_likeDeltas[video.id] ?? 0) - 1;
+
+        _likeDeltas[video.id] =
+            (_likeDeltas[video.id] ?? 0) - 1;
       } else {
         _likedIds.add(video.id);
-        _likeDeltas[video.id] = (_likeDeltas[video.id] ?? 0) + 1;
+
+        _likeDeltas[video.id] =
+            (_likeDeltas[video.id] ?? 0) + 1;
       }
     });
 
     if (user == null) return;
 
     try {
-      final userLikeRef = _firestore
+      final likeRef = _firestore
           .collection('users')
           .doc(user.uid)
           .collection('likedVideos')
@@ -455,22 +525,25 @@ class _HomeScreenState extends State<HomeScreen>
           .doc(video.id);
 
       if (isLiked) {
-        await userLikeRef.delete();
+        await likeRef.delete();
 
         if (!video.isAsset) {
           await videoRef.update({
-            'likes': FieldValue.increment(-1),
+            'likes':
+                FieldValue.increment(-1),
           });
         }
       } else {
-        await userLikeRef.set({
+        await likeRef.set({
           'videoId': video.id,
-          'createdAt': FieldValue.serverTimestamp(),
+          'createdAt':
+              FieldValue.serverTimestamp(),
         });
 
         if (!video.isAsset) {
           await videoRef.update({
-            'likes': FieldValue.increment(1),
+            'likes':
+                FieldValue.increment(1),
           });
         }
       }
@@ -481,33 +554,40 @@ class _HomeScreenState extends State<HomeScreen>
   // SAVE
   // ============================================================
 
-  Future<void> _toggleSave(VideoPost video) async {
+  Future<void> _toggleSave(
+    VideoPost video,
+  ) async {
     final user = _auth.currentUser;
 
-    final isSaved = _savedIds.contains(video.id);
+    final isSaved =
+        _savedIds.contains(video.id);
 
     setState(() {
       if (isSaved) {
         _savedIds.remove(video.id);
-        _saveDeltas[video.id] = (_saveDeltas[video.id] ?? 0) - 1;
+
+        _saveDeltas[video.id] =
+            (_saveDeltas[video.id] ?? 0) - 1;
       } else {
         _savedIds.add(video.id);
-        _saveDeltas[video.id] = (_saveDeltas[video.id] ?? 0) + 1;
+
+        _saveDeltas[video.id] =
+            (_saveDeltas[video.id] ?? 0) + 1;
       }
     });
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isSaved
-                ? 'ভিডিওটি Unsave করা হয়েছে'
-                : 'ভিডিওটি Saved হয়েছে',
-          ),
-          duration: const Duration(milliseconds: 900),
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
+      SnackBar(
+        content: Text(
+          isSaved
+              ? 'ভিডিওটি Unsave করা হয়েছে'
+              : 'ভিডিওটি Saved হয়েছে',
         ),
-      );
-    }
+        duration:
+            const Duration(milliseconds: 800),
+      ),
+    );
 
     if (user == null) return;
 
@@ -522,19 +602,28 @@ class _HomeScreenState extends State<HomeScreen>
         await ref.delete();
 
         if (!video.isAsset) {
-          await _firestore.collection('videos').doc(video.id).update({
-            'saves': FieldValue.increment(-1),
+          await _firestore
+              .collection('videos')
+              .doc(video.id)
+              .update({
+            'saves':
+                FieldValue.increment(-1),
           });
         }
       } else {
         await ref.set({
           'videoId': video.id,
-          'createdAt': FieldValue.serverTimestamp(),
+          'createdAt':
+              FieldValue.serverTimestamp(),
         });
 
         if (!video.isAsset) {
-          await _firestore.collection('videos').doc(video.id).update({
-            'saves': FieldValue.increment(1),
+          await _firestore
+              .collection('videos')
+              .doc(video.id)
+              .update({
+            'saves':
+                FieldValue.increment(1),
           });
         }
       }
@@ -545,36 +634,42 @@ class _HomeScreenState extends State<HomeScreen>
   // FOLLOW
   // ============================================================
 
-  Future<void> _toggleFollow(VideoPost video) async {
+  Future<void> _toggleFollow(
+    VideoPost video,
+  ) async {
     final user = _auth.currentUser;
 
-    if (video.userId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('This creator cannot be followed in demo mode.'),
-        ),
-      );
-      return;
-    }
-
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         const SnackBar(
-          content: Text('Login required to follow creators.'),
+          content: Text(
+            'Login required to follow.',
+          ),
         ),
       );
       return;
     }
 
-    if (video.userId == user.uid) return;
+    if (video.userId.isEmpty ||
+        video.userId == user.uid) {
+      return;
+    }
 
-    final alreadyFollowing = _followingIds.contains(video.userId);
+    final following =
+        _followingIds.contains(
+      video.userId,
+    );
 
     setState(() {
-      if (alreadyFollowing) {
-        _followingIds.remove(video.userId);
+      if (following) {
+        _followingIds.remove(
+          video.userId,
+        );
       } else {
-        _followingIds.add(video.userId);
+        _followingIds.add(
+          video.userId,
+        );
       }
     });
 
@@ -591,18 +686,20 @@ class _HomeScreenState extends State<HomeScreen>
           .collection('followers')
           .doc(user.uid);
 
-      if (alreadyFollowing) {
+      if (following) {
         await followingRef.delete();
         await followerRef.delete();
       } else {
         await followingRef.set({
           'userId': video.userId,
-          'createdAt': FieldValue.serverTimestamp(),
+          'createdAt':
+              FieldValue.serverTimestamp(),
         });
 
         await followerRef.set({
           'userId': user.uid,
-          'createdAt': FieldValue.serverTimestamp(),
+          'createdAt':
+              FieldValue.serverTimestamp(),
         });
       }
     } catch (_) {}
@@ -612,9 +709,12 @@ class _HomeScreenState extends State<HomeScreen>
   // SHARE
   // ============================================================
 
-  Future<void> _shareVideo(VideoPost video) async {
+  Future<void> _shareVideo(
+    VideoPost video,
+  ) async {
     try {
-      final link = 'https://palok.app/video/${video.id}';
+      final link =
+          'https://palok.app/video/${video.id}';
 
       await Share.share(
         'Watch this video on PALOK 🎬\n$link',
@@ -627,18 +727,24 @@ class _HomeScreenState extends State<HomeScreen>
 
       final user = _auth.currentUser;
 
-      if (user != null && !video.isAsset) {
+      if (user != null &&
+          !video.isAsset) {
         await _firestore
             .collection('videos')
             .doc(video.id)
             .collection('sharedVideos')
             .add({
           'userId': user.uid,
-          'createdAt': FieldValue.serverTimestamp(),
+          'createdAt':
+              FieldValue.serverTimestamp(),
         });
 
-        await _firestore.collection('videos').doc(video.id).update({
-          'shares': FieldValue.increment(1),
+        await _firestore
+            .collection('videos')
+            .doc(video.id)
+            .update({
+          'shares':
+              FieldValue.increment(1),
         });
       }
     } catch (_) {}
@@ -648,15 +754,16 @@ class _HomeScreenState extends State<HomeScreen>
   // COMMENTS
   // ============================================================
 
-  void _openComments(VideoPost video) {
-    final controller = _controllers[video.id];
-
-    controller?.pause();
+  void _openComments(
+    VideoPost video,
+  ) {
+    _controllers[video.id]?.pause();
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor:
+          Colors.transparent,
       useSafeArea: false,
       builder: (_) {
         return _CommentsSheet(
@@ -666,23 +773,25 @@ class _HomeScreenState extends State<HomeScreen>
           onCommentAdded: () {
             setState(() {
               _commentDeltas[video.id] =
-                  (_commentDeltas[video.id] ?? 0) + 1;
+                  (_commentDeltas[video.id] ??
+                          0) +
+                      1;
             });
           },
         );
       },
     ).whenComplete(() {
-      if (mounted && _currentIndex < _videos.length) {
-        final currentVideo = _videos[_currentIndex];
-
-        final currentController =
-            _controllers[currentVideo.id];
-
-        if (currentController != null &&
-            currentController.value.isInitialized) {
-          currentController.play();
-        }
+      if (!mounted ||
+          _videos.isEmpty ||
+          _currentIndex >=
+              _videos.length) {
+        return;
       }
+
+      final current =
+          _videos[_currentIndex];
+
+      _controllers[current.id]?.play();
     });
   }
 
@@ -691,14 +800,18 @@ class _HomeScreenState extends State<HomeScreen>
   // ============================================================
 
   void _openSearch() {
-    final searchController = TextEditingController();
+    final controller =
+        TextEditingController();
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF111111),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
+      backgroundColor:
+          const Color(0xFF111111),
+      shape:
+          const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(
           top: Radius.circular(24),
         ),
       ),
@@ -706,10 +819,15 @@ class _HomeScreenState extends State<HomeScreen>
         int searchTab = 0;
 
         return StatefulBuilder(
-          builder: (context, setSheetState) {
+          builder:
+              (context, setSheetState) {
             return SafeArea(
               child: SizedBox(
-                height: MediaQuery.of(context).size.height * 0.88,
+                height:
+                    MediaQuery.of(context)
+                            .size
+                            .height *
+                        0.88,
                 child: Column(
                   children: [
                     const SizedBox(height: 12),
@@ -717,47 +835,67 @@ class _HomeScreenState extends State<HomeScreen>
                     Container(
                       width: 42,
                       height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.white24,
-                        borderRadius: BorderRadius.circular(20),
+                      decoration:
+                          BoxDecoration(
+                        color:
+                            Colors.white24,
+                        borderRadius:
+                            BorderRadius.circular(
+                          20,
+                        ),
                       ),
                     ),
 
                     const SizedBox(height: 18),
 
                     Padding(
-                      padding: const EdgeInsets.symmetric(
+                      padding:
+                          const EdgeInsets
+                              .symmetric(
                         horizontal: 16,
                       ),
                       child: TextField(
-                        controller: searchController,
+                        controller: controller,
                         autofocus: true,
-                        style: const TextStyle(
+                        style:
+                            const TextStyle(
                           color: Colors.white,
                         ),
-                        decoration: InputDecoration(
-                          hintText: 'Search videos, users...',
-                          hintStyle: const TextStyle(
-                            color: Colors.white54,
-                          ),
-                          prefixIcon: const Icon(
-                            Icons.search,
-                            color: Colors.white,
-                          ),
-                          filled: true,
-                          fillColor: Colors.white10,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                        onSubmitted: (_) {
+                        onChanged: (_) {
                           setSheetState(() {});
                         },
+                        decoration:
+                            InputDecoration(
+                          hintText:
+                              'Search videos, users...',
+                          hintStyle:
+                              const TextStyle(
+                            color:
+                                Colors.white54,
+                          ),
+                          prefixIcon:
+                              const Icon(
+                            Icons.search,
+                            color:
+                                Colors.white,
+                          ),
+                          filled: true,
+                          fillColor:
+                              Colors.white10,
+                          border:
+                              OutlineInputBorder(
+                            borderRadius:
+                                BorderRadius.circular(
+                              14,
+                            ),
+                            borderSide:
+                                BorderSide.none,
+                          ),
+                        ),
                       ),
                     ),
 
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 12),
 
                     Row(
                       children: [
@@ -799,8 +937,9 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
 
                     Expanded(
-                      child: _buildSearchResults(
-                        searchController.text,
+                      child:
+                          _buildSearchResults(
+                        controller.text,
                         searchTab,
                       ),
                     ),
@@ -820,22 +959,27 @@ class _HomeScreenState extends State<HomeScreen>
     int selected,
     VoidCallback onTap,
   ) {
-    final active = index == selected;
+    final active =
+        index == selected;
 
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(
+          padding:
+              const EdgeInsets.symmetric(
             vertical: 14,
           ),
           child: Text(
             title,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: active ? Colors.white : Colors.white54,
-              fontWeight:
-                  active ? FontWeight.bold : FontWeight.normal,
+              color: active
+                  ? Colors.white
+                  : Colors.white54,
+              fontWeight: active
+                  ? FontWeight.bold
+                  : FontWeight.normal,
             ),
           ),
         ),
@@ -859,11 +1003,17 @@ class _HomeScreenState extends State<HomeScreen>
       );
     }
 
-    final q = query.toLowerCase();
+    final q =
+        query.toLowerCase();
 
-    final results = _videos.where((video) {
-      return video.username.toLowerCase().contains(q) ||
-          video.caption.toLowerCase().contains(q);
+    final results =
+        _videos.where((video) {
+      return video.username
+              .toLowerCase()
+              .contains(q) ||
+          video.caption
+              .toLowerCase()
+              .contains(q);
     }).toList();
 
     if (results.isEmpty) {
@@ -872,7 +1022,6 @@ class _HomeScreenState extends State<HomeScreen>
           'No results found',
           style: TextStyle(
             color: Colors.white54,
-            fontSize: 16,
           ),
         ),
       );
@@ -880,16 +1029,20 @@ class _HomeScreenState extends State<HomeScreen>
 
     return ListView.builder(
       itemCount: results.length,
-      itemBuilder: (context, index) {
-        final video = results[index];
+      itemBuilder:
+          (context, index) {
+        final video =
+            results[index];
 
         return ListTile(
           leading: Container(
             width: 46,
             height: 46,
-            decoration: const BoxDecoration(
+            decoration:
+                const BoxDecoration(
               shape: BoxShape.circle,
-              gradient: LinearGradient(
+              gradient:
+                  LinearGradient(
                 colors: [
                   _cyan,
                   _pink,
@@ -905,7 +1058,8 @@ class _HomeScreenState extends State<HomeScreen>
             video.username,
             style: const TextStyle(
               color: Colors.white,
-              fontWeight: FontWeight.bold,
+              fontWeight:
+                  FontWeight.bold,
             ),
           ),
           subtitle: Text(
@@ -913,8 +1067,10 @@ class _HomeScreenState extends State<HomeScreen>
                 ? 'PALOK video'
                 : video.caption,
             maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            overflow:
+                TextOverflow.ellipsis,
+            style:
+                const TextStyle(
               color: Colors.white54,
             ),
           ),
@@ -930,45 +1086,56 @@ class _HomeScreenState extends State<HomeScreen>
   void _openCreateSheet() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF151515),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
+      backgroundColor:
+          const Color(0xFF151515),
+      shape:
+          const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(
           top: Radius.circular(24),
         ),
       ),
       builder: (_) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(
+            padding:
+                const EdgeInsets.fromLTRB(
               18,
               14,
               18,
               20,
             ),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisSize:
+                  MainAxisSize.min,
               children: [
                 Container(
                   width: 42,
                   height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(20),
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        Colors.white24,
+                    borderRadius:
+                        BorderRadius.circular(
+                      20,
+                    ),
                   ),
                 ),
 
-                const SizedBox(height: 22),
+                const SizedBox(height: 20),
 
                 const Text(
                   'Create on PALOK',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 21,
-                    fontWeight: FontWeight.bold,
+                    fontWeight:
+                        FontWeight.bold,
                   ),
                 ),
 
-                const SizedBox(height: 22),
+                const SizedBox(height: 18),
 
                 _createOption(
                   Icons.videocam_outlined,
@@ -998,7 +1165,9 @@ class _HomeScreenState extends State<HomeScreen>
                   () {
                     Navigator.pop(context);
 
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(
                       const SnackBar(
                         content: Text(
                           'Sound feature will be connected next.',
@@ -1022,15 +1191,17 @@ class _HomeScreenState extends State<HomeScreen>
   ) {
     return ListTile(
       onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(
-        vertical: 4,
+      contentPadding:
+          const EdgeInsets.symmetric(
+        vertical: 3,
       ),
       leading: Container(
         width: 48,
         height: 48,
         decoration: BoxDecoration(
           color: Colors.white10,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius:
+              BorderRadius.circular(14),
         ),
         child: Icon(
           icon,
@@ -1042,7 +1213,8 @@ class _HomeScreenState extends State<HomeScreen>
         style: const TextStyle(
           color: Colors.white,
           fontSize: 16,
-          fontWeight: FontWeight.w600,
+          fontWeight:
+              FontWeight.w600,
         ),
       ),
       trailing: const Icon(
@@ -1052,11 +1224,17 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Future<void> _pickVideo(ImageSource source) async {
+  Future<void> _pickVideo(
+    ImageSource source,
+  ) async {
     try {
-      final picked = await _picker.pickVideo(
+      final picked =
+          await _picker.pickVideo(
         source: source,
-        maxDuration: const Duration(minutes: 5),
+        maxDuration:
+            const Duration(
+          minutes: 5,
+        ),
       );
 
       if (picked == null) return;
@@ -1066,7 +1244,8 @@ class _HomeScreenState extends State<HomeScreen>
       await showModalBottomSheet(
         context: context,
         isScrollControlled: true,
-        backgroundColor: Colors.transparent,
+        backgroundColor:
+            Colors.transparent,
         builder: (_) {
           return _PostComposerSheet(
             videoFile: File(picked.path),
@@ -1084,18 +1263,19 @@ class _HomeScreenState extends State<HomeScreen>
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(
         SnackBar(
-          content: Text(
-            'Video select failed: $e',
-          ),
+          content:
+              Text('Video select failed: $e'),
         ),
       );
     }
   }
 
   // ============================================================
-  // HOME FEED
+  // HOME
   // ============================================================
 
   Widget _buildHomeContent() {
@@ -1103,11 +1283,8 @@ class _HomeScreenState extends State<HomeScreen>
       fit: StackFit.expand,
       children: [
         _buildVideoFeed(),
-
         _buildTopHeader(),
-
         _buildVideoInfo(),
-
         _buildRightActions(),
       ],
     );
@@ -1118,7 +1295,8 @@ class _HomeScreenState extends State<HomeScreen>
       return const ColoredBox(
         color: Colors.black,
         child: Center(
-          child: CircularProgressIndicator(
+          child:
+              CircularProgressIndicator(
             color: _pink,
           ),
         ),
@@ -1142,20 +1320,29 @@ class _HomeScreenState extends State<HomeScreen>
 
     return PageView.builder(
       controller: _pageController,
-      scrollDirection: Axis.vertical,
+      scrollDirection:
+          Axis.vertical,
       itemCount: _videos.length,
-      onPageChanged: _onPageChanged,
-      itemBuilder: (context, index) {
-        final video = _videos[index];
+      onPageChanged:
+          _onPageChanged,
+      itemBuilder:
+          (context, index) {
+        final video =
+            _videos[index];
 
         return _VideoPage(
           video: video,
-          controller: _controllers[video.id],
-          initializing: _initializing[video.id] == true,
-          liked: _likedIds.contains(video.id),
-          onTap: () => _toggleVideoPlay(video),
+          controller:
+              _controllers[video.id],
+          initializing:
+              _initializing[
+                    video.id] ==
+                  true,
+          onTap: () =>
+              _toggleVideoPlay(video),
           onDoubleTap: () {
-            if (!_likedIds.contains(video.id)) {
+            if (!_likedIds
+                .contains(video.id)) {
               _toggleLike(video);
             }
           },
@@ -1165,7 +1352,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // ============================================================
-  // TOP
+  // TOP HEADER
   // ============================================================
 
   Widget _buildTopHeader() {
@@ -1178,12 +1365,16 @@ class _HomeScreenState extends State<HomeScreen>
         child: Row(
           children: [
             AnimatedBuilder(
-              animation: _logoController,
-              builder: (context, child) {
+              animation:
+                  _logoController,
+              builder:
+                  (context, child) {
                 return Transform.scale(
-                  scale: _logoScale.value,
+                  scale:
+                      _logoScale.value,
                   child: Opacity(
-                    opacity: _logoOpacity.value,
+                    opacity:
+                        _logoOpacity.value,
                     child: child,
                   ),
                 );
@@ -1193,45 +1384,48 @@ class _HomeScreenState extends State<HomeScreen>
                   Container(
                     width: 56,
                     height: 56,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(17),
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+                    decoration:
+                        BoxDecoration(
+                      borderRadius:
+                          BorderRadius.circular(
+                        17,
+                      ),
+                      gradient:
+                          const LinearGradient(
                         colors: [
                           _cyan,
                           _pink,
                         ],
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _pink.withOpacity(0.20),
-                          blurRadius: 15,
-                          spreadRadius: 1,
-                        ),
-                      ],
                     ),
-                    child: const Center(
+                    child:
+                        const Center(
                       child: Text(
                         'P',
-                        style: TextStyle(
-                          color: Colors.white,
+                        style:
+                            TextStyle(
+                          color:
+                              Colors.white,
                           fontSize: 35,
-                          fontWeight: FontWeight.w900,
+                          fontWeight:
+                              FontWeight
+                                  .w900,
                         ),
                       ),
                     ),
                   ),
 
-                  const SizedBox(width: 9),
+                  const SizedBox(
+                    width: 9,
+                  ),
 
                   const Text(
                     'PALOK',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 23,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.3,
+                      fontWeight:
+                          FontWeight.w800,
                     ),
                   ),
                 ],
@@ -1249,10 +1443,9 @@ class _HomeScreenState extends State<HomeScreen>
               child: Text(
                 'For You',
                 style: TextStyle(
-                  color:
-                      _topIndex == 0
-                          ? Colors.white
-                          : Colors.white54,
+                  color: _topIndex == 0
+                      ? Colors.white
+                      : Colors.white54,
                   fontSize: 17,
                   fontWeight:
                       _topIndex == 0
@@ -1262,30 +1455,22 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ),
 
-            const SizedBox(width: 25),
+            const SizedBox(
+              width: 25,
+            ),
 
             GestureDetector(
               onTap: () {
                 setState(() {
                   _topIndex = 1;
                 });
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Following feed selected',
-                    ),
-                    duration: Duration(milliseconds: 700),
-                  ),
-                );
               },
               child: Text(
                 'Following',
                 style: TextStyle(
-                  color:
-                      _topIndex == 1
-                          ? Colors.white
-                          : Colors.white54,
+                  color: _topIndex == 1
+                      ? Colors.white
+                      : Colors.white54,
                   fontSize: 17,
                   fontWeight:
                       _topIndex == 1
@@ -1295,7 +1480,9 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ),
 
-            const SizedBox(width: 17),
+            const SizedBox(
+              width: 17,
+            ),
 
             GestureDetector(
               onTap: _openSearch,
@@ -1317,11 +1504,13 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildVideoInfo() {
     if (_videos.isEmpty ||
-        _currentIndex >= _videos.length) {
+        _currentIndex >=
+            _videos.length) {
       return const SizedBox.shrink();
     }
 
-    final video = _videos[_currentIndex];
+    final video =
+        _videos[_currentIndex];
 
     return Positioned(
       left: 18,
@@ -1330,50 +1519,79 @@ class _HomeScreenState extends State<HomeScreen>
       child: SafeArea(
         top: false,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisSize:
+                  MainAxisSize.min,
               children: [
                 Text(
                   video.username,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white,
                     fontSize: 17,
-                    fontWeight: FontWeight.bold,
+                    fontWeight:
+                        FontWeight.bold,
                   ),
                 ),
 
-                if (video.userId.isNotEmpty &&
-                    video.userId != _auth.currentUser?.uid)
+                if (video.userId
+                        .isNotEmpty &&
+                    video.userId !=
+                        _auth
+                            .currentUser
+                            ?.uid)
                   Padding(
-                    padding: const EdgeInsets.only(
+                    padding:
+                        const EdgeInsets
+                            .only(
                       left: 8,
                     ),
-                    child: GestureDetector(
-                      onTap: () => _toggleFollow(video),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
+                    child:
+                        GestureDetector(
+                      onTap: () =>
+                          _toggleFollow(
+                        video,
+                      ),
+                      child:
+                          Container(
+                        padding:
+                            const EdgeInsets
+                                .symmetric(
                           horizontal: 9,
                           vertical: 4,
                         ),
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: Colors.white70,
+                        decoration:
+                            BoxDecoration(
+                          border:
+                              Border.all(
+                            color:
+                                Colors.white70,
                           ),
                           borderRadius:
-                              BorderRadius.circular(6),
+                              BorderRadius
+                                  .circular(
+                            6,
+                          ),
                         ),
                         child: Text(
-                          _followingIds.contains(
-                            video.userId,
-                          )
+                          _followingIds
+                                  .contains(
+                                video.userId,
+                              )
                               ? 'Following'
                               : 'Follow',
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style:
+                              const TextStyle(
+                            color:
+                                Colors.white,
                             fontSize: 11,
-                            fontWeight: FontWeight.bold,
+                            fontWeight:
+                                FontWeight
+                                    .bold,
                           ),
                         ),
                       ),
@@ -1382,35 +1600,47 @@ class _HomeScreenState extends State<HomeScreen>
               ],
             ),
 
-            const SizedBox(height: 8),
+            const SizedBox(
+              height: 8,
+            ),
 
-            if (video.caption.isNotEmpty)
+            if (video.caption
+                .isNotEmpty)
               Text(
                 video.caption,
                 maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                overflow:
+                    TextOverflow.ellipsis,
+                style:
+                    const TextStyle(
                   color: Colors.white,
                   fontSize: 15,
                   height: 1.35,
                 ),
               ),
 
-            const SizedBox(height: 7),
+            const SizedBox(
+              height: 7,
+            ),
 
             const Row(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisSize:
+                  MainAxisSize.min,
               children: [
                 Icon(
                   Icons.music_note,
                   color: Colors.white,
                   size: 15,
                 ),
-                SizedBox(width: 5),
+                SizedBox(
+                  width: 5,
+                ),
                 Text(
                   'Original sound • PALOK',
-                  style: TextStyle(
-                    color: Colors.white,
+                  style:
+                      TextStyle(
+                    color:
+                        Colors.white,
                     fontSize: 12,
                   ),
                 ),
@@ -1428,23 +1658,37 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildRightActions() {
     if (_videos.isEmpty ||
-        _currentIndex >= _videos.length) {
+        _currentIndex >=
+            _videos.length) {
       return const SizedBox.shrink();
     }
 
-    final video = _videos[_currentIndex];
+    final video =
+        _videos[_currentIndex];
 
     final likes =
-        video.likes + (_likeDeltas[video.id] ?? 0);
+        video.likes +
+            (_likeDeltas[
+                    video.id] ??
+                0);
 
     final comments =
-        video.comments + (_commentDeltas[video.id] ?? 0);
+        video.comments +
+            (_commentDeltas[
+                    video.id] ??
+                0);
 
     final saves =
-        video.saves + (_saveDeltas[video.id] ?? 0);
+        video.saves +
+            (_saveDeltas[
+                    video.id] ??
+                0);
 
     final shares =
-        video.shares + (_shareDeltas[video.id] ?? 0);
+        video.shares +
+            (_shareDeltas[
+                    video.id] ??
+                0);
 
     return Positioned(
       right: 10,
@@ -1452,50 +1696,75 @@ class _HomeScreenState extends State<HomeScreen>
       child: Column(
         children: [
           _ActionButton(
-            icon: Icons.person_add_alt_1,
-            active: _followingIds.contains(
+            icon:
+                Icons.person_add_alt_1,
+            active:
+                _followingIds.contains(
               video.userId,
             ),
             count: '',
-            onTap: () => _toggleFollow(video),
+            onTap: () =>
+                _toggleFollow(video),
           ),
 
-          const SizedBox(height: 14),
+          const SizedBox(
+            height: 14,
+          ),
 
           _ActionButton(
-            icon: _likedIds.contains(video.id)
+            icon: _likedIds
+                    .contains(video.id)
                 ? Icons.favorite
                 : Icons.favorite_border,
-            active: _likedIds.contains(video.id),
-            count: _formatCount(likes),
-            onTap: () => _toggleLike(video),
+            active: _likedIds
+                .contains(video.id),
+            count:
+                _formatCount(likes),
+            onTap: () =>
+                _toggleLike(video),
           ),
 
-          const SizedBox(height: 14),
-
-          _ActionButton(
-            icon: Icons.chat_bubble_outline,
-            count: _formatCount(comments),
-            onTap: () => _openComments(video),
+          const SizedBox(
+            height: 14,
           ),
 
-          const SizedBox(height: 14),
+          _ActionButton(
+            icon:
+                Icons.chat_bubble_outline,
+            count:
+                _formatCount(comments),
+            onTap: () =>
+                _openComments(video),
+          ),
+
+          const SizedBox(
+            height: 14,
+          ),
 
           _ActionButton(
-            icon: _savedIds.contains(video.id)
+            icon: _savedIds
+                    .contains(video.id)
                 ? Icons.bookmark
                 : Icons.bookmark_border,
-            active: _savedIds.contains(video.id),
-            count: _formatCount(saves),
-            onTap: () => _toggleSave(video),
+            active: _savedIds
+                .contains(video.id),
+            count:
+                _formatCount(saves),
+            onTap: () =>
+                _toggleSave(video),
           ),
 
-          const SizedBox(height: 14),
+          const SizedBox(
+            height: 14,
+          ),
 
           _ActionButton(
-            icon: Icons.share_outlined,
-            count: _formatCount(shares),
-            onTap: () => _shareVideo(video),
+            icon:
+                Icons.share_outlined,
+            count:
+                _formatCount(shares),
+            onTap: () =>
+                _shareVideo(video),
           ),
         ],
       ),
@@ -1522,7 +1791,8 @@ class _HomeScreenState extends State<HomeScreen>
     return const _SimplePalokScreen(
       icon: Icons.people_outline,
       title: 'Friends',
-      subtitle: 'Connect with your friends on PALOK',
+      subtitle:
+          'Connect with your friends on PALOK',
     );
   }
 
@@ -1532,9 +1802,11 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildInboxScreen() {
     return const _SimplePalokScreen(
-      icon: Icons.chat_bubble_outline,
+      icon:
+          Icons.chat_bubble_outline,
       title: 'Inbox',
-      subtitle: 'Your messages and notifications will appear here',
+      subtitle:
+          'Your messages and notifications will appear here',
     );
   }
 
@@ -1543,183 +1815,387 @@ class _HomeScreenState extends State<HomeScreen>
   // ============================================================
 
   Widget _buildProfileScreen() {
-    final user = _auth.currentUser;
+    final user =
+        _auth.currentUser;
 
-    return SafeArea(
-      child: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                18,
-                20,
-                18,
-                18,
-              ),
-              child: Column(
-                children: [
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: IconButton(
-                      onPressed: () {},
-                      icon: const Icon(
-                        Icons.menu,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-
-                  Container(
-                    width: 92,
-                    height: 92,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [
-                          _cyan,
-                          _pink,
-                        ],
-                      ),
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.person,
-                        color: Colors.white,
-                        size: 50,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  Text(
-                    user?.displayName ??
-                        user?.email ??
-                        '@palok_user',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 21,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
-                  const SizedBox(height: 6),
-
-                  Text(
-                    user?.email ?? 'PALOK Creator',
-                    style: const TextStyle(
-                      color: Colors.white54,
-                      fontSize: 13,
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _profileStat(
-                        'Following',
-                        _followingIds.length.toString(),
-                      ),
-                      _profileStat(
-                        'Followers',
-                        '0',
-                      ),
-                      _profileStat(
-                        'Likes',
-                        '0',
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  SizedBox(
-                    width: double.infinity,
-                    height: 44,
-                    child: OutlinedButton(
-                      onPressed: () {},
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(
-                          color: Colors.white24,
+    return Container(
+      color: Colors.black,
+      child: SafeArea(
+        child: CustomScrollView(
+          physics:
+              const BouncingScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding:
+                    const EdgeInsets
+                        .fromLTRB(
+                  16,
+                  4,
+                  16,
+                  12,
+                ),
+                child: Column(
+                  children: [
+                    // Menu
+                    Align(
+                      alignment:
+                          Alignment
+                              .centerRight,
+                      child: IconButton(
+                        padding:
+                            EdgeInsets.zero,
+                        constraints:
+                            const BoxConstraints(
+                          minWidth: 42,
+                          minHeight: 42,
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: const Text(
-                        'Edit profile',
-                        style: TextStyle(
-                          color: Colors.white,
+                        onPressed: () {},
+                        icon:
+                            const Icon(
+                          Icons.menu,
+                          color:
+                              Colors.white,
+                          size: 28,
                         ),
                       ),
                     ),
-                  ),
-                ],
+
+                    const SizedBox(
+                      height: 2,
+                    ),
+
+                    // Avatar
+                    Container(
+                      width: 82,
+                      height: 82,
+                      decoration:
+                          const BoxDecoration(
+                        shape:
+                            BoxShape.circle,
+                        gradient:
+                            LinearGradient(
+                          begin: Alignment
+                              .topLeft,
+                          end: Alignment
+                              .bottomRight,
+                          colors: [
+                            _cyan,
+                            _pink,
+                          ],
+                        ),
+                      ),
+                      padding:
+                          const EdgeInsets
+                              .all(2),
+                      child: Container(
+                        decoration:
+                            const BoxDecoration(
+                          shape:
+                              BoxShape.circle,
+                          color:
+                              Colors.black,
+                        ),
+                        child:
+                            const Center(
+                          child: Icon(
+                            Icons.person,
+                            color:
+                                Colors.white,
+                            size: 43,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(
+                      height: 9,
+                    ),
+
+                    // Username
+                    Text(
+                      user?.displayName ??
+                          user?.email
+                              ?.split(
+                                  '@')
+                              .first ??
+                          'palok_user',
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow
+                              .ellipsis,
+                      style:
+                          const TextStyle(
+                        color:
+                            Colors.white,
+                        fontSize: 20,
+                        fontWeight:
+                            FontWeight.w800,
+                      ),
+                    ),
+
+                    const SizedBox(
+                      height: 4,
+                    ),
+
+                    // Email
+                    if (user?.email !=
+                        null)
+                      Text(
+                        user!.email!,
+                        maxLines: 1,
+                        overflow:
+                            TextOverflow
+                                .ellipsis,
+                        style:
+                            const TextStyle(
+                          color:
+                              Colors.white54,
+                          fontSize: 12,
+                        ),
+                      ),
+
+                    const SizedBox(
+                      height: 17,
+                    ),
+
+                    // Stats
+                    Row(
+                      mainAxisAlignment:
+                          MainAxisAlignment
+                              .center,
+                      children: [
+                        _profileStat(
+                          'Following',
+                          _followingIds
+                              .length
+                              .toString(),
+                        ),
+                        const SizedBox(
+                          width: 38,
+                        ),
+                        _profileStat(
+                          'Followers',
+                          '0',
+                        ),
+                        const SizedBox(
+                          width: 38,
+                        ),
+                        _profileStat(
+                          'Likes',
+                          _profileLikes()
+                              .toString(),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(
+                      height: 16,
+                    ),
+
+                    // Edit profile
+                    SizedBox(
+                      width:
+                          double.infinity,
+                      height: 42,
+                      child:
+                          OutlinedButton(
+                        onPressed: () {},
+                        style:
+                            OutlinedButton
+                                .styleFrom(
+                          side:
+                              const BorderSide(
+                            color:
+                                Colors.white30,
+                          ),
+                          shape:
+                              RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius
+                                    .circular(
+                              7,
+                            ),
+                          ),
+                        ),
+                        child:
+                            const Text(
+                          'Edit profile',
+                          style:
+                              TextStyle(
+                            color:
+                                Colors.white,
+                            fontSize: 14,
+                            fontWeight:
+                                FontWeight
+                                    .w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
 
-          const SliverToBoxAdapter(
-            child: Divider(
-              color: Colors.white12,
+            // Profile tabs
+            const SliverToBoxAdapter(
+              child: Divider(
+                height: 1,
+                color:
+                    Colors.white12,
+              ),
             ),
-          ),
 
-          SliverPadding(
-            padding: const EdgeInsets.all(2),
-            sliver: SliverGrid(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  if (index >= _videos.length) {
-                    return const SizedBox.shrink();
-                  }
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 46,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        alignment:
+                            Alignment
+                                .center,
+                        decoration:
+                            const BoxDecoration(
+                          border:
+                              Border(
+                            bottom:
+                                BorderSide(
+                              color:
+                                  Colors.white,
+                              width: 2,
+                            ),
+                          ),
+                        ),
+                        child:
+                            const Icon(
+                          Icons.grid_on,
+                          color:
+                              Colors.white,
+                          size: 21,
+                        ),
+                      ),
+                    ),
 
-                  final video = _videos[index];
-
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _bottomIndex = 0;
-                        _currentIndex = index;
-                      });
-
-                      WidgetsBinding.instance
-                          .addPostFrameCallback((_) {
-                        if (_pageController.hasClients) {
-                          _pageController.jumpToPage(index);
-                        }
-                      });
-                    },
-                    child: Container(
-                      color: Colors.white10,
-                      child: const Center(
+                    Expanded(
+                      child:
+                          const Center(
                         child: Icon(
-                          Icons.play_arrow,
-                          color: Colors.white,
-                          size: 32,
+                          Icons.lock_outline,
+                          color:
+                              Colors.white38,
+                          size: 21,
                         ),
                       ),
                     ),
-                  );
-                },
-                childCount: _videos.length,
-              ),
-              gridDelegate:
-                  const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 2,
-                mainAxisSpacing: 2,
-                childAspectRatio: 0.72,
+
+                    Expanded(
+                      child:
+                          const Center(
+                        child: Icon(
+                          Icons
+                              .bookmark_border,
+                          color:
+                              Colors.white38,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+
+            // Actual video thumbnails
+            SliverPadding(
+              padding:
+                  const EdgeInsets.only(
+                top: 2,
+              ),
+              sliver: SliverGrid(
+                delegate:
+                    SliverChildBuilderDelegate(
+                  (context, index) {
+                    if (index >=
+                        _videos.length) {
+                      return const SizedBox
+                          .shrink();
+                    }
+
+                    final video =
+                        _videos[index];
+
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _bottomIndex =
+                              0;
+                          _currentIndex =
+                              index;
+                        });
+
+                        WidgetsBinding
+                            .instance
+                            .addPostFrameCallback(
+                          (_) {
+                            if (_pageController
+                                .hasClients) {
+                              _pageController
+                                  .jumpToPage(
+                                index,
+                              );
+                            }
+                          },
+                        );
+                      },
+                      child:
+                          _ProfileVideoThumbnail(
+                        video: video,
+                      ),
+                    );
+                  },
+                  childCount:
+                      _videos.length,
+                ),
+                gridDelegate:
+                    const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 2,
+                  mainAxisSpacing: 2,
+                  childAspectRatio:
+                      0.72,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  int _profileLikes() {
+    final user =
+        _auth.currentUser;
+
+    if (user == null) return 0;
+
+    int total = 0;
+
+    for (final video
+        in _videos) {
+      if (video.userId ==
+          user.uid) {
+        total +=
+            video.likes +
+                (_likeDeltas[
+                        video.id] ??
+                    0);
+      }
+    }
+
+    return total;
   }
 
   Widget _profileStat(
@@ -1730,16 +2206,21 @@ class _HomeScreenState extends State<HomeScreen>
       children: [
         Text(
           value,
-          style: const TextStyle(
+          style:
+              const TextStyle(
             color: Colors.white,
             fontSize: 19,
-            fontWeight: FontWeight.bold,
+            fontWeight:
+                FontWeight.bold,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(
+          height: 3,
+        ),
         Text(
           title,
-          style: const TextStyle(
+          style:
+              const TextStyle(
             color: Colors.white54,
             fontSize: 12,
           ),
@@ -1752,31 +2233,38 @@ class _HomeScreenState extends State<HomeScreen>
   // BOTTOM NAVIGATION
   // ============================================================
 
-  void _selectBottom(int index) {
+  void _selectBottom(
+    int index,
+  ) {
     if (index == 2) {
       _openCreateSheet();
       return;
     }
 
+    if (_bottomIndex == index) {
+      return;
+    }
+
+    if (_videos.isNotEmpty &&
+        _currentIndex <
+            _videos.length) {
+      final video =
+          _videos[_currentIndex];
+
+      if (index != 0) {
+        _controllers[
+              video.id]
+            ?.pause();
+      } else {
+        _controllers[
+              video.id]
+            ?.play();
+      }
+    }
+
     setState(() {
       _bottomIndex = index;
     });
-
-    if (index != 0) {
-      final currentVideo =
-          _currentIndex < _videos.length
-              ? _videos[_currentIndex]
-              : null;
-
-      if (currentVideo != null) {
-        _controllers[currentVideo.id]?.pause();
-      }
-    } else {
-      if (_currentIndex < _videos.length) {
-        final currentVideo = _videos[_currentIndex];
-        _controllers[currentVideo.id]?.play();
-      }
-    }
   }
 
   Widget _buildBottomNavigation() {
@@ -1787,65 +2275,98 @@ class _HomeScreenState extends State<HomeScreen>
       child: SafeArea(
         top: false,
         child: Container(
-          height: 78,
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.82),
-            border: const Border(
+          height: 70,
+          padding:
+              const EdgeInsets
+                  .symmetric(
+            horizontal: 7,
+          ),
+          decoration:
+              BoxDecoration(
+            color: Colors.black
+                .withOpacity(0.96),
+            border:
+                const Border(
               top: BorderSide(
-                color: Colors.white10,
+                color:
+                    Colors.white10,
+                width: 0.7,
               ),
             ),
           ),
           child: Row(
             children: [
               Expanded(
-                child: _BottomNavItem(
-                  icon: Icons.home_outlined,
-                  activeIcon: Icons.home,
+                child:
+                    _BottomNavItem(
+                  icon:
+                      Icons.home_outlined,
+                  activeIcon:
+                      Icons.home,
                   label: 'Home',
-                  selected: _bottomIndex == 0,
-                  onTap: () => _selectBottom(0),
+                  selected:
+                      _bottomIndex ==
+                          0,
+                  onTap: () =>
+                      _selectBottom(
+                    0,
+                  ),
                 ),
               ),
 
               Expanded(
-                child: _BottomNavItem(
-                  icon: Icons.people_outline,
-                  activeIcon: Icons.people,
+                child:
+                    _BottomNavItem(
+                  icon:
+                      Icons.people_outline,
+                  activeIcon:
+                      Icons.people,
                   label: 'Friends',
-                  selected: _bottomIndex == 1,
-                  onTap: () => _selectBottom(1),
+                  selected:
+                      _bottomIndex ==
+                          1,
+                  onTap: () =>
+                      _selectBottom(
+                    1,
+                  ),
                 ),
               ),
 
               SizedBox(
-                width: 74,
-                child: Center(
-                  child: GestureDetector(
-                    onTap: () => _selectBottom(2),
-                    child: Container(
-                      width: 52,
-                      height: 38,
-                      decoration: BoxDecoration(
+                width: 70,
+                child:
+                    Center(
+                  child:
+                      GestureDetector(
+                    onTap: () =>
+                        _selectBottom(
+                      2,
+                    ),
+                    child:
+                        Container(
+                      width: 50,
+                      height: 36,
+                      decoration:
+                          BoxDecoration(
                         borderRadius:
-                            BorderRadius.circular(10),
-                        gradient: const LinearGradient(
+                            BorderRadius
+                                .circular(
+                          10,
+                        ),
+                        gradient:
+                            const LinearGradient(
                           colors: [
                             _cyan,
                             _pink,
                           ],
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _pink.withOpacity(0.25),
-                            blurRadius: 14,
-                          ),
-                        ],
                       ),
-                      child: const Icon(
+                      child:
+                          const Icon(
                         Icons.add,
-                        color: Colors.white,
-                        size: 28,
+                        color:
+                            Colors.white,
+                        size: 27,
                       ),
                     ),
                   ),
@@ -1853,22 +2374,38 @@ class _HomeScreenState extends State<HomeScreen>
               ),
 
               Expanded(
-                child: _BottomNavItem(
-                  icon: Icons.chat_bubble_outline,
-                  activeIcon: Icons.chat_bubble,
+                child:
+                    _BottomNavItem(
+                  icon: Icons
+                      .chat_bubble_outline,
+                  activeIcon: Icons
+                      .chat_bubble,
                   label: 'Inbox',
-                  selected: _bottomIndex == 3,
-                  onTap: () => _selectBottom(3),
+                  selected:
+                      _bottomIndex ==
+                          3,
+                  onTap: () =>
+                      _selectBottom(
+                    3,
+                  ),
                 ),
               ),
 
               Expanded(
-                child: _BottomNavItem(
-                  icon: Icons.person_outline,
-                  activeIcon: Icons.person,
+                child:
+                    _BottomNavItem(
+                  icon:
+                      Icons.person_outline,
+                  activeIcon:
+                      Icons.person,
                   label: 'Profile',
-                  selected: _bottomIndex == 4,
-                  onTap: () => _selectBottom(4),
+                  selected:
+                      _bottomIndex ==
+                          4,
+                  onTap: () =>
+                      _selectBottom(
+                    4,
+                  ),
                 ),
               ),
             ],
@@ -1883,9 +2420,12 @@ class _HomeScreenState extends State<HomeScreen>
   // ============================================================
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor:
+          Colors.black,
       extendBody: true,
       body: Stack(
         children: [
@@ -1913,11 +2453,12 @@ class _HomeScreenState extends State<HomeScreen>
 // VIDEO PAGE
 // =================================================================
 
-class _VideoPage extends StatelessWidget {
+class _VideoPage
+    extends StatelessWidget {
   final VideoPost video;
-  final VideoPlayerController? controller;
+  final VideoPlayerController?
+      controller;
   final bool initializing;
-  final bool liked;
   final VoidCallback onTap;
   final VoidCallback onDoubleTap;
 
@@ -1925,15 +2466,17 @@ class _VideoPage extends StatelessWidget {
     required this.video,
     required this.controller,
     required this.initializing,
-    required this.liked,
     required this.onTap,
     required this.onDoubleTap,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+      behavior:
+          HitTestBehavior.opaque,
       onTap: onTap,
       onDoubleTap: onDoubleTap,
       child: Container(
@@ -1942,18 +2485,29 @@ class _VideoPage extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             if (controller != null &&
-                controller!.value.isInitialized)
+                controller!
+                    .value
+                    .isInitialized)
               FittedBox(
                 fit: BoxFit.cover,
                 child: SizedBox(
-                  width: controller!.value.size.width,
-                  height: controller!.value.size.height,
-                  child: VideoPlayer(controller!),
+                  width: controller!
+                      .value
+                      .size
+                      .width,
+                  height: controller!
+                      .value
+                      .size
+                      .height,
+                  child: VideoPlayer(
+                    controller!,
+                  ),
                 ),
               )
             else
               const Center(
-                child: CircularProgressIndicator(
+                child:
+                    CircularProgressIndicator(
                   color: Colors.white,
                   strokeWidth: 2,
                 ),
@@ -1961,29 +2515,41 @@ class _VideoPage extends StatelessWidget {
 
             if (initializing)
               const Center(
-                child: CircularProgressIndicator(
+                child:
+                    CircularProgressIndicator(
                   color: Colors.white,
                   strokeWidth: 2,
                 ),
               ),
 
             if (controller != null &&
-                controller!.value.isInitialized &&
-                !controller!.value.isPlaying)
+                controller!
+                    .value
+                    .isInitialized &&
+                !controller!
+                    .value
+                    .isPlaying)
               Center(
                 child: Container(
                   width: 64,
                   height: 64,
-                  decoration: BoxDecoration(
-                    color: Colors.black45,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white38,
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        Colors.black45,
+                    shape:
+                        BoxShape.circle,
+                    border:
+                        Border.all(
+                      color:
+                          Colors.white38,
                     ),
                   ),
-                  child: const Icon(
+                  child:
+                      const Icon(
                     Icons.play_arrow,
-                    color: Colors.white,
+                    color:
+                        Colors.white,
                     size: 40,
                   ),
                 ),
@@ -1996,10 +2562,211 @@ class _VideoPage extends StatelessWidget {
 }
 
 // =================================================================
+// PROFILE VIDEO THUMBNAIL
+// =================================================================
+
+class _ProfileVideoThumbnail
+    extends StatefulWidget {
+  final VideoPost video;
+
+  const _ProfileVideoThumbnail({
+    required this.video,
+  });
+
+  @override
+  State<
+      _ProfileVideoThumbnail>
+      createState() =>
+          _ProfileVideoThumbnailState();
+}
+
+class _ProfileVideoThumbnailState
+    extends State<
+        _ProfileVideoThumbnail> {
+  VideoPlayerController?
+      _controller;
+
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    try {
+      if (widget.video.isAsset) {
+        _controller =
+            VideoPlayerController
+                .asset(
+          widget.video.videoUrl,
+        );
+      } else {
+        _controller =
+            VideoPlayerController
+                .networkUrl(
+          Uri.parse(
+            widget.video.videoUrl,
+          ),
+        );
+      }
+
+      await _controller!
+          .initialize();
+
+      await _controller!
+          .setLooping(true);
+
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    if (_loading ||
+        _controller == null ||
+        !_controller!
+            .value
+            .isInitialized) {
+      return Container(
+        color:
+            const Color(0xFF181818),
+        child: const Center(
+          child:
+              CircularProgressIndicator(
+            color: Colors.white54,
+            strokeWidth: 2,
+          ),
+        ),
+      );
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: _controller!
+                .value
+                .size
+                .width,
+            height: _controller!
+                .value
+                .size
+                .height,
+            child: VideoPlayer(
+              _controller!,
+            ),
+          ),
+        ),
+
+        // Dark overlay
+        Container(
+          decoration:
+              BoxDecoration(
+            gradient:
+                LinearGradient(
+              begin: Alignment
+                  .topCenter,
+              end: Alignment
+                  .bottomCenter,
+              colors: [
+                Colors.transparent,
+                Colors.black
+                    .withOpacity(
+                  0.25,
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // Play icon
+        const Center(
+          child: Icon(
+            Icons.play_arrow,
+            color: Colors.white,
+            size: 29,
+          ),
+        ),
+
+        // Views
+        Positioned(
+          left: 7,
+          bottom: 6,
+          child: Row(
+            children: [
+              const Icon(
+                Icons.play_arrow,
+                color:
+                    Colors.white,
+                size: 14,
+              ),
+              const SizedBox(
+                width: 2,
+              ),
+              Text(
+                _formatViews(
+                  widget.video.likes,
+                ),
+                style:
+                    const TextStyle(
+                  color:
+                      Colors.white,
+                  fontSize: 10,
+                  fontWeight:
+                      FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatViews(
+    int value,
+  ) {
+    if (value >= 1000000) {
+      return '${(value / 1000000).toStringAsFixed(1)}M';
+    }
+
+    if (value >= 1000) {
+      return '${(value / 1000).toStringAsFixed(1)}K';
+    }
+
+    return value.toString();
+  }
+}
+
+// =================================================================
 // ACTION BUTTON
 // =================================================================
 
-class _ActionButton extends StatelessWidget {
+class _ActionButton
+    extends StatelessWidget {
   final IconData icon;
   final String count;
   final VoidCallback onTap;
@@ -2013,7 +2780,9 @@ class _ActionButton extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
@@ -2023,11 +2792,18 @@ class _ActionButton extends StatelessWidget {
             Container(
               width: 43,
               height: 43,
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.35),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.16),
+              decoration:
+                  BoxDecoration(
+                color: Colors.black
+                    .withOpacity(0.35),
+                shape:
+                    BoxShape.circle,
+                border:
+                    Border.all(
+                  color: Colors.white
+                      .withOpacity(
+                    0.16,
+                  ),
                 ),
               ),
               child: Icon(
@@ -2039,17 +2815,25 @@ class _ActionButton extends StatelessWidget {
               ),
             ),
 
-            if (count.isNotEmpty) ...[
-              const SizedBox(height: 3),
-              Text(
-                count,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
+            if (count.isNotEmpty)
+              Padding(
+                padding:
+                    const EdgeInsets
+                        .only(
+                  top: 3,
+                ),
+                child: Text(
+                  count,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white,
+                    fontSize: 10,
+                    fontWeight:
+                        FontWeight.w600,
+                  ),
                 ),
               ),
-            ],
           ],
         ),
       ),
@@ -2061,7 +2845,8 @@ class _ActionButton extends StatelessWidget {
 // BOTTOM NAV ITEM
 // =================================================================
 
-class _BottomNavItem extends StatelessWidget {
+class _BottomNavItem
+    extends StatelessWidget {
   final IconData icon;
   final IconData activeIcon;
   final String label;
@@ -2077,21 +2862,31 @@ class _BottomNavItem extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return GestureDetector(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      behavior:
+          HitTestBehavior.opaque,
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment:
+            MainAxisAlignment.center,
         children: [
           Icon(
-            selected ? activeIcon : icon,
+            selected
+                ? activeIcon
+                : icon,
             color: selected
                 ? Colors.white
                 : Colors.white54,
-            size: 24,
+            size: 23,
           ),
-          const SizedBox(height: 4),
+
+          const SizedBox(
+            height: 3,
+          ),
+
           Text(
             label,
             style: TextStyle(
@@ -2114,7 +2909,8 @@ class _BottomNavItem extends StatelessWidget {
 // SIMPLE SCREEN
 // =================================================================
 
-class _SimplePalokScreen extends StatelessWidget {
+class _SimplePalokScreen
+    extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
@@ -2126,60 +2922,74 @@ class _SimplePalokScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return Container(
       color: Colors.black,
       child: SafeArea(
         child: Center(
           child: Padding(
-            padding: const EdgeInsets.all(30),
+            padding:
+                const EdgeInsets.all(
+              30,
+            ),
             child: Column(
               mainAxisAlignment:
-                  MainAxisAlignment.center,
+                  MainAxisAlignment
+                      .center,
               children: [
                 Container(
                   width: 86,
                   height: 86,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
+                  decoration:
+                      const BoxDecoration(
+                    shape:
+                        BoxShape.circle,
+                    gradient:
+                        LinearGradient(
                       colors: [
                         _cyan,
                         _pink,
                       ],
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _pink.withOpacity(0.18),
-                        blurRadius: 25,
-                      ),
-                    ],
                   ),
                   child: Icon(
                     icon,
-                    color: Colors.white,
+                    color:
+                        Colors.white,
                     size: 42,
                   ),
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(
+                  height: 20,
+                ),
 
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white,
                     fontSize: 25,
-                    fontWeight: FontWeight.bold,
+                    fontWeight:
+                        FontWeight.bold,
                   ),
                 ),
 
-                const SizedBox(height: 8),
+                const SizedBox(
+                  height: 8,
+                ),
 
                 Text(
                   subtitle,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white54,
+                  textAlign:
+                      TextAlign.center,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white54,
                     fontSize: 14,
                   ),
                 ),
@@ -2196,7 +3006,8 @@ class _SimplePalokScreen extends StatelessWidget {
 // COMMENTS SHEET
 // =================================================================
 
-class _CommentsSheet extends StatefulWidget {
+class _CommentsSheet
+    extends StatefulWidget {
   final VideoPost video;
   final FirebaseFirestore firestore;
   final FirebaseAuth auth;
@@ -2210,27 +3021,36 @@ class _CommentsSheet extends StatefulWidget {
   });
 
   @override
-  State<_CommentsSheet> createState() =>
-      _CommentsSheetState();
+  State<_CommentsSheet>
+      createState() =>
+          _CommentsSheetState();
 }
 
 class _CommentsSheetState
-    extends State<_CommentsSheet> {
-  final TextEditingController _commentController =
+    extends State<
+        _CommentsSheet> {
+  final TextEditingController
+      _commentController =
       TextEditingController();
 
-  final FocusNode _focusNode = FocusNode();
+  final FocusNode _focusNode =
+      FocusNode();
 
   bool _sending = false;
 
   @override
   void dispose() {
-    _commentController.dispose();
+    _commentController
+        .dispose();
+
     _focusNode.dispose();
+
     super.dispose();
   }
 
-  Stream<QuerySnapshot<Map<String, dynamic>>>?
+  Stream<
+      QuerySnapshot<
+          Map<String, dynamic>>>?
       _commentsStream() {
     if (widget.video.isAsset) {
       return null;
@@ -2249,14 +3069,21 @@ class _CommentsSheetState
 
   Future<void> _sendComment() async {
     final text =
-        _commentController.text.trim();
+        _commentController.text
+            .trim();
 
-    if (text.isEmpty || _sending) return;
+    if (text.isEmpty ||
+        _sending) {
+      return;
+    }
 
-    final user = widget.auth.currentUser;
+    final user =
+        widget.auth.currentUser;
 
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(
         const SnackBar(
           content: Text(
             'Login required to comment.',
@@ -2279,8 +3106,10 @@ class _CommentsSheetState
         'userId': user.uid,
         'username':
             user.displayName ??
-            user.email?.split('@').first ??
-            'user',
+                user.email
+                    ?.split('@')
+                    .first ??
+                'user',
         'text': text,
         'createdAt':
             FieldValue.serverTimestamp(),
@@ -2291,7 +3120,10 @@ class _CommentsSheetState
             .collection('videos')
             .doc(widget.video.id)
             .update({
-          'comments': FieldValue.increment(1),
+          'comments':
+              FieldValue.increment(
+            1,
+          ),
         });
       }
 
@@ -2302,7 +3134,9 @@ class _CommentsSheetState
       _focusNode.unfocus();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(
           SnackBar(
             content: Text(
               'Comment failed: $e',
@@ -2327,24 +3161,30 @@ class _CommentsSheetState
       },
       {
         'username': '@karim',
-        'text': 'PALOK looks amazing ❤️',
+        'text':
+            'PALOK looks amazing ❤️',
       },
       {
         'username': '@user123',
-        'text': 'Great content!',
+        'text':
+            'Great content!',
       },
     ];
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(
+      padding:
+          const EdgeInsets.fromLTRB(
         18,
         12,
         18,
         110,
       ),
-      itemCount: comments.length,
-      itemBuilder: (context, index) {
-        final comment = comments[index];
+      itemCount:
+          comments.length,
+      itemBuilder:
+          (context, index) {
+        final comment =
+            comments[index];
 
         return _commentTile(
           comment['username']!,
@@ -2355,21 +3195,28 @@ class _CommentsSheetState
   }
 
   Widget _buildFirestoreComments() {
-    final stream = _commentsStream();
+    final stream =
+        _commentsStream();
 
     if (stream == null) {
       return _buildDemoComments();
     }
 
     return StreamBuilder<
-        QuerySnapshot<Map<String, dynamic>>>(
+        QuerySnapshot<
+            Map<String, dynamic>>>(
       stream: stream,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState ==
-            ConnectionState.waiting) {
+      builder:
+          (context, snapshot) {
+        if (snapshot
+                .connectionState ==
+            ConnectionState
+                .waiting) {
           return const Center(
-            child: CircularProgressIndicator(
-              color: Colors.white,
+            child:
+                CircularProgressIndicator(
+              color:
+                  Colors.white,
               strokeWidth: 2,
             ),
           );
@@ -2379,22 +3226,27 @@ class _CommentsSheetState
           return const Center(
             child: Text(
               'Unable to load comments',
-              style: TextStyle(
-                color: Colors.white54,
+              style:
+                  TextStyle(
+                color:
+                    Colors.white54,
               ),
             ),
           );
         }
 
         final docs =
-            snapshot.data?.docs ?? [];
+            snapshot.data?.docs ??
+                [];
 
         if (docs.isEmpty) {
           return const Center(
             child: Text(
               'No comments yet',
-              style: TextStyle(
-                color: Colors.white54,
+              style:
+                  TextStyle(
+                color:
+                    Colors.white54,
                 fontSize: 15,
               ),
             ),
@@ -2402,25 +3254,33 @@ class _CommentsSheetState
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(
+          padding:
+              const EdgeInsets
+                  .fromLTRB(
             18,
             12,
             18,
             110,
           ),
-          itemCount: docs.length,
-          itemBuilder: (context, index) {
-            final data = docs[index].data();
+          itemCount:
+              docs.length,
+          itemBuilder:
+              (context, index) {
+            final data =
+                docs[index].data();
 
             final username =
-                data['username']?.toString() ??
-                    data['userName']?.toString() ??
-                    data['displayName']?.toString() ??
+                data['username']
+                        ?.toString() ??
+                    data['userName']
+                        ?.toString() ??
                     'user';
 
             final text =
-                data['text']?.toString() ??
-                    data['comment']?.toString() ??
+                data['text']
+                        ?.toString() ??
+                    data['comment']
+                        ?.toString() ??
                     '';
 
             return _commentTile(
@@ -2440,19 +3300,24 @@ class _CommentsSheetState
     String text,
   ) {
     return Padding(
-      padding: const EdgeInsets.only(
+      padding:
+          const EdgeInsets.only(
         bottom: 20,
       ),
       child: Row(
         crossAxisAlignment:
-            CrossAxisAlignment.start,
+            CrossAxisAlignment
+                .start,
         children: [
           Container(
             width: 40,
             height: 40,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
+            decoration:
+                const BoxDecoration(
+              shape:
+                  BoxShape.circle,
+              gradient:
+                  LinearGradient(
                 colors: [
                   _cyan,
                   _pink,
@@ -2461,44 +3326,59 @@ class _CommentsSheetState
             ),
             child: const Icon(
               Icons.person,
-              color: Colors.white,
+              color:
+                  Colors.white,
               size: 22,
             ),
           ),
 
-          const SizedBox(width: 11),
+          const SizedBox(
+            width: 11,
+          ),
 
           Expanded(
             child: Column(
               crossAxisAlignment:
-                  CrossAxisAlignment.start,
+                  CrossAxisAlignment
+                      .start,
               children: [
                 Text(
                   username,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white,
                     fontSize: 13,
-                    fontWeight: FontWeight.bold,
+                    fontWeight:
+                        FontWeight.bold,
                   ),
                 ),
 
-                const SizedBox(height: 5),
+                const SizedBox(
+                  height: 5,
+                ),
 
                 Text(
                   text,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white,
                     fontSize: 14,
                     height: 1.35,
                   ),
                 ),
 
-                const SizedBox(height: 5),
+                const SizedBox(
+                  height: 5,
+                ),
 
                 const Text(
                   'Like',
-                  style: TextStyle(
-                    color: Colors.white38,
+                  style:
+                      TextStyle(
+                    color:
+                        Colors.white38,
                     fontSize: 11,
                   ),
                 ),
@@ -2511,56 +3391,84 @@ class _CommentsSheetState
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     final keyboardHeight =
-        MediaQuery.of(context).viewInsets.bottom;
+        MediaQuery.of(context)
+            .viewInsets
+            .bottom;
 
     return AnimatedPadding(
-      duration: const Duration(
+      duration:
+          const Duration(
         milliseconds: 220,
       ),
-      curve: Curves.easeOut,
-      padding: EdgeInsets.only(
+      curve:
+          Curves.easeOut,
+      padding:
+          EdgeInsets.only(
         bottom: keyboardHeight,
       ),
       child: Container(
         height:
-            MediaQuery.of(context).size.height * 0.62,
-        decoration: const BoxDecoration(
-          color: Color(0xFF101010),
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(24),
+            MediaQuery.of(context)
+                    .size
+                    .height *
+                0.62,
+        decoration:
+            const BoxDecoration(
+          color:
+              Color(0xFF101010),
+          borderRadius:
+              BorderRadius.vertical(
+            top: Radius.circular(
+              24,
+            ),
           ),
         ),
         child: Column(
           children: [
-            const SizedBox(height: 10),
+            const SizedBox(
+              height: 10,
+            ),
 
             Container(
               width: 45,
               height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white24,
+              decoration:
+                  BoxDecoration(
+                color:
+                    Colors.white24,
                 borderRadius:
-                    BorderRadius.circular(20),
+                    BorderRadius
+                        .circular(
+                  20,
+                ),
               ),
             ),
 
             Padding(
-              padding: const EdgeInsets.fromLTRB(
+              padding:
+                  const EdgeInsets
+                      .fromLTRB(
                 20,
-                18,
+                17,
                 12,
-                16,
+                15,
               ),
               child: Row(
                 children: [
                   Text(
                     '${widget.video.comments + 0} Comments',
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style:
+                        const TextStyle(
+                      color:
+                          Colors.white,
                       fontSize: 21,
-                      fontWeight: FontWeight.bold,
+                      fontWeight:
+                          FontWeight
+                              .bold,
                     ),
                   ),
 
@@ -2568,14 +3476,18 @@ class _CommentsSheetState
 
                   GestureDetector(
                     onTap: () {
-                      Navigator.pop(context);
+                      Navigator.pop(
+                        context,
+                      );
                     },
-                    child: const SizedBox(
+                    child:
+                        const SizedBox(
                       width: 45,
                       height: 45,
                       child: Icon(
                         Icons.close,
-                        color: Colors.white70,
+                        color: Colors
+                            .white70,
                         size: 31,
                       ),
                     ),
@@ -2586,7 +3498,8 @@ class _CommentsSheetState
 
             const Divider(
               height: 1,
-              color: Colors.white12,
+              color:
+                  Colors.white12,
             ),
 
             Expanded(
@@ -2596,12 +3509,16 @@ class _CommentsSheetState
 
                   Align(
                     alignment:
-                        Alignment.bottomCenter,
-                    child: SafeArea(
+                        Alignment
+                            .bottomCenter,
+                    child:
+                        SafeArea(
                       top: false,
-                      child: Container(
+                      child:
+                          Container(
                         padding:
-                            const EdgeInsets.fromLTRB(
+                            const EdgeInsets
+                                .fromLTRB(
                           16,
                           10,
                           12,
@@ -2609,23 +3526,34 @@ class _CommentsSheetState
                         ),
                         decoration:
                             const BoxDecoration(
-                          color: Color(0xFF101010),
-                          border: Border(
-                            top: BorderSide(
-                              color: Colors.white10,
+                          color:
+                              Color(
+                            0xFF101010,
+                          ),
+                          border:
+                              Border(
+                            top:
+                                BorderSide(
+                              color:
+                                  Colors.white10,
                             ),
                           ),
                         ),
-                        child: Row(
+                        child:
+                            Row(
                           crossAxisAlignment:
-                              CrossAxisAlignment.end,
+                              CrossAxisAlignment
+                                  .end,
                           children: [
                             Expanded(
-                              child: Container(
+                              child:
+                                  Container(
                                 constraints:
                                     const BoxConstraints(
-                                  minHeight: 48,
-                                  maxHeight: 110,
+                                  minHeight:
+                                      48,
+                                  maxHeight:
+                                      110,
                                 ),
                                 decoration:
                                     BoxDecoration(
@@ -2634,24 +3562,27 @@ class _CommentsSheetState
                                     0xFF292929,
                                   ),
                                   borderRadius:
-                                      BorderRadius.circular(
+                                      BorderRadius
+                                          .circular(
                                     25,
                                   ),
                                 ),
-                                child: TextField(
+                                child:
+                                    TextField(
                                   controller:
                                       _commentController,
                                   focusNode:
                                       _focusNode,
-                                  minLines: 1,
-                                  maxLines: 4,
-                                  textInputAction:
-                                      TextInputAction
-                                          .newline,
+                                  minLines:
+                                      1,
+                                  maxLines:
+                                      4,
                                   style:
                                       const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 15,
+                                    color:
+                                        Colors.white,
+                                    fontSize:
+                                        15,
                                   ),
                                   decoration:
                                       const InputDecoration(
@@ -2661,28 +3592,36 @@ class _CommentsSheetState
                                         TextStyle(
                                       color:
                                           Colors.white54,
-                                      fontSize: 15,
+                                      fontSize:
+                                          15,
                                     ),
                                     border:
                                         InputBorder.none,
                                     contentPadding:
-                                        EdgeInsets
-                                            .symmetric(
-                                      horizontal: 18,
-                                      vertical: 13,
+                                        EdgeInsets.symmetric(
+                                      horizontal:
+                                          18,
+                                      vertical:
+                                          13,
                                     ),
                                   ),
                                 ),
                               ),
                             ),
 
-                            const SizedBox(width: 9),
+                            const SizedBox(
+                              width: 9,
+                            ),
 
                             GestureDetector(
-                              onTap: _sendComment,
-                              child: Container(
-                                width: 50,
-                                height: 50,
+                              onTap:
+                                  _sendComment,
+                              child:
+                                  Container(
+                                width:
+                                    50,
+                                height:
+                                    50,
                                 decoration:
                                     const BoxDecoration(
                                   shape:
@@ -2695,25 +3634,28 @@ class _CommentsSheetState
                                     ],
                                   ),
                                 ),
-                                child: _sending
-                                    ? const Padding(
-                                        padding:
-                                            EdgeInsets.all(
-                                          15,
-                                        ),
-                                        child:
-                                            CircularProgressIndicator(
-                                          color:
-                                              Colors.white,
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(
-                                        Icons.send,
-                                        color:
-                                            Colors.white,
-                                        size: 24,
-                                      ),
+                                child:
+                                    _sending
+                                        ? const Padding(
+                                            padding:
+                                                EdgeInsets.all(
+                                              15,
+                                            ),
+                                            child:
+                                                CircularProgressIndicator(
+                                              color:
+                                                  Colors.white,
+                                              strokeWidth:
+                                                  2,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.send,
+                                            color:
+                                                Colors.white,
+                                            size:
+                                                24,
+                                          ),
                               ),
                             ),
                           ],
@@ -2735,7 +3677,8 @@ class _CommentsSheetState
 // POST COMPOSER
 // =================================================================
 
-class _PostComposerSheet extends StatefulWidget {
+class _PostComposerSheet
+    extends StatefulWidget {
   final File videoFile;
   final FirebaseFirestore firestore;
   final FirebaseAuth auth;
@@ -2747,18 +3690,24 @@ class _PostComposerSheet extends StatefulWidget {
   });
 
   @override
-  State<_PostComposerSheet> createState() =>
-      _PostComposerSheetState();
+  State<
+      _PostComposerSheet>
+      createState() =>
+          _PostComposerSheetState();
 }
 
 class _PostComposerSheetState
-    extends State<_PostComposerSheet> {
-  late VideoPlayerController _previewController;
+    extends State<
+        _PostComposerSheet> {
+  late VideoPlayerController
+      _previewController;
 
-  final TextEditingController _captionController =
+  final TextEditingController
+      _captionController =
       TextEditingController();
 
-  final TextEditingController _hashtagsController =
+  final TextEditingController
+      _hashtagsController =
       TextEditingController();
 
   bool _initializing = true;
@@ -2776,11 +3725,17 @@ class _PostComposerSheetState
     _initializePreview();
   }
 
-  Future<void> _initializePreview() async {
+  Future<void>
+      _initializePreview() async {
     try {
-      await _previewController.initialize();
-      await _previewController.setLooping(true);
-      await _previewController.play();
+      await _previewController
+          .initialize();
+
+      await _previewController
+          .setLooping(true);
+
+      await _previewController
+          .play();
     } catch (_) {}
 
     if (mounted) {
@@ -2792,9 +3747,14 @@ class _PostComposerSheetState
 
   @override
   void dispose() {
-    _previewController.dispose();
-    _captionController.dispose();
-    _hashtagsController.dispose();
+    _previewController
+        .dispose();
+
+    _captionController
+        .dispose();
+
+    _hashtagsController
+        .dispose();
 
     super.dispose();
   }
@@ -2802,10 +3762,13 @@ class _PostComposerSheetState
   Future<void> _uploadVideo() async {
     if (_uploading) return;
 
-    final user = widget.auth.currentUser;
+    final user =
+        widget.auth.currentUser;
 
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(
         const SnackBar(
           content: Text(
             'Login required to upload.',
@@ -2820,11 +3783,9 @@ class _PostComposerSheetState
     });
 
     try {
-      // ----------------------------------------------------------
-      // CLOUDINARY
-      // ----------------------------------------------------------
+      const cloudName =
+          'u0jufmrl';
 
-      const cloudName = 'u0jufmrl';
       const uploadPreset =
           'palok_video_upload';
 
@@ -2839,23 +3800,30 @@ class _PostComposerSheetState
         uri,
       );
 
-      request.fields['upload_preset'] =
+      request.fields[
+              'upload_preset'] =
           uploadPreset;
 
       request.files.add(
-        await http.MultipartFile.fromPath(
+        await http.MultipartFile
+            .fromPath(
           'file',
           widget.videoFile.path,
         ),
       );
 
-      final response = await request.send();
+      final response =
+          await request.send();
 
       final responseBody =
-          await response.stream.bytesToString();
+          await response
+              .stream
+              .bytesToString();
 
-      if (response.statusCode < 200 ||
-          response.statusCode >= 300) {
+      if (response.statusCode <
+              200 ||
+          response.statusCode >=
+              300) {
         throw Exception(
           'Cloudinary upload failed: '
           '${response.statusCode}',
@@ -2863,11 +3831,13 @@ class _PostComposerSheetState
       }
 
       final json =
-          jsonDecode(responseBody)
-              as Map<String, dynamic>;
+          jsonDecode(
+        responseBody,
+      ) as Map<String, dynamic>;
 
       final secureUrl =
-          json['secure_url']?.toString();
+          json['secure_url']
+              ?.toString();
 
       if (secureUrl == null ||
           secureUrl.isEmpty) {
@@ -2876,15 +3846,15 @@ class _PostComposerSheetState
         );
       }
 
-      // ----------------------------------------------------------
-      // FIRESTORE
-      // ----------------------------------------------------------
-
       final caption =
-          _captionController.text.trim();
+          _captionController
+              .text
+              .trim();
 
       final hashtags =
-          _hashtagsController.text.trim();
+          _hashtagsController
+              .text
+              .trim();
 
       await widget.firestore
           .collection('videos')
@@ -2894,8 +3864,10 @@ class _PostComposerSheetState
         'uid': user.uid,
         'username':
             user.displayName ??
-            user.email?.split('@').first ??
-            'palok_user',
+                user.email
+                    ?.split('@')
+                    .first ??
+                'palok_user',
         'caption': caption,
         'hashtags': hashtags,
         'likes': 0,
@@ -2910,7 +3882,9 @@ class _PostComposerSheetState
 
       Navigator.pop(context);
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(
         const SnackBar(
           content: Text(
             'Video successfully posted on PALOK 🎉',
@@ -2920,11 +3894,12 @@ class _PostComposerSheetState
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(
         SnackBar(
-          content: Text(
-            'Upload failed: $e',
-          ),
+          content:
+              Text('Upload failed: $e'),
         ),
       );
     } finally {
@@ -2937,42 +3912,66 @@ class _PostComposerSheetState
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     final keyboard =
-        MediaQuery.of(context).viewInsets.bottom;
+        MediaQuery.of(context)
+            .viewInsets
+            .bottom;
 
     return AnimatedPadding(
       duration:
-          const Duration(milliseconds: 220),
-      padding: EdgeInsets.only(
+          const Duration(
+        milliseconds: 220,
+      ),
+      padding:
+          EdgeInsets.only(
         bottom: keyboard,
       ),
       child: Container(
         height:
-            MediaQuery.of(context).size.height * 0.86,
-        decoration: const BoxDecoration(
-          color: Color(0xFF111111),
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(24),
+            MediaQuery.of(context)
+                    .size
+                    .height *
+                0.86,
+        decoration:
+            const BoxDecoration(
+          color:
+              Color(0xFF111111),
+          borderRadius:
+              BorderRadius.vertical(
+            top: Radius.circular(
+              24,
+            ),
           ),
         ),
         child: SafeArea(
           child: Column(
             children: [
-              const SizedBox(height: 10),
+              const SizedBox(
+                height: 10,
+              ),
 
               Container(
                 width: 44,
                 height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
+                decoration:
+                    BoxDecoration(
+                  color:
+                      Colors.white24,
                   borderRadius:
-                      BorderRadius.circular(20),
+                      BorderRadius
+                          .circular(
+                    20,
+                  ),
                 ),
               ),
 
               Padding(
-                padding: const EdgeInsets.fromLTRB(
+                padding:
+                    const EdgeInsets
+                        .fromLTRB(
                   18,
                   15,
                   18,
@@ -2982,10 +3981,14 @@ class _PostComposerSheetState
                   children: [
                     const Text(
                       'New PALOK Video',
-                      style: TextStyle(
-                        color: Colors.white,
+                      style:
+                          TextStyle(
+                        color:
+                            Colors.white,
                         fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                        fontWeight:
+                            FontWeight
+                                .bold,
                       ),
                     ),
 
@@ -2999,9 +4002,11 @@ class _PostComposerSheetState
                                   Navigator.pop(
                                     context,
                                   ),
-                      icon: const Icon(
+                      icon:
+                          const Icon(
                         Icons.close,
-                        color: Colors.white70,
+                        color:
+                            Colors.white70,
                       ),
                     ),
                   ],
@@ -3009,9 +4014,11 @@ class _PostComposerSheetState
               ),
 
               Expanded(
-                child: SingleChildScrollView(
+                child:
+                    SingleChildScrollView(
                   padding:
-                      const EdgeInsets.fromLTRB(
+                      const EdgeInsets
+                          .fromLTRB(
                     18,
                     5,
                     18,
@@ -3019,15 +4026,19 @@ class _PostComposerSheetState
                   ),
                   child: Column(
                     crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                        CrossAxisAlignment
+                            .start,
                     children: [
                       if (_initializing)
                         const AspectRatio(
-                          aspectRatio: 9 / 16,
-                          child: Center(
+                          aspectRatio:
+                              9 / 16,
+                          child:
+                              Center(
                             child:
                                 CircularProgressIndicator(
-                              color: _pink,
+                              color:
+                                  _pink,
                             ),
                           ),
                         )
@@ -3035,19 +4046,25 @@ class _PostComposerSheetState
                           .value
                           .isInitialized)
                         AspectRatio(
-                          aspectRatio: 9 / 16,
-                          child: ClipRRect(
+                          aspectRatio:
+                              9 / 16,
+                          child:
+                              ClipRRect(
                             borderRadius:
-                                BorderRadius.circular(
+                                BorderRadius
+                                    .circular(
                               18,
                             ),
-                            child: VideoPlayer(
+                            child:
+                                VideoPlayer(
                               _previewController,
                             ),
                           ),
                         ),
 
-                      const SizedBox(height: 20),
+                      const SizedBox(
+                        height: 20,
+                      ),
 
                       TextField(
                         controller:
@@ -3055,7 +4072,8 @@ class _PostComposerSheetState
                         maxLines: 4,
                         style:
                             const TextStyle(
-                          color: Colors.white,
+                          color:
+                              Colors.white,
                         ),
                         decoration:
                             InputDecoration(
@@ -3063,7 +4081,8 @@ class _PostComposerSheetState
                               'Write a caption...',
                           hintStyle:
                               const TextStyle(
-                            color: Colors.white54,
+                            color:
+                                Colors.white54,
                           ),
                           filled: true,
                           fillColor:
@@ -3071,23 +4090,28 @@ class _PostComposerSheetState
                           border:
                               OutlineInputBorder(
                             borderRadius:
-                                BorderRadius.circular(
+                                BorderRadius
+                                    .circular(
                               14,
                             ),
                             borderSide:
-                                BorderSide.none,
+                                BorderSide
+                                    .none,
                           ),
                         ),
                       ),
 
-                      const SizedBox(height: 12),
+                      const SizedBox(
+                        height: 12,
+                      ),
 
                       TextField(
                         controller:
                             _hashtagsController,
                         style:
                             const TextStyle(
-                          color: Colors.white,
+                          color:
+                              Colors.white,
                         ),
                         decoration:
                             InputDecoration(
@@ -3095,12 +4119,14 @@ class _PostComposerSheetState
                               '#hashtags',
                           hintStyle:
                               const TextStyle(
-                            color: Colors.white54,
+                            color:
+                                Colors.white54,
                           ),
                           prefixIcon:
                               const Icon(
                             Icons.tag,
-                            color: Colors.white54,
+                            color:
+                                Colors.white54,
                           ),
                           filled: true,
                           fillColor:
@@ -3108,27 +4134,34 @@ class _PostComposerSheetState
                           border:
                               OutlineInputBorder(
                             borderRadius:
-                                BorderRadius.circular(
+                                BorderRadius
+                                    .circular(
                               14,
                             ),
                             borderSide:
-                                BorderSide.none,
+                                BorderSide
+                                    .none,
                           ),
                         ),
                       ),
 
-                      const SizedBox(height: 24),
+                      const SizedBox(
+                        height: 24,
+                      ),
 
                       SizedBox(
-                        width: double.infinity,
+                        width:
+                            double.infinity,
                         height: 52,
-                        child: ElevatedButton(
+                        child:
+                            ElevatedButton(
                           onPressed:
                               _uploading
                                   ? null
                                   : _uploadVideo,
                           style:
-                              ElevatedButton.styleFrom(
+                              ElevatedButton
+                                  .styleFrom(
                             backgroundColor:
                                 _pink,
                             disabledBackgroundColor:
@@ -3136,20 +4169,24 @@ class _PostComposerSheetState
                             shape:
                                 RoundedRectangleBorder(
                               borderRadius:
-                                  BorderRadius.circular(
+                                  BorderRadius
+                                      .circular(
                                 14,
                               ),
                             ),
                           ),
                           child: _uploading
                               ? const SizedBox(
-                                  width: 23,
-                                  height: 23,
+                                  width:
+                                      23,
+                                  height:
+                                      23,
                                   child:
                                       CircularProgressIndicator(
                                     color:
                                         Colors.white,
-                                    strokeWidth: 2,
+                                    strokeWidth:
+                                        2,
                                   ),
                                 )
                               : const Text(
@@ -3158,9 +4195,11 @@ class _PostComposerSheetState
                                       TextStyle(
                                     color:
                                         Colors.white,
-                                    fontSize: 16,
+                                    fontSize:
+                                        16,
                                     fontWeight:
-                                        FontWeight.bold,
+                                        FontWeight
+                                            .bold,
                                   ),
                                 ),
                         ),
