@@ -1,485 +1,493 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
 
-class ProfileScreen extends StatefulWidget {
-  final String? userId;
-
-  const ProfileScreen({super.key, this.userId});
+class EditProfileScreen extends StatefulWidget {
+  const EditProfileScreen({super.key});
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  State<EditProfileScreen> createState() => _EditProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
-  static const _pink = Color(0xFFFF2D75);
-
+class _EditProfileScreenState extends State<EditProfileScreen> {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  bool get _isOwnProfile =>
-      widget.userId == null ||
-      widget.userId == FirebaseAuth.instance.currentUser?.uid;
+  final TextEditingController _usernameController =
+      TextEditingController();
 
-  String get _profileUid =>
-      widget.userId ?? FirebaseAuth.instance.currentUser?.uid ?? '';
+  final TextEditingController _bioController =
+      TextEditingController();
 
-  bool _following = false;
-  bool _followBusy = false;
+  bool _loading = true;
+  bool _saving = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _checkFollowing();
-  }
-
-  Future<void> _checkFollowing() async {
-    final me = FirebaseAuth.instance.currentUser;
-
-    if (me == null || _isOwnProfile) return;
-
-    final doc = await _firestore
-        .collection('users')
-        .doc(me.uid)
-        .collection('following')
-        .doc(_profileUid)
-        .get();
-
-    if (mounted) {
-      setState(() => _following = doc.exists);
-    }
-  }
-
-  Future<void> _toggleFollow() async {
-    final me = FirebaseAuth.instance.currentUser;
-
-    if (me == null || _isOwnProfile || _followBusy) return;
-
-    setState(() => _followBusy = true);
-
-    final ref = _firestore
-        .collection('users')
-        .doc(me.uid)
-        .collection('following')
-        .doc(_profileUid);
-
-    try {
-      if (_following) {
-        await ref.delete();
-      } else {
-        await ref.set({
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
-
-      if (mounted) {
-        setState(() => _following = !_following);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _followBusy = false);
-      }
-    }
-  }
-
-  Future<void> _logout() async {
-    await FirebaseAuth.instance.signOut();
-
-    if (mounted) {
-      Navigator.of(context).popUntil((route) => route.isFirst);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final me = FirebaseAuth.instance.currentUser;
-
-    if (_profileUid.isEmpty) {
-      return const Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(
-          child: Text(
-            'Login করা নেই',
-            style: TextStyle(color: Colors.white70),
-          ),
-        ),
-      );
-    }
-
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        title: Text(
-          _isOwnProfile
-              ? (me?.displayName ?? '@palok_user')
-              : 'Profile',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        actions: [
-          if (_isOwnProfile)
-            IconButton(
-              onPressed: _logout,
-              icon: const Icon(Icons.logout, color: Colors.white),
-            ),
-        ],
-      ),
-      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: _firestore
-            .collection('users')
-            .doc(_profileUid)
-            .snapshots(),
-        builder: (context, userSnap) {
-          final userData = userSnap.data?.data();
-
-          return CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                child: _buildHeader(userData),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                  child: Row(
-                    children: const [
-                      Icon(Icons.grid_on, color: Colors.white, size: 20),
-                      SizedBox(width: 6),
-                      Text(
-                        'Videos',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              _buildVideoGrid(),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildHeader(Map<String, dynamic>? userData) {
-    final me = FirebaseAuth.instance.currentUser;
-
-    final displayName = _isOwnProfile
-        ? (me?.displayName ?? '@palok_user')
-        : (userData?['username']?.toString() ?? '@palok_user');
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-      child: Column(
-        children: [
-          const CircleAvatar(
-            radius: 42,
-            backgroundColor: _pink,
-            child: Icon(Icons.person, color: Colors.white, size: 42),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            displayName,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 17,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          if (_isOwnProfile && me?.email != null) ...[
-            const SizedBox(height: 3),
-            Text(
-              me!.email!,
-              style: const TextStyle(color: Colors.white54, fontSize: 13),
-            ),
-          ],
-          const SizedBox(height: 16),
-          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: _firestore
-                .collection('users')
-                .doc(_profileUid)
-                .collection('following')
-                .snapshots(),
-            builder: (context, followingSnap) {
-              final followingCount = followingSnap.data?.docs.length ?? 0;
-
-              return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: _firestore
-                    .collection('videos')
-                    .where('ownerId', isEqualTo: _profileUid)
-                    .snapshots(),
-                builder: (context, videosSnap) {
-                  final videoCount = videosSnap.data?.docs.length ?? 0;
-
-                  final likeCount = (videosSnap.data?.docs ?? [])
-                      .fold<int>(
-                    0,
-                    (sum, doc) =>
-                        sum +
-                        ((doc.data()['likeCount'] as num?)?.toInt() ?? 0),
-                  );
-
-                  return Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _statColumn('$videoCount', 'Videos'),
-                      _statColumn('$followingCount', 'Following'),
-                      _statColumn(_format(likeCount), 'Likes'),
-                    ],
-                  );
-                },
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-          if (!_isOwnProfile)
-            SizedBox(
-              width: double.infinity,
-              height: 42,
-              child: ElevatedButton(
-                onPressed: _followBusy ? null : _toggleFollow,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      _following ? Colors.white10 : _pink,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: _following
-                        ? const BorderSide(color: Colors.white24)
-                        : BorderSide.none,
-                  ),
-                ),
-                child: Text(
-                  _following ? 'Following' : 'Follow',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _statColumn(String value, String label) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white54, fontSize: 12),
-        ),
-      ],
-    );
-  }
-
-  String _format(int value) {
-    if (value >= 1000000) {
-      return '${(value / 1000000).toStringAsFixed(1)}M';
-    }
-
-    if (value >= 1000) {
-      return '${(value / 1000).toStringAsFixed(1)}K';
-    }
-
-    return value.toString();
-  }
-
-  Widget _buildVideoGrid() {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: _firestore
-          .collection('videos')
-          .where('ownerId', isEqualTo: _profileUid)
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(
-                child: Text(
-                  'ভিডিও লোড করা যায়নি',
-                  style: TextStyle(color: Colors.white54),
-                ),
-              ),
-            ),
-          );
-        }
-
-        if (!snapshot.hasData) {
-          return const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.all(40),
-              child: Center(
-                child: CircularProgressIndicator(color: _pink),
-              ),
-            ),
-          );
-        }
-
-        final docs = snapshot.data!.docs;
-
-        if (docs.isEmpty) {
-          return const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.all(40),
-              child: Center(
-                child: Text(
-                  'এখনো কোনো ভিডিও পোস্ট করা হয়নি',
-                  style: TextStyle(color: Colors.white54),
-                ),
-              ),
-            ),
-          );
-        }
-
-        return SliverPadding(
-          padding: const EdgeInsets.all(2),
-          sliver: SliverGrid(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              mainAxisSpacing: 2,
-              crossAxisSpacing: 2,
-              childAspectRatio: 0.6,
-            ),
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final data = docs[index].data();
-
-                return _GridThumbnail(
-                  videoUrl: data['videoUrl']?.toString() ?? '',
-                  likeCount: (data['likeCount'] as num?)?.toInt() ?? 0,
-                );
-              },
-              childCount: docs.length,
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _GridThumbnail extends StatefulWidget {
-  final String videoUrl;
-  final int likeCount;
-
-  const _GridThumbnail({
-    required this.videoUrl,
-    required this.likeCount,
-  });
-
-  @override
-  State<_GridThumbnail> createState() => _GridThumbnailState();
-}
-
-class _GridThumbnailState extends State<_GridThumbnail> {
-  VideoPlayerController? _controller;
+  String _email = '';
+  String _profileImage = '';
 
   @override
   void initState() {
     super.initState();
-    _prepare();
+    _loadProfile();
   }
 
-  Future<void> _prepare() async {
-    if (widget.videoUrl.isEmpty) return;
-
-    final controller = widget.videoUrl.startsWith('http')
-        ? VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl))
-        : VideoPlayerController.asset(widget.videoUrl);
-
+  Future<void> _loadProfile() async {
     try {
-      await controller.initialize();
-      await controller.seekTo(Duration.zero);
+      final User? user = _auth.currentUser;
 
-      if (!mounted) {
-        await controller.dispose();
+      if (user == null) {
+        if (mounted) {
+          Navigator.pop(context);
+        }
         return;
       }
 
-      setState(() => _controller = controller);
-    } catch (_) {
-      await controller.dispose();
+      _email = user.email ?? '';
+
+      final DocumentSnapshot<Map<String, dynamic>> doc =
+          await _firestore.collection('users').doc(user.uid).get();
+
+      final data = doc.data();
+
+      String username = '';
+
+      if (data != null) {
+        username = (data['username'] ?? '').toString();
+        _profileImage = (data['profileImage'] ?? '').toString();
+      }
+
+      if (username.isEmpty) {
+        username = user.displayName ?? '';
+      }
+
+      if (username.isEmpty) {
+        username = user.email?.split('@').first ?? 'PALOK User';
+      }
+
+      _usernameController.text = username;
+
+      if (data != null) {
+        _bioController.text = (data['bio'] ?? '').toString();
+      }
+
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Profile load failed: $e'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _saveProfile() async {
+    final User? user = _auth.currentUser;
+
+    if (user == null) {
+      return;
+    }
+
+    final String username = _usernameController.text.trim();
+    final String bio = _bioController.text.trim();
+
+    if (username.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Username cannot be empty'),
+        ),
+      );
+      return;
+    }
+
+    if (username.length < 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Username must be at least 3 characters'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+    });
+
+    try {
+      await _firestore.collection('users').doc(user.uid).set(
+        {
+          'username': username,
+          'bio': bio,
+          'email': user.email ?? '',
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+
+      await user.updateDisplayName(username);
+
+      await user.reload();
+
+      if (!mounted) return;
+
+      Navigator.pop(
+        context,
+        {
+          'username': username,
+          'bio': bio,
+          'email': user.email ?? _email,
+          'profileImage': _profileImage,
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Profile save failed: $e'),
+          ),
+        );
+      }
     }
   }
 
   @override
   void dispose() {
-    _controller?.dispose();
+    _usernameController.dispose();
+    _bioController.dispose();
     super.dispose();
-  }
-
-  String _format(int value) {
-    if (value >= 1000000) {
-      return '${(value / 1000000).toStringAsFixed(1)}M';
-    }
-
-    if (value >= 1000) {
-      return '${(value / 1000).toStringAsFixed(1)}K';
-    }
-
-    return value.toString();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFF151515),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (_controller != null && _controller!.value.isInitialized)
-            FittedBox(
-              fit: BoxFit.cover,
-              child: SizedBox(
-                width: _controller!.value.size.width,
-                height: _controller!.value.size.height,
-                child: VideoPlayer(_controller!),
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        elevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: Colors.white,
+            size: 20,
+          ),
+          onPressed: () {
+            Navigator.pop(context);
+          },
+        ),
+        title: const Text(
+          'Edit profile',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: _saving ? null : _saveProfile,
+            child: Text(
+              'Save',
+              style: TextStyle(
+                color: _saving
+                    ? Colors.white38
+                    : const Color(0xFFFF2D55),
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
               ),
-            )
-          else
-            const Center(
-              child: Icon(
-                Icons.videocam_outlined,
-                color: Colors.white24,
-                size: 28,
-              ),
-            ),
-          Positioned(
-            left: 6,
-            bottom: 6,
-            child: Row(
-              children: [
-                const Icon(Icons.favorite, color: Colors.white, size: 13),
-                const SizedBox(width: 3),
-                Text(
-                  _format(widget.likeCount),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    shadows: [Shadow(color: Colors.black, blurRadius: 4)],
-                  ),
-                ),
-              ],
             ),
           ),
         ],
+      ),
+      body: _loading
+          ? const Center(
+              child: CircularProgressIndicator(
+                color: Color(0xFFFF2D55),
+              ),
+            )
+          : SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(
+                20,
+                20,
+                20,
+                40,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Column(
+                      children: [
+                        Stack(
+                          alignment: Alignment.bottomRight,
+                          children: [
+                            Container(
+                              width: 104,
+                              height: 104,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF00E5FF),
+                                    Color(0xFFFF2D55),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                              ),
+                              padding: const EdgeInsets.all(3),
+                              child: Container(
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.black,
+                                ),
+                                child: ClipOval(
+                                  child: _profileImage.isNotEmpty
+                                      ? Image.network(
+                                          _profileImage,
+                                          fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (
+                                                context,
+                                                error,
+                                                stackTrace,
+                                              ) {
+                                            return const Icon(
+                                              Icons.person,
+                                              color: Colors.white,
+                                              size: 58,
+                                            );
+                                          },
+                                        )
+                                      : const Icon(
+                                          Icons.person,
+                                          color: Colors.white,
+                                          size: 58,
+                                        ),
+                                ),
+                              ),
+                            ),
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFF2D55),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.black,
+                                  width: 3,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt,
+                                color: Colors.white,
+                                size: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Change photo',
+                          style: TextStyle(
+                            color: Color(0xFFFF2D55),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 35),
+
+                  _buildLabel('Username'),
+
+                  const SizedBox(height: 8),
+
+                  _buildTextField(
+                    controller: _usernameController,
+                    hintText: 'Username',
+                    prefixIcon: Icons.person_outline,
+                    maxLength: 30,
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  _buildLabel('Bio'),
+
+                  const SizedBox(height: 8),
+
+                  _buildTextField(
+                    controller: _bioController,
+                    hintText: 'Tell people about yourself',
+                    prefixIcon: Icons.edit_note,
+                    maxLines: 4,
+                    maxLength: 150,
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  _buildLabel('Email'),
+
+                  const SizedBox(height: 8),
+
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 17,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF171717),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white12,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.email_outlined,
+                          color: Colors.white54,
+                          size: 21,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _email,
+                            style: const TextStyle(
+                              color: Colors.white60,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.lock_outline,
+                          color: Colors.white30,
+                          size: 18,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 35),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: _saving ? null : _saveProfile,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF2D55),
+                        disabledBackgroundColor:
+                            const Color(0xFF3A3A3A),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: _saving
+                          ? const SizedBox(
+                              width: 23,
+                              height: 23,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              'Save changes',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildLabel(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String hintText,
+    required IconData prefixIcon,
+    int maxLines = 1,
+    int? maxLength,
+  }) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      maxLength: maxLength,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 16,
+      ),
+      cursorColor: const Color(0xFFFF2D55),
+      decoration: InputDecoration(
+        counterStyle: const TextStyle(
+          color: Colors.white38,
+        ),
+        hintText: hintText,
+        hintStyle: const TextStyle(
+          color: Colors.white38,
+        ),
+        prefixIcon: Icon(
+          prefixIcon,
+          color: Colors.white54,
+        ),
+        filled: true,
+        fillColor: const Color(0xFF171717),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(
+            color: Colors.white12,
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(
+            color: Colors.white12,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(
+            color: Color(0xFFFF2D55),
+            width: 1.3,
+          ),
+        ),
       ),
     );
   }
