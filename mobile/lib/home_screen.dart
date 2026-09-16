@@ -1483,7 +1483,7 @@ class _HomeScreenState extends State<HomeScreen>
                       'Your messages and notifications\nwill appear here.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.white45,
+                        color: Colors.white54,
                         fontSize: 14,
                       ),
                     ),
