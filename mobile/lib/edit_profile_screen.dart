@@ -23,6 +23,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String _email = '';
   String _profileImage = '';
 
+  static const Color palokPink = Color(0xFFFF2D55);
+  static const Color cardColor = Color(0xFF18181B);
+  static const Color appBarColor = Color(0xFF101014);
+
   @override
   void initState() {
     super.initState();
@@ -64,7 +68,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         }
 
         username = (data['username'] ?? '').toString();
-
         bio = (data['bio'] ?? '').toString();
 
         profileImage = (data['profileImage'] ??
@@ -89,10 +92,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
 
       if (username.isEmpty) {
-        username = data?['username']?.toString() ?? '';
-      }
-
-      if (username.isEmpty) {
         username = name;
       }
 
@@ -101,12 +100,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _bioController.text = bio;
       _profileImage = profileImage;
 
-      if (mounted) {
-        setState(() {
-          _loading = false;
-        });
-      }
-    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+      });
+    } on FirebaseException catch (e) {
       if (!mounted) return;
 
       setState(() {
@@ -116,8 +115,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Profile load failed: $e',
+            'Profile load failed: ${e.message ?? e.code}',
           ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Profile load failed: $e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -134,14 +146,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final User? user = _auth.currentUser;
 
     if (user == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please login again'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      _showMessage(
+        'Please login again.',
+        isError: true,
+      );
       return;
     }
 
@@ -149,118 +157,101 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final String username = _usernameController.text.trim();
     final String bio = _bioController.text.trim();
 
-    // -----------------------------
+    // ----------------------------------------------------------
     // NAME VALIDATION
-    // -----------------------------
+    // ----------------------------------------------------------
 
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Name cannot be empty'),
-          backgroundColor: Colors.red,
-        ),
+      _showMessage(
+        'Name cannot be empty.',
+        isError: true,
       );
       return;
     }
 
     if (name.length < 3) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Name must be at least 3 characters'),
-          backgroundColor: Colors.red,
-        ),
+      _showMessage(
+        'Name must be at least 3 characters.',
+        isError: true,
       );
       return;
     }
 
     if (name.length > 50) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Name cannot be longer than 50 characters'),
-          backgroundColor: Colors.red,
-        ),
+      _showMessage(
+        'Name cannot be longer than 50 characters.',
+        isError: true,
       );
       return;
     }
 
-    // -----------------------------
+    // ----------------------------------------------------------
     // USERNAME VALIDATION
-    // -----------------------------
+    // ----------------------------------------------------------
 
     if (username.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Username cannot be empty'),
-          backgroundColor: Colors.red,
-        ),
+      _showMessage(
+        'Username cannot be empty.',
+        isError: true,
       );
       return;
     }
 
     if (username.length < 3) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Username must be at least 3 characters'),
-          backgroundColor: Colors.red,
-        ),
+      _showMessage(
+        'Username must be at least 3 characters.',
+        isError: true,
       );
       return;
     }
 
     if (username.length > 30) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Username cannot be longer than 30 characters'),
-          backgroundColor: Colors.red,
-        ),
+      _showMessage(
+        'Username cannot be longer than 30 characters.',
+        isError: true,
       );
       return;
     }
 
-    // Username should contain only safe characters.
     final RegExp usernameRegex = RegExp(
       r'^[a-zA-Z0-9._]+$',
     );
 
     if (!usernameRegex.hasMatch(username)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Username can only contain letters, numbers, dots and underscores',
-          ),
-          backgroundColor: Colors.red,
-        ),
+      _showMessage(
+        'Username can only contain letters, numbers, dots and underscores.',
+        isError: true,
       );
       return;
     }
 
-    // -----------------------------
+    // ----------------------------------------------------------
     // BIO VALIDATION
-    // -----------------------------
+    // ----------------------------------------------------------
 
     if (bio.length > 150) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Bio cannot be longer than 150 characters'),
-          backgroundColor: Colors.red,
-        ),
+      _showMessage(
+        'Bio cannot be longer than 150 characters.',
+        isError: true,
       );
       return;
     }
+
+    FocusScope.of(context).unfocus();
 
     setState(() {
       _saving = true;
     });
 
     try {
-      // --------------------------------------------------------
+      // ========================================================
       // SAVE TO FIRESTORE
-      // --------------------------------------------------------
+      // ========================================================
 
-      await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .set(
+      final DocumentReference<Map<String, dynamic>> userRef =
+          _firestore.collection('users').doc(user.uid);
+
+      await userRef.set(
         {
           'name': name,
           'displayName': name,
@@ -273,15 +264,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         SetOptions(merge: true),
       );
 
-      // --------------------------------------------------------
-      // UPDATE FIREBASE AUTH DISPLAY NAME
-      // --------------------------------------------------------
+      // ========================================================
+      // UPDATE FIREBASE AUTH PROFILE
+      // ========================================================
 
       try {
-        await user.updateDisplayName(name);
+        if (user.displayName != name) {
+          await user.updateDisplayName(name);
+        }
       } catch (_) {
-        // Firestore data has already been saved.
-        // Auth display name failure should not block the save.
+        // Firestore save already succeeded.
       }
 
       if (!mounted) return;
@@ -290,29 +282,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _saving = false;
       });
 
-      // --------------------------------------------------------
-      // SUCCESS MESSAGE
-      // --------------------------------------------------------
+      // ========================================================
+      // SUCCESS
+      // ========================================================
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Profile saved successfully',
-          ),
-          backgroundColor: Color(0xFFFF2D55),
-          duration: Duration(milliseconds: 900),
-        ),
+      _showMessage(
+        'Profile saved successfully.',
+        isError: false,
       );
 
       await Future.delayed(
-        const Duration(milliseconds: 500),
+        const Duration(milliseconds: 700),
       );
 
       if (!mounted) return;
-
-      // --------------------------------------------------------
-      // RETURN UPDATED PROFILE DATA
-      // --------------------------------------------------------
 
       Navigator.pop(
         context,
@@ -334,26 +317,41 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       String message;
 
-      if (e.code == 'permission-denied') {
-        message =
-            'Permission denied. Please check Firebase Firestore Rules.';
-      } else if (e.code == 'network-request-failed') {
-        message =
-            'Internet connection failed. Please try again.';
-      } else if (e.code == 'unavailable') {
-        message =
-            'Firebase is temporarily unavailable. Please try again.';
-      } else {
-        message =
-            'Save failed: ${e.message ?? e.code}';
+      switch (e.code) {
+        case 'permission-denied':
+          message =
+              'Firestore permission denied. Check Firestore Rules.';
+          break;
+
+        case 'unauthenticated':
+          message =
+              'Your login session expired. Please login again.';
+          break;
+
+        case 'network-request-failed':
+          message =
+              'Internet connection failed. Please try again.';
+          break;
+
+        case 'unavailable':
+          message =
+              'Firebase is temporarily unavailable. Please try again.';
+          break;
+
+        case 'failed-precondition':
+          message =
+              'Firestore is not ready. Please check Firebase setup.';
+          break;
+
+        default:
+          message =
+              'Save failed: ${e.message ?? e.code}';
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 4),
-        ),
+      _showMessage(
+        message,
+        isError: true,
+        seconds: 5,
       );
     } catch (e) {
       if (!mounted) return;
@@ -362,16 +360,52 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _saving = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Save failed: $e',
-          ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 4),
-        ),
+      _showMessage(
+        'Save failed: $e',
+        isError: true,
+        seconds: 5,
       );
     }
+  }
+
+  // ============================================================
+  // MESSAGE
+  // ============================================================
+
+  void _showMessage(
+    String message, {
+    required bool isError,
+    int seconds = 2,
+  }) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            message,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          backgroundColor:
+              isError ? Colors.red.shade700 : palokPink,
+          duration: Duration(seconds: seconds),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(
+            16,
+            0,
+            16,
+            16,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      );
   }
 
   // ============================================================
@@ -383,12 +417,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
 
-      // --------------------------------------------------------
-      // APP BAR
-      // --------------------------------------------------------
-
       appBar: AppBar(
-        backgroundColor: const Color(0xFF101014),
+        backgroundColor: appBarColor,
         elevation: 0,
         centerTitle: true,
 
@@ -418,11 +448,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           TextButton(
             onPressed: _saving ? null : _saveProfile,
             child: Text(
-              'Save',
+              _saving ? 'Saving...' : 'Save',
               style: TextStyle(
                 color: _saving
                     ? Colors.white38
-                    : const Color(0xFFFF2D55),
+                    : palokPink,
                 fontSize: 17,
                 fontWeight: FontWeight.w800,
               ),
@@ -431,14 +461,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ],
       ),
 
-      // --------------------------------------------------------
-      // BODY
-      // --------------------------------------------------------
-
       body: _loading
           ? const Center(
               child: CircularProgressIndicator(
-                color: Color(0xFFFF2D55),
+                color: palokPink,
               ),
             )
           : SafeArea(
@@ -452,7 +478,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   45,
                 ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
                   children: [
                     // ==================================================
                     // PROFILE PHOTO
@@ -469,7 +496,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 height: 118,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  gradient: const LinearGradient(
+                                  gradient:
+                                      const LinearGradient(
                                     colors: [
                                       Color(0xFF00E5FF),
                                       Color(0xFF8E7CC3),
@@ -479,14 +507,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                     end: Alignment.bottomRight,
                                   ),
                                 ),
-                                padding: const EdgeInsets.all(3),
+                                padding:
+                                    const EdgeInsets.all(3),
                                 child: Container(
-                                  decoration: const BoxDecoration(
+                                  decoration:
+                                      const BoxDecoration(
                                     shape: BoxShape.circle,
                                     color: Colors.black,
                                   ),
                                   child: ClipOval(
-                                    child: _profileImage.isNotEmpty
+                                    child: _profileImage
+                                            .isNotEmpty
                                         ? Image.network(
                                             _profileImage,
                                             fit: BoxFit.cover,
@@ -498,7 +529,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                             ) {
                                               return const Icon(
                                                 Icons.person,
-                                                color: Colors.white,
+                                                color:
+                                                    Colors.white,
                                                 size: 62,
                                               );
                                             },
@@ -515,8 +547,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               Container(
                                 width: 38,
                                 height: 38,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFF2D55),
+                                decoration:
+                                    BoxDecoration(
+                                  color: palokPink,
                                   shape: BoxShape.circle,
                                   border: Border.all(
                                     color: Colors.black,
@@ -537,7 +570,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           const Text(
                             'Change photo',
                             style: TextStyle(
-                              color: Color(0xFFFF2D55),
+                              color: palokPink,
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
                             ),
@@ -563,50 +596,48 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
                     const SizedBox(height: 18),
 
-                    // ==================================================
                     // NAME
-                    // ==================================================
-
                     _buildTextField(
                       controller: _nameController,
                       label: 'Name',
                       hintText: 'Your name',
-                      prefixIcon: Icons.person_outline_rounded,
+                      prefixIcon:
+                          Icons.person_outline_rounded,
                       maxLines: 1,
                       maxLength: 50,
-                      textCapitalization: TextCapitalization.words,
+                      textCapitalization:
+                          TextCapitalization.words,
                     ),
 
                     const SizedBox(height: 22),
 
-                    // ==================================================
                     // USERNAME
-                    // ==================================================
-
                     _buildTextField(
                       controller: _usernameController,
                       label: 'Username',
                       hintText: 'username',
-                      prefixIcon: Icons.alternate_email_rounded,
+                      prefixIcon:
+                          Icons.alternate_email_rounded,
                       maxLines: 1,
                       maxLength: 30,
-                      textCapitalization: TextCapitalization.none,
+                      textCapitalization:
+                          TextCapitalization.none,
                     ),
 
                     const SizedBox(height: 22),
 
-                    // ==================================================
                     // BIO
-                    // ==================================================
-
                     _buildTextField(
                       controller: _bioController,
                       label: 'Bio',
-                      hintText: 'Tell people about yourself',
-                      prefixIcon: Icons.edit_note_rounded,
+                      hintText:
+                          'Tell people about yourself',
+                      prefixIcon:
+                          Icons.edit_note_rounded,
                       maxLines: 5,
                       maxLength: 150,
-                      textCapitalization: TextCapitalization.sentences,
+                      textCapitalization:
+                          TextCapitalization.sentences,
                     ),
 
                     const SizedBox(height: 30),
@@ -628,13 +659,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
+                      padding:
+                          const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 18,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF18181B),
-                        borderRadius: BorderRadius.circular(16),
+                        color: cardColor,
+                        borderRadius:
+                            BorderRadius.circular(16),
                         border: Border.all(
                           color: Colors.white12,
                         ),
@@ -659,7 +692,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   style: TextStyle(
                                     color: Colors.white54,
                                     fontSize: 14,
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight:
+                                        FontWeight.w500,
                                   ),
                                 ),
 
@@ -672,7 +706,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 16,
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight:
+                                        FontWeight.w500,
                                   ),
                                   maxLines: 2,
                                   overflow:
@@ -705,13 +740,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       child: ElevatedButton(
                         onPressed:
                             _saving ? null : _saveProfile,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              const Color(0xFFFF2D55),
+                        style:
+                            ElevatedButton.styleFrom(
+                          backgroundColor: palokPink,
                           disabledBackgroundColor:
                               const Color(0xFF3A3A3A),
                           elevation: 0,
-                          shape: RoundedRectangleBorder(
+                          shape:
+                              RoundedRectangleBorder(
                             borderRadius:
                                 BorderRadius.circular(14),
                           ),
@@ -731,7 +767,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 17,
-                                  fontWeight: FontWeight.w800,
+                                  fontWeight:
+                                      FontWeight.w800,
                                 ),
                               ),
                       ),
@@ -758,11 +795,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }) {
     return TextField(
       controller: controller,
-
       maxLines: maxLines,
-
       maxLength: maxLength,
-
       textCapitalization: textCapitalization,
 
       style: const TextStyle(
@@ -771,7 +805,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         fontWeight: FontWeight.w500,
       ),
 
-      cursorColor: const Color(0xFFFF2D55),
+      cursorColor: palokPink,
 
       decoration: InputDecoration(
         labelText: label,
@@ -782,7 +816,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
 
         floatingLabelStyle: const TextStyle(
-          color: Color(0xFFFF2D55),
+          color: palokPink,
           fontSize: 16,
           fontWeight: FontWeight.w600,
         ),
@@ -806,38 +840,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
 
         filled: true,
+        fillColor: cardColor,
 
-        fillColor: const Color(0xFF18181B),
-
-        contentPadding: const EdgeInsets.symmetric(
+        contentPadding:
+            const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 17,
         ),
 
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: Colors.white12,
-          ),
+          borderSide:
+              const BorderSide(color: Colors.white12),
         ),
 
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: Colors.white12,
-          ),
+          borderSide:
+              const BorderSide(color: Colors.white12),
         ),
 
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(
-            color: Color(0xFFFF2D55),
+            color: palokPink,
             width: 1.5,
           ),
         ),
       ),
     );
   }
+
+  // ============================================================
+  // DISPOSE
+  // ============================================================
 
   @override
   void dispose() {
