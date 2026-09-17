@@ -19,6 +19,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
+
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   static const Color _pink = Color(0xFFFF2D55);
