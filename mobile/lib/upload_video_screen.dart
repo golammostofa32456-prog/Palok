@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'upload_video_screen.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -9,33 +9,43 @@ import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 
 class UploadVideoScreen extends StatefulWidget {
-  const UploadVideoScreen({super.key});
+  const UploadVideoScreen({
+    super.key,
+  });
 
   @override
-  State<UploadVideoScreen> createState() => _UploadVideoScreenState();
+  State<UploadVideoScreen> createState() =>
+      _UploadVideoScreenState();
 }
 
-class _UploadVideoScreenState extends State<UploadVideoScreen> {
+class _UploadVideoScreenState
+    extends State<UploadVideoScreen> {
   // ============================================================
-  // PALOK UPLOAD CONFIG
+  // PALOK / CLOUDINARY CONFIG
   // ============================================================
 
   static const String _cloudName = 'u0jufmrl';
-  static const String _uploadPreset = 'palok_video_upload';
+  static const String _uploadPreset =
+      'palok_video_upload';
 
-  // Current maximum file size
-  static const int _maxVideoBytes = 100 * 1024 * 1024;
+  static const int _maxVideoBytes =
+      100 * 1024 * 1024;
 
-  // PALOK short-video maximum duration
-  static const Duration _maxVideoDuration = Duration(minutes: 3);
+  static const Duration _maxVideoDuration =
+      Duration(minutes: 3);
 
   // ============================================================
-  // SERVICES
+  // FIREBASE
   // ============================================================
 
-  final ImagePicker _picker = ImagePicker();
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth =
+      FirebaseAuth.instance;
+
+  final FirebaseFirestore _firestore =
+      FirebaseFirestore.instance;
+
+  final ImagePicker _picker =
+      ImagePicker();
 
   // ============================================================
   // CONTROLLERS
@@ -48,13 +58,15 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
       TextEditingController();
 
   // ============================================================
-  // VIDEO STATE
+  // VIDEO
   // ============================================================
 
   File? _videoFile;
+
   VideoPlayerController? _videoController;
 
-  Duration _videoDuration = Duration.zero;
+  Duration _videoDuration =
+      Duration.zero;
 
   // ============================================================
   // UPLOAD STATE
@@ -67,6 +79,16 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
   String _uploadStatus = '';
 
   // ============================================================
+  // COLORS
+  // ============================================================
+
+  static const Color _pink =
+      Color(0xFFFF2D55);
+
+  static const Color _cyan =
+      Color(0xFF00E5FF);
+
+  // ============================================================
   // LIFECYCLE
   // ============================================================
 
@@ -74,6 +96,7 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
   void dispose() {
     _captionController.dispose();
     _hashtagController.dispose();
+
     _videoController?.dispose();
 
     super.dispose();
@@ -89,7 +112,8 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
     }
 
     try {
-      final XFile? pickedFile = await _picker.pickVideo(
+      final XFile? pickedFile =
+          await _picker.pickVideo(
         source: ImageSource.gallery,
       );
 
@@ -97,24 +121,25 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
         return;
       }
 
-      final File file = File(pickedFile.path);
+      final File file =
+          File(pickedFile.path);
 
       // ----------------------------------------------------------
-      // FILE SIZE CHECK
+      // FILE SIZE
       // ----------------------------------------------------------
 
-      final int fileSize = await file.length();
+      final int fileSize =
+          await file.length();
 
       if (fileSize > _maxVideoBytes) {
         _showMessage(
           'ভিডিও 100 MB বা তার কম হতে হবে।',
         );
-
         return;
       }
 
       // ----------------------------------------------------------
-      // OLD CONTROLLER DISPOSE
+      // OLD CONTROLLER
       // ----------------------------------------------------------
 
       await _videoController?.dispose();
@@ -122,7 +147,7 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
       _videoController = null;
 
       // ----------------------------------------------------------
-      // CREATE NEW CONTROLLER
+      // NEW CONTROLLER
       // ----------------------------------------------------------
 
       final VideoPlayerController controller =
@@ -130,10 +155,11 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
 
       await controller.initialize();
 
-      final Duration duration = controller.value.duration;
+      final Duration duration =
+          controller.value.duration;
 
       // ----------------------------------------------------------
-      // DURATION CHECK
+      // DURATION
       // ----------------------------------------------------------
 
       if (duration > _maxVideoDuration) {
@@ -146,20 +172,16 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
         return;
       }
 
-      controller.setLooping(true);
+      // ----------------------------------------------------------
+      // LOOP
+      // ----------------------------------------------------------
 
-      // ----------------------------------------------------------
-      // MOUNT CHECK
-      // ----------------------------------------------------------
+      await controller.setLooping(true);
 
       if (!mounted) {
         await controller.dispose();
         return;
       }
-
-      // ----------------------------------------------------------
-      // SAVE STATE
-      // ----------------------------------------------------------
 
       setState(() {
         _videoFile = file;
@@ -168,7 +190,7 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
       });
 
       // ----------------------------------------------------------
-      // PLAY PREVIEW
+      // PREVIEW PLAY
       // ----------------------------------------------------------
 
       await controller.play();
@@ -177,6 +199,10 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
         setState(() {});
       }
     } catch (e) {
+      debugPrint(
+        'Pick video error: $e',
+      );
+
       _showMessage(
         'ভিডিও নির্বাচন করা যায়নি। আবার চেষ্টা করুন।',
       );
@@ -191,16 +217,50 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
     File file,
   ) async {
     final Uri uri = Uri.parse(
-      'https://api.cloudinary.com/v1_1/$_cloudName/video/upload',
+      'https://api.cloudinary.com/v1_1/'
+      '$_cloudName/video/upload',
     );
 
     final String boundary =
-        '----PALOK${DateTime.now().microsecondsSinceEpoch}';
+        '----PALOK'
+        '${DateTime.now().microsecondsSinceEpoch}';
 
-    final int fileLength = await file.length();
+    final int fileLength =
+        await file.length();
+
+    // ----------------------------------------------------------
+    // FILE EXTENSION
+    // ----------------------------------------------------------
+
+    String extension = 'mp4';
+
+    final String originalPath =
+        file.path.toLowerCase();
+
+    if (originalPath.endsWith('.mov')) {
+      extension = 'mov';
+    } else if (originalPath.endsWith('.m4v')) {
+      extension = 'm4v';
+    } else if (originalPath.endsWith('.webm')) {
+      extension = 'webm';
+    }
 
     final String fileName =
-        'palok_${DateTime.now().millisecondsSinceEpoch}.mp4';
+        'palok_${DateTime.now().millisecondsSinceEpoch}'
+        '.$extension';
+
+    // ----------------------------------------------------------
+    // CONTENT TYPE
+    // ----------------------------------------------------------
+
+    String contentType =
+        'video/mp4';
+
+    if (extension == 'mov') {
+      contentType = 'video/quicktime';
+    } else if (extension == 'webm') {
+      contentType = 'video/webm';
+    }
 
     // ----------------------------------------------------------
     // MULTIPART PREFIX
@@ -214,7 +274,7 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
         '--$boundary\r\n'
         'Content-Disposition: form-data; '
         'name="file"; filename="$fileName"\r\n'
-        'Content-Type: video/mp4\r\n\r\n';
+        'Content-Type: $contentType\r\n\r\n';
 
     // ----------------------------------------------------------
     // MULTIPART SUFFIX
@@ -255,10 +315,11 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
     request.contentLength = total;
 
     // ----------------------------------------------------------
-    // SEND REQUEST
+    // SEND
     // ----------------------------------------------------------
 
-    final Future<http.StreamedResponse> responseFuture =
+    final Future<http.StreamedResponse>
+        responseFuture =
         request.send();
 
     // ----------------------------------------------------------
@@ -275,11 +336,13 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
     );
 
     // ----------------------------------------------------------
-    // VIDEO FILE STREAM
+    // FILE STREAM
     // ----------------------------------------------------------
 
-    await for (final List<int> chunk
-        in file.openRead()) {
+    await for (
+      final List<int> chunk
+      in file.openRead()
+    ) {
       request.sink.add(chunk);
 
       sent += chunk.length;
@@ -304,7 +367,7 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
     );
 
     // ----------------------------------------------------------
-    // CLOSE REQUEST
+    // CLOSE
     // ----------------------------------------------------------
 
     await request.sink.close();
@@ -326,7 +389,8 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
     if (response.statusCode < 200 ||
         response.statusCode >= 300) {
       String message =
-          'Cloudinary error (${response.statusCode})';
+          'Cloudinary error '
+          '(${response.statusCode})';
 
       try {
         final dynamic decoded =
@@ -342,15 +406,13 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
                     .toString();
           }
         }
-      } catch (_) {
-        // Ignore JSON parsing error.
-      }
+      } catch (_) {}
 
       throw Exception(message);
     }
 
     // ----------------------------------------------------------
-    // DECODE
+    // JSON
     // ----------------------------------------------------------
 
     final dynamic decoded =
@@ -386,12 +448,16 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
   }
 
   // ============================================================
-  // LOAD PALOK USERNAME
+  // LOAD USER PROFILE
   // ============================================================
 
-  Future<String> _getUsername(User user) async {
+  Future<Map<String, dynamic>>
+      _getUserProfile(
+    User user,
+  ) async {
     try {
-      final DocumentSnapshot<Map<String, dynamic>> snapshot =
+      final DocumentSnapshot<
+          Map<String, dynamic>> snapshot =
           await _firestore
               .collection('users')
               .doc(user.uid)
@@ -401,40 +467,82 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
           snapshot.data();
 
       if (data != null) {
-        final String username =
-            (data['username'] ?? '')
-                .toString()
-                .trim();
-
-        if (username.isNotEmpty) {
-          if (username.startsWith('@')) {
-            return username;
-          }
-
-          return '@$username';
-        }
+        return data;
       }
-    } catch (_) {
-      // If profile loading fails,
-      // fallback below will be used.
+    } catch (e) {
+      debugPrint(
+        'User profile error: $e',
+      );
     }
 
-    // ----------------------------------------------------------
-    // FALLBACK
-    // ----------------------------------------------------------
+    return <String, dynamic>{};
+  }
+
+  // ============================================================
+  // GET USERNAME
+  // ============================================================
+
+  Future<String> _getUsername(
+    User user,
+  ) async {
+    final Map<String, dynamic> profile =
+        await _getUserProfile(user);
+
+    final String username =
+        (profile['username'] ?? '')
+            .toString()
+            .trim();
+
+    if (username.isNotEmpty) {
+      return username.startsWith('@')
+          ? username
+          : '@$username';
+    }
 
     final String displayName =
-        user.displayName?.trim() ?? '';
+        (profile['displayName'] ??
+                profile['name'] ??
+                user.displayName ??
+                '')
+            .toString()
+            .trim();
 
     if (displayName.isNotEmpty) {
       return '@$displayName';
+    }
+
+    if (user.email != null &&
+        user.email!.contains('@')) {
+      return '@${user.email!.split('@').first}';
     }
 
     return '@palok_user';
   }
 
   // ============================================================
-  // HASHTAG PARSER
+  // GET PROFILE IMAGE
+  // ============================================================
+
+  Future<String> _getProfileImage(
+    User user,
+  ) async {
+    final Map<String, dynamic> profile =
+        await _getUserProfile(user);
+
+    final String profileImage =
+        (profile['profileImage'] ?? '')
+            .toString()
+            .trim();
+
+    if (profileImage.isNotEmpty) {
+      return profileImage;
+    }
+
+    return user.photoURL ?? '';
+  }
+
+  // ============================================================
+  // HASHTAGS
   // ============================================================
 
   List<String> _getHashtags() {
@@ -449,10 +557,12 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
         text
             .split(RegExp(r'[\s,#]+'))
             .where(
-              (String tag) => tag.trim().isNotEmpty,
+              (String tag) =>
+                  tag.trim().isNotEmpty,
             )
             .map(
-              (String tag) => tag.trim(),
+              (String tag) =>
+                  tag.trim(),
             )
             .toList();
 
@@ -468,6 +578,11 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
 
       if (!hashtags.contains(tag)) {
         hashtags.add(tag);
+      }
+
+      // Avoid an excessive number of hashtags.
+      if (hashtags.length >= 20) {
+        break;
       }
     }
 
@@ -516,11 +631,34 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
     }
 
     // ----------------------------------------------------------
-    // DURATION CHECK AGAIN
+    // FILE SIZE CHECK AGAIN
+    // ----------------------------------------------------------
+
+    final int fileSize =
+        await _videoFile!.length();
+
+    if (fileSize > _maxVideoBytes) {
+      _showMessage(
+        'ভিডিও 100 MB বা তার কম হতে হবে।',
+      );
+
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // DURATION CHECK
     // ----------------------------------------------------------
 
     final Duration duration =
         _videoController!.value.duration;
+
+    if (duration <= Duration.zero) {
+      _showMessage(
+        'ভিডিওর duration পাওয়া যায়নি।',
+      );
+
+      return;
+    }
 
     if (duration > _maxVideoDuration) {
       _showMessage(
@@ -546,7 +684,7 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
 
     try {
       // --------------------------------------------------------
-      // START UPLOAD
+      // START
       // --------------------------------------------------------
 
       setState(() {
@@ -557,23 +695,29 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
       });
 
       // --------------------------------------------------------
-      // PAUSE PREVIEW
+      // PAUSE
       // --------------------------------------------------------
 
       await _videoController?.pause();
 
       // --------------------------------------------------------
-      // GET USERNAME
+      // USER PROFILE
       // --------------------------------------------------------
+
+      final Map<String, dynamic> profile =
+          await _getUserProfile(user);
 
       final String username =
           await _getUsername(user);
+
+      final String profileImage =
+          await _getProfileImage(user);
 
       // --------------------------------------------------------
       // CLOUDINARY
       // --------------------------------------------------------
 
-      final Map<String, dynamic> data =
+      final Map<String, dynamic> cloudinaryData =
           await _cloudinaryUpload(
         _videoFile!,
       );
@@ -583,26 +727,32 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
       // --------------------------------------------------------
 
       final String videoUrl =
-          (data['secure_url'] ?? '')
+          (cloudinaryData['secure_url'] ?? '')
               .toString()
               .trim();
 
       if (videoUrl.isEmpty) {
         throw Exception(
-          'Cloudinary video URL পাওয়া যায়নি।',
+          'Cloudinary video URL পাওয়া যায়নি।',
         );
       }
 
       // --------------------------------------------------------
-      // CLOUDINARY IDs
+      // CLOUDINARY IDS
       // --------------------------------------------------------
 
-      final String cloudinaryPublicId =
-          (data['public_id'] ?? '')
-              .toString();
+      final String publicId =
+          (cloudinaryData['public_id'] ?? '')
+              .toString()
+              .trim();
 
-      final String cloudinaryAssetId =
-          (data['asset_id'] ?? '')
+      final String assetId =
+          (cloudinaryData['asset_id'] ?? '')
+              .toString()
+              .trim();
+
+      final String resourceType =
+          (cloudinaryData['resource_type'] ?? 'video')
               .toString();
 
       // --------------------------------------------------------
@@ -617,68 +767,132 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
       }
 
       // --------------------------------------------------------
-      // CREATE VIDEO DOCUMENT
+      // VIDEO DOCUMENT
       // --------------------------------------------------------
 
-      final DocumentReference<Map<String, dynamic>>
-          videoRef =
+      final DocumentReference<
+          Map<String, dynamic>> videoRef =
           _firestore
               .collection('videos')
               .doc();
 
       // --------------------------------------------------------
-      // FINAL VIDEO DATA
+      // IMPORTANT
+      //
+      // Canonical owner field = userId
+      //
+      // HomeScreen reads userId.
+      // So ownerId is NOT used here.
       // --------------------------------------------------------
 
-      await videoRef.set({
-        'ownerId': user.uid,
+      await videoRef.set(
+        <String, dynamic>{
+          // ----------------------------------------------------
+          // OWNER
+          // ----------------------------------------------------
 
-        'username': username,
+          'userId': user.uid,
 
-        'videoUrl': videoUrl,
+          // ----------------------------------------------------
+          // CREATOR INFO
+          // ----------------------------------------------------
 
-        'cloudinaryPublicId':
-            cloudinaryPublicId,
+          'username': username,
 
-        'cloudinaryAssetId':
-            cloudinaryAssetId,
+          'profileImage': profileImage,
 
-        'thumbnailUrl':
-            (data['secure_url'] ?? '')
-                .toString(),
+          // ----------------------------------------------------
+          // VIDEO
+          // ----------------------------------------------------
 
-        'caption': caption,
+          'videoUrl': videoUrl,
 
-        'hashtags': hashtags,
+          // Don't use the MP4 URL as an image thumbnail.
+          // Home can safely fall back to video.
+          'thumbnailUrl': '',
 
-        'soundName':
-            'Original sound',
+          // ----------------------------------------------------
+          // CLOUDINARY
+          // ----------------------------------------------------
 
-        'likeCount': 0,
+          'cloudinaryPublicId': publicId,
 
-        'commentCount': 0,
+          'cloudinaryAssetId': assetId,
 
-        'saveCount': 0,
+          'resourceType': resourceType,
 
-        'shareCount': 0,
+          // ----------------------------------------------------
+          // CONTENT
+          // ----------------------------------------------------
 
-        'createdAt':
-            FieldValue.serverTimestamp(),
-      });
+          'caption': caption,
 
-      // --------------------------------------------------------
-      // ENSURE USER DOCUMENT EXISTS
-      // --------------------------------------------------------
+          'hashtags': hashtags,
 
-      await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .set(
-        {
-          'uid': user.uid,
-          'updatedAt':
+          'soundName': 'Original sound',
+
+          // ----------------------------------------------------
+          // COUNTERS
+          // ----------------------------------------------------
+
+          'likeCount': 0,
+
+          'commentCount': 0,
+
+          'saveCount': 0,
+
+          'shareCount': 0,
+
+          // ----------------------------------------------------
+          // CREATED
+          // ----------------------------------------------------
+
+          'createdAt':
               FieldValue.serverTimestamp(),
         },
+      );
+
+      // --------------------------------------------------------
+      // ENSURE USER DOCUMENT
+      // --------------------------------------------------------
+
+      final DocumentReference<
+          Map<String, dynamic>> userRef =
+          _firestore
+              .collection('users')
+              .doc(user.uid);
+
+      final Map<String, dynamic>
+          userUpdate =
+          <String, dynamic>{
+        'uid': user.uid,
+        'updatedAt':
+            FieldValue.serverTimestamp(),
+      };
+
+      // Only add missing basic fields.
+      if (!profile.containsKey('followersCount')) {
+        userUpdate['followersCount'] = 0;
+      }
+
+      if (!profile.containsKey('followingCount')) {
+        userUpdate['followingCount'] = 0;
+      }
+
+      if (!profile.containsKey('email') &&
+          user.email != null) {
+        userUpdate['email'] =
+            user.email;
+      }
+
+      if (!profile.containsKey('profileImage') &&
+          profileImage.isNotEmpty) {
+        userUpdate['profileImage'] =
+            profileImage;
+      }
+
+      await userRef.set(
+        userUpdate,
         SetOptions(merge: true),
       );
 
@@ -700,7 +914,7 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
           .showSnackBar(
         const SnackBar(
           content: Text(
-            'ভিডিও সফলভাবে PALOK-এ পোস্ট হয়েছে 🎉',
+            'ভিডিও সফলভাবে PALOK-এ পোস্ট হয়েছে 🎉',
           ),
           duration:
               Duration(seconds: 2),
@@ -708,7 +922,7 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
       );
 
       // --------------------------------------------------------
-      // RETURN TO HOME
+      // RETURN HOME
       // --------------------------------------------------------
 
       await Future.delayed(
@@ -730,6 +944,10 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
       // ERROR
       // --------------------------------------------------------
 
+      debugPrint(
+        'Video upload error: $e',
+      );
+
       if (!mounted) {
         return;
       }
@@ -740,7 +958,7 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
       });
 
       _showMessage(
-        'ভিডিও পোস্ট করা যায়নি:\n'
+        'ভিডিও পোস্ট করা যায়নি:\n'
         '${e.toString().replaceFirst(
           'Exception: ',
           '',
@@ -764,7 +982,9 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text(message),
+          content: Text(
+            message,
+          ),
         ),
       );
   }
@@ -782,11 +1002,12 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
     final int seconds =
         duration.inSeconds % 60;
 
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+    return '$minutes:'
+        '${seconds.toString().padLeft(2, '0')}';
   }
 
   // ============================================================
-  // VIDEO PREVIEW
+  // PREVIEW
   // ============================================================
 
   Widget _buildPreview() {
@@ -798,20 +1019,67 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
       return Container(
         width: double.infinity,
         height: 430,
+
         decoration: BoxDecoration(
-          color: Colors.black,
+          color: const Color(0xFF111111),
           borderRadius:
               BorderRadius.circular(18),
+
           border: Border.all(
             color: Colors.white12,
           ),
         ),
-        child: const Center(
-          child: Icon(
-            Icons.video_library_outlined,
-            color: Colors.white54,
-            size: 70,
-          ),
+
+        child: Column(
+          mainAxisAlignment:
+              MainAxisAlignment.center,
+
+          children: [
+            Container(
+              width: 82,
+              height: 82,
+
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient:
+                    const LinearGradient(
+                  colors: [
+                    _pink,
+                    _cyan,
+                  ],
+                ),
+              ),
+
+              child: const Icon(
+                Icons.video_library_outlined,
+                color: Colors.white,
+                size: 42,
+              ),
+            ),
+
+            const SizedBox(height: 18),
+
+            const Text(
+              'Select a video',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight:
+                    FontWeight.w700,
+              ),
+            ),
+
+            const SizedBox(height: 6),
+
+            Text(
+              'Maximum 100 MB • 3 minutes',
+              style: TextStyle(
+                color: Colors.white
+                    .withValues(alpha: 0.5),
+                fontSize: 13,
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -822,89 +1090,113 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
     return Container(
       width: double.infinity,
       height: 430,
+
       clipBehavior:
           Clip.antiAlias,
+
       decoration: BoxDecoration(
         color: Colors.black,
         borderRadius:
             BorderRadius.circular(18),
       ),
+
       child: Stack(
-        alignment:
-            Alignment.center,
+        alignment: Alignment.center,
+
         children: [
-          // ----------------------------------------------------
+          // ------------------------------------------------------
           // VIDEO
-          // ----------------------------------------------------
+          // ------------------------------------------------------
 
           FittedBox(
             fit: BoxFit.cover,
+
             child: SizedBox(
               width:
                   controller.value.size.width,
+
               height:
                   controller.value.size.height,
+
               child: VideoPlayer(
                 controller,
               ),
             ),
           ),
 
-          // ----------------------------------------------------
+          // ------------------------------------------------------
           // TAP AREA
-          // ----------------------------------------------------
+          // ------------------------------------------------------
 
-          GestureDetector(
-            onTap: () async {
-              if (controller.value.isPlaying) {
-                await controller.pause();
-              } else {
-                await controller.play();
-              }
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: () async {
+                if (controller.value.isPlaying) {
+                  await controller.pause();
+                } else {
+                  await controller.play();
+                }
 
-              if (mounted) {
-                setState(() {});
-              }
-            },
-            child: Container(
-              width: double.infinity,
-              height: double.infinity,
-              color: Colors.transparent,
+                if (mounted) {
+                  setState(() {});
+                }
+              },
+
+              child:
+                  const SizedBox.expand(),
             ),
           ),
 
-          // ----------------------------------------------------
+          // ------------------------------------------------------
           // PLAY ICON
-          // ----------------------------------------------------
+          // ------------------------------------------------------
 
           if (!controller.value.isPlaying)
-            const Icon(
-              Icons.play_circle_fill,
-              color: Colors.white,
-              size: 70,
+            Container(
+              width: 72,
+              height: 72,
+
+              decoration:
+                  const BoxDecoration(
+                color: Colors.black54,
+                shape: BoxShape.circle,
+              ),
+
+              child: const Icon(
+                Icons.play_arrow_rounded,
+                color: Colors.white,
+                size: 44,
+              ),
             ),
 
-          // ----------------------------------------------------
+          // ------------------------------------------------------
           // DURATION
-          // ----------------------------------------------------
+          // ------------------------------------------------------
 
           Positioned(
             right: 12,
             bottom: 12,
+
             child: Container(
               padding:
                   const EdgeInsets.symmetric(
                 horizontal: 10,
                 vertical: 6,
               ),
+
               decoration: BoxDecoration(
-                color: Colors.black54,
+                color: Colors.black
+                    .withValues(alpha: 0.65),
+
                 borderRadius:
                     BorderRadius.circular(20),
               ),
+
               child: Text(
                 _formatDuration(duration),
-                style: const TextStyle(
+
+                style:
+                    const TextStyle(
                   color: Colors.white,
                   fontWeight:
                       FontWeight.bold,
@@ -918,6 +1210,63 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
   }
 
   // ============================================================
+  // INPUT DECORATION
+  // ============================================================
+
+  InputDecoration _inputDecoration({
+    required String hint,
+  }) {
+    return InputDecoration(
+      hintText: hint,
+
+      hintStyle: TextStyle(
+        color: Colors.white
+            .withValues(alpha: 0.35),
+      ),
+
+      filled: true,
+
+      fillColor:
+          const Color(0xFF181818),
+
+      contentPadding:
+          const EdgeInsets.symmetric(
+        horizontal: 15,
+        vertical: 15,
+      ),
+
+      border:
+          OutlineInputBorder(
+        borderRadius:
+            BorderRadius.circular(14),
+        borderSide:
+            BorderSide.none,
+      ),
+
+      enabledBorder:
+          OutlineInputBorder(
+        borderRadius:
+            BorderRadius.circular(14),
+        borderSide: BorderSide(
+          color: Colors.white
+              .withValues(alpha: 0.05),
+        ),
+      ),
+
+      focusedBorder:
+          OutlineInputBorder(
+        borderRadius:
+            BorderRadius.circular(14),
+        borderSide:
+            const BorderSide(
+          color: _pink,
+          width: 1.2,
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
   // BUILD
   // ============================================================
 
@@ -926,45 +1275,36 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
     BuildContext context,
   ) {
     return Scaffold(
-      backgroundColor:
-          Colors.black,
-
-      // --------------------------------------------------------
-      // APP BAR
-      // --------------------------------------------------------
+      backgroundColor: Colors.black,
 
       appBar: AppBar(
-        backgroundColor:
-            Colors.black,
-
-        foregroundColor:
-            Colors.white,
-
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
         elevation: 0,
+
+        centerTitle: true,
 
         title: const Text(
           'Post Video',
           style: TextStyle(
             fontWeight:
-                FontWeight.bold,
+                FontWeight.w800,
           ),
         ),
-
-        centerTitle: true,
       ),
-
-      // --------------------------------------------------------
-      // BODY
-      // --------------------------------------------------------
 
       body: SafeArea(
         child: SingleChildScrollView(
+          keyboardDismissBehavior:
+              ScrollViewKeyboardDismissBehavior
+                  .onDrag,
+
           padding:
               const EdgeInsets.fromLTRB(
             18,
             10,
             18,
-            30,
+            35,
           ),
 
           child: Column(
@@ -983,7 +1323,7 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
               ),
 
               // ------------------------------------------------
-              // VIDEO BUTTON
+              // SELECT VIDEO
               // ------------------------------------------------
 
               SizedBox(
@@ -998,40 +1338,60 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
                           : _pickVideo,
 
                   icon: const Icon(
-                    Icons.video_library,
+                    Icons.video_library_rounded,
                   ),
 
                   label: Text(
                     _videoFile == null
-                        ? 'Choose Original Video'
+                        ? 'Choose Video'
                         : 'Change Video',
+                  ),
+
+                  style:
+                      OutlinedButton.styleFrom(
+                    foregroundColor:
+                        Colors.white,
+
+                    side: BorderSide(
+                      color: Colors.white
+                          .withValues(
+                        alpha: 0.14,
+                      ),
+                    ),
+
+                    shape:
+                        RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(
+                        14,
+                      ),
+                    ),
                   ),
                 ),
               ),
 
               const SizedBox(
-                height: 20,
+                height: 18,
               ),
 
               // ------------------------------------------------
-              // DURATION INFO
+              // DURATION
               // ------------------------------------------------
 
               if (_videoFile != null)
                 Container(
-                  width:
-                      double.infinity,
+                  width: double.infinity,
 
                   padding:
                       const EdgeInsets.all(
-                    12,
+                    13,
                   ),
 
                   decoration:
                       BoxDecoration(
                     color:
                         const Color(
-                      0xff171717,
+                      0xFF171717,
                     ),
 
                     borderRadius:
@@ -1049,15 +1409,14 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
                       ),
 
                       const SizedBox(
-                        width: 8,
+                        width: 9,
                       ),
 
                       Text(
                         'Duration: '
                         '${_formatDuration(
                           _videoDuration,
-                        )}'
-                        ' / 3:00 max',
+                        )} / 3:00 max',
 
                         style:
                             const TextStyle(
@@ -1070,7 +1429,7 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
                 ),
 
               const SizedBox(
-                height: 20,
+                height: 22,
               ),
 
               // ------------------------------------------------
@@ -1079,15 +1438,11 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
 
               const Text(
                 'Caption',
-
                 style: TextStyle(
-                  color:
-                      Colors.white,
-
+                  color: Colors.white,
                   fontSize: 16,
-
                   fontWeight:
-                      FontWeight.bold,
+                      FontWeight.w700,
                 ),
               ),
 
@@ -1099,52 +1454,29 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
                 controller:
                     _captionController,
 
-                maxLines: 3,
-
-                maxLength: 500,
-
                 enabled:
                     !_uploading,
 
+                maxLines: 4,
+
+                maxLength: 500,
+
                 style:
                     const TextStyle(
-                  color:
-                      Colors.white,
+                  color: Colors.white,
                 ),
 
+                cursorColor: _pink,
+
                 decoration:
-                    InputDecoration(
-                  hintText:
+                    _inputDecoration(
+                  hint:
                       'Write something about your video...',
-
-                  hintStyle:
-                      const TextStyle(
-                    color:
-                        Colors.white54,
-                  ),
-
-                  filled: true,
-
-                  fillColor:
-                      const Color(
-                    0xff1e1e1e,
-                  ),
-
-                  border:
-                      OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(
-                      14,
-                    ),
-
-                    borderSide:
-                        BorderSide.none,
-                  ),
                 ),
               ),
 
               const SizedBox(
-                height: 8,
+                height: 10,
               ),
 
               // ------------------------------------------------
@@ -1153,15 +1485,11 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
 
               const Text(
                 'Hashtags',
-
                 style: TextStyle(
-                  color:
-                      Colors.white,
-
+                  color: Colors.white,
                   fontSize: 16,
-
                   fontWeight:
-                      FontWeight.bold,
+                      FontWeight.w700,
                 ),
               ),
 
@@ -1178,38 +1506,15 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
 
                 style:
                     const TextStyle(
-                  color:
-                      Colors.white,
+                  color: Colors.white,
                 ),
 
+                cursorColor: _pink,
+
                 decoration:
-                    InputDecoration(
-                  hintText:
+                    _inputDecoration(
+                  hint:
                       '#PALOK #ShortVideo #Bangladesh',
-
-                  hintStyle:
-                      const TextStyle(
-                    color:
-                        Colors.white54,
-                  ),
-
-                  filled: true,
-
-                  fillColor:
-                      const Color(
-                    0xff1e1e1e,
-                  ),
-
-                  border:
-                      OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(
-                      14,
-                    ),
-
-                    borderSide:
-                        BorderSide.none,
-                  ),
                 ),
               ),
 
@@ -1229,15 +1534,15 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
 
                   style:
                       const TextStyle(
-                    color:
-                        Colors.white,
-
+                    color: Colors.white,
                     fontSize: 14,
+                    fontWeight:
+                        FontWeight.w500,
                   ),
                 ),
 
                 const SizedBox(
-                  height: 8,
+                  height: 9,
                 ),
 
                 ClipRRect(
@@ -1252,6 +1557,18 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
                         _uploadProgress,
 
                     minHeight: 6,
+
+                    backgroundColor:
+                        Colors.white
+                            .withValues(
+                      alpha: 0.08,
+                    ),
+
+                    valueColor:
+                        const AlwaysStoppedAnimation<
+                            Color>(
+                      _pink,
+                    ),
                   ),
                 ),
 
@@ -1266,8 +1583,8 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
 
                   style:
                       const TextStyle(
-                    color:
-                        Colors.white70,
+                    color: Colors.white70,
+                    fontSize: 12,
                   ),
                 ),
 
@@ -1277,13 +1594,11 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
               ],
 
               // ------------------------------------------------
-              // POST BUTTON
+              // POST
               // ------------------------------------------------
 
               SizedBox(
-                width:
-                    double.infinity,
-
+                width: double.infinity,
                 height: 56,
 
                 child:
@@ -1297,17 +1612,17 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
                       ? const SizedBox(
                           width: 22,
                           height: 22,
+
                           child:
                               CircularProgressIndicator(
-                            strokeWidth:
-                                2,
-
+                            strokeWidth: 2,
                             color:
                                 Colors.white,
                           ),
                         )
                       : const Icon(
-                          Icons.send,
+                          Icons
+                              .send_rounded,
                         ),
 
                   label: Text(
@@ -1318,21 +1633,23 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
                     style:
                         const TextStyle(
                       fontSize: 17,
-
                       fontWeight:
-                          FontWeight.bold,
+                          FontWeight.w800,
                     ),
                   ),
 
                   style:
                       ElevatedButton.styleFrom(
                     backgroundColor:
-                        const Color(
-                      0xffff176b,
-                    ),
+                        _pink,
 
                     foregroundColor:
                         Colors.white,
+
+                    disabledBackgroundColor:
+                        _pink.withValues(
+                      alpha: 0.4,
+                    ),
 
                     shape:
                         RoundedRectangleBorder(
