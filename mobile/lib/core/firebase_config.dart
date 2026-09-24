@@ -1,0 +1,1 @@
+// PALOK - Firebase Config
