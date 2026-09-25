@@ -9,47 +9,37 @@ import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 
 class UploadVideoScreen extends StatefulWidget {
-  const UploadVideoScreen({
-    super.key,
-  });
+  const UploadVideoScreen({super.key});
 
   @override
-  State<UploadVideoScreen> createState() =>
-      _UploadVideoScreenState();
+  State<UploadVideoScreen> createState() => _UploadVideoScreenState();
 }
 
-class _UploadVideoScreenState
-    extends State<UploadVideoScreen> {
+class _UploadVideoScreenState extends State<UploadVideoScreen> {
   // ============================================================
   // PALOK / CLOUDINARY CONFIG
   // ============================================================
 
   static const String _cloudName = 'u0jufmrl';
-  static const String _uploadPreset =
-      'palok_video_upload';
+  static const String _uploadPreset = 'palok_video_upload';
 
-  static const int _maxVideoBytes =
-      100 * 1024 * 1024;
-
-  static const Duration _maxVideoDuration =
-      Duration(minutes: 3);
+  static const int _maxVideoBytes = 100 * 1024 * 1024;
+  static const Duration _maxVideoDuration = Duration(minutes: 3);
 
   // ============================================================
-  // FIREBASE
+  // SERVICES
   // ============================================================
 
-  final FirebaseAuth _auth =
-      FirebaseAuth.instance;
-
-  final FirebaseFirestore _firestore =
-      FirebaseFirestore.instance;
-
-  final ImagePicker _picker =
-      ImagePicker();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final ImagePicker _picker = ImagePicker();
 
   // ============================================================
-  // CONTROLLERS
+  // STATE
   // ============================================================
+
+  File? _videoFile;
+  VideoPlayerController? _videoController;
 
   final TextEditingController _captionController =
       TextEditingController();
@@ -57,48 +47,21 @@ class _UploadVideoScreenState
   final TextEditingController _hashtagController =
       TextEditingController();
 
-  // ============================================================
-  // VIDEO
-  // ============================================================
-
-  File? _videoFile;
-
-  VideoPlayerController? _videoController;
-
-  Duration _videoDuration =
-      Duration.zero;
-
-  // ============================================================
-  // UPLOAD STATE
-  // ============================================================
-
   bool _uploading = false;
-
   double _uploadProgress = 0.0;
 
   String _uploadStatus = '';
+  String? _errorMessage;
 
   // ============================================================
-  // COLORS
-  // ============================================================
-
-  static const Color _pink =
-      Color(0xFFFF2D55);
-
-  static const Color _cyan =
-      Color(0xFF00E5FF);
-
-  // ============================================================
-  // LIFECYCLE
+  // INIT / DISPOSE
   // ============================================================
 
   @override
   void dispose() {
+    _videoController?.dispose();
     _captionController.dispose();
     _hashtagController.dispose();
-
-    _videoController?.dispose();
-
     super.dispose();
   }
 
@@ -107,13 +70,14 @@ class _UploadVideoScreenState
   // ============================================================
 
   Future<void> _pickVideo() async {
-    if (_uploading) {
-      return;
-    }
+    if (_uploading) return;
+
+    setState(() {
+      _errorMessage = null;
+    });
 
     try {
-      final XFile? pickedFile =
-          await _picker.pickVideo(
+      final XFile? pickedFile = await _picker.pickVideo(
         source: ImageSource.gallery,
       );
 
@@ -121,62 +85,37 @@ class _UploadVideoScreenState
         return;
       }
 
-      final File file =
-          File(pickedFile.path);
+      final File file = File(pickedFile.path);
 
-      // ----------------------------------------------------------
-      // FILE SIZE
-      // ----------------------------------------------------------
-
-      final int fileSize =
-          await file.length();
+      final int fileSize = await file.length();
 
       if (fileSize > _maxVideoBytes) {
-        _showMessage(
-          'ভিডিও 100 MB বা তার কম হতে হবে।',
+        _showError(
+          'ভিডিও 100 MB-এর বেশি হতে পারবে না।',
         );
         return;
       }
 
-      // ----------------------------------------------------------
-      // OLD CONTROLLER
-      // ----------------------------------------------------------
+      setState(() {
+        _uploadStatus = 'ভিডিও পরীক্ষা করা হচ্ছে...';
+      });
 
-      await _videoController?.dispose();
-
-      _videoController = null;
-
-      // ----------------------------------------------------------
-      // NEW CONTROLLER
-      // ----------------------------------------------------------
-
-      final VideoPlayerController controller =
-          VideoPlayerController.file(file);
+      final controller = VideoPlayerController.file(file);
 
       await controller.initialize();
 
-      final Duration duration =
-          controller.value.duration;
-
-      // ----------------------------------------------------------
-      // DURATION
-      // ----------------------------------------------------------
+      final Duration duration = controller.value.duration;
 
       if (duration > _maxVideoDuration) {
         await controller.dispose();
 
-        _showMessage(
-          'ভিডিও সর্বোচ্চ 3 মিনিটের হতে হবে।',
+        _showError(
+          'ভিডিও সর্বোচ্চ 3 মিনিটের হতে পারবে।',
         );
-
         return;
       }
 
-      // ----------------------------------------------------------
-      // LOOP
-      // ----------------------------------------------------------
-
-      await controller.setLooping(true);
+      await _videoController?.dispose();
 
       if (!mounted) {
         await controller.dispose();
@@ -186,403 +125,117 @@ class _UploadVideoScreenState
       setState(() {
         _videoFile = file;
         _videoController = controller;
-        _videoDuration = duration;
+        _uploadStatus = '';
+        _uploadProgress = 0.0;
       });
 
-      // ----------------------------------------------------------
-      // PREVIEW PLAY
-      // ----------------------------------------------------------
-
+      await controller.setLooping(true);
       await controller.play();
-
-      if (mounted) {
-        setState(() {});
-      }
     } catch (e) {
-      debugPrint(
-        'Pick video error: $e',
-      );
-
-      _showMessage(
+      _showError(
         'ভিডিও নির্বাচন করা যায়নি। আবার চেষ্টা করুন।',
       );
     }
   }
 
   // ============================================================
-  // CLOUDINARY UPLOAD
+  // REMOVE VIDEO
   // ============================================================
 
-  Future<Map<String, dynamic>> _cloudinaryUpload(
-    File file,
-  ) async {
-    final Uri uri = Uri.parse(
-      'https://api.cloudinary.com/v1_1/'
-      '$_cloudName/video/upload',
-    );
+  Future<void> _removeVideo() async {
+    if (_uploading) return;
 
-    final String boundary =
-        '----PALOK'
-        '${DateTime.now().microsecondsSinceEpoch}';
+    await _videoController?.dispose();
 
-    final int fileLength =
-        await file.length();
-
-    // ----------------------------------------------------------
-    // FILE EXTENSION
-    // ----------------------------------------------------------
-
-    String extension = 'mp4';
-
-    final String originalPath =
-        file.path.toLowerCase();
-
-    if (originalPath.endsWith('.mov')) {
-      extension = 'mov';
-    } else if (originalPath.endsWith('.m4v')) {
-      extension = 'm4v';
-    } else if (originalPath.endsWith('.webm')) {
-      extension = 'webm';
-    }
-
-    final String fileName =
-        'palok_${DateTime.now().millisecondsSinceEpoch}'
-        '.$extension';
-
-    // ----------------------------------------------------------
-    // CONTENT TYPE
-    // ----------------------------------------------------------
-
-    String contentType =
-        'video/mp4';
-
-    if (extension == 'mov') {
-      contentType = 'video/quicktime';
-    } else if (extension == 'webm') {
-      contentType = 'video/webm';
-    }
-
-    // ----------------------------------------------------------
-    // MULTIPART PREFIX
-    // ----------------------------------------------------------
-
-    final String prefix =
-        '--$boundary\r\n'
-        'Content-Disposition: form-data; '
-        'name="upload_preset"\r\n\r\n'
-        '$_uploadPreset\r\n'
-        '--$boundary\r\n'
-        'Content-Disposition: form-data; '
-        'name="file"; filename="$fileName"\r\n'
-        'Content-Type: $contentType\r\n\r\n';
-
-    // ----------------------------------------------------------
-    // MULTIPART SUFFIX
-    // ----------------------------------------------------------
-
-    final String suffix =
-        '\r\n--$boundary--\r\n';
-
-    final List<int> prefixBytes =
-        utf8.encode(prefix);
-
-    final List<int> suffixBytes =
-        utf8.encode(suffix);
-
-    final int total =
-        prefixBytes.length +
-        fileLength +
-        suffixBytes.length;
-
-    int sent = 0;
-
-    // ----------------------------------------------------------
-    // REQUEST
-    // ----------------------------------------------------------
-
-    final http.StreamedRequest request =
-        http.StreamedRequest(
-      'POST',
-      uri,
-    );
-
-    request.headers['Content-Type'] =
-        'multipart/form-data; boundary=$boundary';
-
-    request.headers['Accept'] =
-        'application/json';
-
-    request.contentLength = total;
-
-    // ----------------------------------------------------------
-    // SEND
-    // ----------------------------------------------------------
-
-    final Future<http.StreamedResponse>
-        responseFuture =
-        request.send();
-
-    // ----------------------------------------------------------
-    // PREFIX
-    // ----------------------------------------------------------
-
-    request.sink.add(prefixBytes);
-
-    sent += prefixBytes.length;
-
-    _setUploadProgress(
-      sent / total,
-      'ভিডিও আপলোড হচ্ছে...',
-    );
-
-    // ----------------------------------------------------------
-    // FILE STREAM
-    // ----------------------------------------------------------
-
-    await for (
-      final List<int> chunk
-      in file.openRead()
-    ) {
-      request.sink.add(chunk);
-
-      sent += chunk.length;
-
-      _setUploadProgress(
-        sent / total,
-        'ভিডিও আপলোড হচ্ছে...',
-      );
-    }
-
-    // ----------------------------------------------------------
-    // SUFFIX
-    // ----------------------------------------------------------
-
-    request.sink.add(suffixBytes);
-
-    sent += suffixBytes.length;
-
-    _setUploadProgress(
-      1.0,
-      'ভিডিও প্রসেস হচ্ছে...',
-    );
-
-    // ----------------------------------------------------------
-    // CLOSE
-    // ----------------------------------------------------------
-
-    await request.sink.close();
-
-    // ----------------------------------------------------------
-    // RESPONSE
-    // ----------------------------------------------------------
-
-    final http.StreamedResponse response =
-        await responseFuture;
-
-    final String body =
-        await response.stream.bytesToString();
-
-    // ----------------------------------------------------------
-    // ERROR
-    // ----------------------------------------------------------
-
-    if (response.statusCode < 200 ||
-        response.statusCode >= 300) {
-      String message =
-          'Cloudinary error '
-          '(${response.statusCode})';
-
-      try {
-        final dynamic decoded =
-            jsonDecode(body);
-
-        if (decoded is Map<String, dynamic>) {
-          final dynamic error =
-              decoded['error'];
-
-          if (error is Map) {
-            message =
-                (error['message'] ?? message)
-                    .toString();
-          }
-        }
-      } catch (_) {}
-
-      throw Exception(message);
-    }
-
-    // ----------------------------------------------------------
-    // JSON
-    // ----------------------------------------------------------
-
-    final dynamic decoded =
-        jsonDecode(body);
-
-    if (decoded is! Map<String, dynamic>) {
-      throw Exception(
-        'Cloudinary response সঠিক নয়।',
-      );
-    }
-
-    return decoded;
-  }
-
-  // ============================================================
-  // UPLOAD PROGRESS
-  // ============================================================
-
-  void _setUploadProgress(
-    double value,
-    String status,
-  ) {
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     setState(() {
-      _uploadProgress =
-          value.clamp(0.0, 1.0);
-
-      _uploadStatus = status;
+      _videoController = null;
+      _videoFile = null;
+      _uploadProgress = 0.0;
+      _uploadStatus = '';
+      _errorMessage = null;
     });
   }
 
   // ============================================================
-  // LOAD USER PROFILE
+  // USER PROFILE
   // ============================================================
 
-  Future<Map<String, dynamic>>
-      _getUserProfile(
+  Future<Map<String, dynamic>> _getUserProfile(
+    String uid,
     User user,
   ) async {
     try {
-      final DocumentSnapshot<
-          Map<String, dynamic>> snapshot =
-          await _firestore
-              .collection('users')
-              .doc(user.uid)
-              .get();
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(uid)
+          .get();
 
-      final Map<String, dynamic>? data =
-          snapshot.data();
+      final data = snapshot.data();
 
-      if (data != null) {
-        return data;
+      if (data == null) {
+        return {
+          'username':
+              user.displayName?.trim().isNotEmpty == true
+                  ? user.displayName!.trim()
+                  : 'PALOK User',
+          'profileImage': user.photoURL ?? '',
+        };
       }
-    } catch (e) {
-      debugPrint(
-        'User profile error: $e',
-      );
+
+      final String username =
+          (data['username'] ??
+                  data['displayName'] ??
+                  user.displayName ??
+                  'PALOK User')
+              .toString()
+              .trim();
+
+      return {
+        'username':
+            username.isEmpty ? 'PALOK User' : username,
+        'profileImage':
+            (data['profileImage'] ?? user.photoURL ?? '')
+                .toString(),
+      };
+    } catch (_) {
+      return {
+        'username':
+            user.displayName?.trim().isNotEmpty == true
+                ? user.displayName!.trim()
+                : 'PALOK User',
+        'profileImage': user.photoURL ?? '',
+      };
     }
-
-    return <String, dynamic>{};
-  }
-
-  // ============================================================
-  // GET USERNAME
-  // ============================================================
-
-  Future<String> _getUsername(
-    User user,
-  ) async {
-    final Map<String, dynamic> profile =
-        await _getUserProfile(user);
-
-    final String username =
-        (profile['username'] ?? '')
-            .toString()
-            .trim();
-
-    if (username.isNotEmpty) {
-      return username.startsWith('@')
-          ? username
-          : '@$username';
-    }
-
-    final String displayName =
-        (profile['displayName'] ??
-                profile['name'] ??
-                user.displayName ??
-                '')
-            .toString()
-            .trim();
-
-    if (displayName.isNotEmpty) {
-      return '@$displayName';
-    }
-
-    if (user.email != null &&
-        user.email!.contains('@')) {
-      return '@${user.email!.split('@').first}';
-    }
-
-    return '@palok_user';
-  }
-
-  // ============================================================
-  // GET PROFILE IMAGE
-  // ============================================================
-
-  Future<String> _getProfileImage(
-    User user,
-  ) async {
-    final Map<String, dynamic> profile =
-        await _getUserProfile(user);
-
-    final String profileImage =
-        (profile['profileImage'] ?? '')
-            .toString()
-            .trim();
-
-    if (profileImage.isNotEmpty) {
-      return profileImage;
-    }
-
-    return user.photoURL ?? '';
   }
 
   // ============================================================
   // HASHTAGS
   // ============================================================
 
-  List<String> _getHashtags() {
-    final String text =
-        _hashtagController.text.trim();
+  List<String> _parseHashtags(String value) {
+    final text = value.trim();
 
     if (text.isEmpty) {
       return <String>[];
     }
 
-    final List<String> rawTags =
-        text
-            .split(RegExp(r'[\s,#]+'))
-            .where(
-              (String tag) =>
-                  tag.trim().isNotEmpty,
-            )
-            .map(
-              (String tag) =>
-                  tag.trim(),
-            )
-            .toList();
+    final parts = text.split(RegExp(r'[\s,]+'));
 
-    final List<String> hashtags =
-        <String>[];
+    final List<String> hashtags = [];
 
-    for (final String rawTag in rawTags) {
-      String tag = rawTag;
+    for (String part in parts) {
+      part = part.trim();
 
-      if (!tag.startsWith('#')) {
-        tag = '#$tag';
+      if (part.isEmpty) continue;
+
+      if (!part.startsWith('#')) {
+        part = '#$part';
       }
 
-      if (!hashtags.contains(tag)) {
-        hashtags.add(tag);
-      }
-
-      // Avoid an excessive number of hashtags.
-      if (hashtags.length >= 20) {
-        break;
+      if (!hashtags.contains(part)) {
+        hashtags.add(part);
       }
     }
 
@@ -590,560 +243,662 @@ class _UploadVideoScreenState
   }
 
   // ============================================================
+  // CLOUDINARY UPLOAD
+  // ============================================================
+
+  Future<Map<String, dynamic>?> _uploadToCloudinary(
+    File file,
+  ) async {
+    final Uri url = Uri.parse(
+      'https://api.cloudinary.com/v1_1/$_cloudName/video/upload',
+    );
+
+    final request = http.MultipartRequest(
+      'POST',
+      url,
+    );
+
+    request.fields['upload_preset'] = _uploadPreset;
+
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        'file',
+        file.path,
+      ),
+    );
+
+    setState(() {
+      _uploadStatus = 'ভিডিও Upload হচ্ছে...';
+      _uploadProgress = 0.0;
+    });
+
+    final streamedResponse = await request.send();
+
+    final totalBytes = streamedResponse.contentLength;
+
+    final List<int> responseBytes = [];
+
+    int receivedBytes = 0;
+
+    await for (final chunk in streamedResponse.stream) {
+      responseBytes.addAll(chunk);
+
+      receivedBytes += chunk.length;
+
+      if (totalBytes != null && totalBytes > 0) {
+        final progress =
+            receivedBytes / totalBytes;
+
+        if (mounted) {
+          setState(() {
+            _uploadProgress =
+                progress.clamp(0.0, 1.0);
+          });
+        }
+      }
+    }
+
+    final responseText =
+        utf8.decode(responseBytes);
+
+    if (streamedResponse.statusCode < 200 ||
+        streamedResponse.statusCode >= 300) {
+      throw Exception(
+        'Cloudinary upload failed: '
+        '${streamedResponse.statusCode}',
+      );
+    }
+
+    final Map<String, dynamic> data =
+        jsonDecode(responseText)
+            as Map<String, dynamic>;
+
+    return data;
+  }
+
+  // ============================================================
   // UPLOAD VIDEO
   // ============================================================
 
   Future<void> _uploadVideo() async {
-    // ----------------------------------------------------------
-    // VIDEO CHECK
-    // ----------------------------------------------------------
+    if (_uploading) return;
 
-    if (_videoFile == null ||
-        _videoController == null) {
-      _showMessage(
-        'প্রথমে একটি ভিডিও নির্বাচন করুন।',
-      );
-
-      return;
-    }
-
-    // ----------------------------------------------------------
-    // UPLOAD CHECK
-    // ----------------------------------------------------------
-
-    if (_uploading) {
-      return;
-    }
-
-    // ----------------------------------------------------------
-    // AUTH CHECK
-    // ----------------------------------------------------------
-
-    final User? user =
-        _auth.currentUser;
+    final user = _auth.currentUser;
 
     if (user == null) {
-      _showMessage(
-        'আগে Login করুন।',
+      _showError(
+        'ভিডিও Upload করতে Login করতে হবে।',
       );
-
       return;
     }
 
-    // ----------------------------------------------------------
-    // FILE SIZE CHECK AGAIN
-    // ----------------------------------------------------------
+    final File? file = _videoFile;
 
-    final int fileSize =
-        await _videoFile!.length();
-
-    if (fileSize > _maxVideoBytes) {
-      _showMessage(
-        'ভিডিও 100 MB বা তার কম হতে হবে।',
+    if (file == null) {
+      _showError(
+        'প্রথমে একটি ভিডিও নির্বাচন করুন।',
       );
-
       return;
     }
 
-    // ----------------------------------------------------------
-    // DURATION CHECK
-    // ----------------------------------------------------------
-
-    final Duration duration =
-        _videoController!.value.duration;
-
-    if (duration <= Duration.zero) {
-      _showMessage(
-        'ভিডিওর duration পাওয়া যায়নি।',
-      );
-
-      return;
-    }
-
-    if (duration > _maxVideoDuration) {
-      _showMessage(
-        'ভিডিও সর্বোচ্চ 3 মিনিটের হতে হবে।',
-      );
-
-      return;
-    }
-
-    // ----------------------------------------------------------
-    // CAPTION
-    // ----------------------------------------------------------
-
-    final String caption =
+    final caption =
         _captionController.text.trim();
 
-    // ----------------------------------------------------------
-    // HASHTAGS
-    // ----------------------------------------------------------
+    final hashtags =
+        _parseHashtags(
+          _hashtagController.text,
+        );
 
-    final List<String> hashtags =
-        _getHashtags();
+    setState(() {
+      _uploading = true;
+      _errorMessage = null;
+      _uploadProgress = 0.0;
+      _uploadStatus = 'প্রস্তুত হচ্ছে...';
+    });
 
     try {
       // --------------------------------------------------------
-      // START
+      // Re-check file size
       // --------------------------------------------------------
 
-      setState(() {
-        _uploading = true;
-        _uploadProgress = 0.0;
-        _uploadStatus =
-            'ভিডিও প্রস্তুত করা হচ্ছে...';
-      });
+      final int fileSize = await file.length();
 
-      // --------------------------------------------------------
-      // PAUSE
-      // --------------------------------------------------------
-
-      await _videoController?.pause();
-
-      // --------------------------------------------------------
-      // USER PROFILE
-      // --------------------------------------------------------
-
-      final Map<String, dynamic> profile =
-          await _getUserProfile(user);
-
-      final String username =
-          await _getUsername(user);
-
-      final String profileImage =
-          await _getProfileImage(user);
-
-      // --------------------------------------------------------
-      // CLOUDINARY
-      // --------------------------------------------------------
-
-      final Map<String, dynamic> cloudinaryData =
-          await _cloudinaryUpload(
-        _videoFile!,
-      );
-
-      // --------------------------------------------------------
-      // VIDEO URL
-      // --------------------------------------------------------
-
-      final String videoUrl =
-          (cloudinaryData['secure_url'] ?? '')
-              .toString()
-              .trim();
-
-      if (videoUrl.isEmpty) {
+      if (fileSize > _maxVideoBytes) {
         throw Exception(
-          'Cloudinary video URL পাওয়া যায়নি।',
+          'ভিডিও 100 MB-এর বেশি।',
         );
       }
 
       // --------------------------------------------------------
-      // CLOUDINARY IDS
+      // Re-check duration
       // --------------------------------------------------------
 
-      final String publicId =
-          (cloudinaryData['public_id'] ?? '')
-              .toString()
-              .trim();
+      final checkController =
+          VideoPlayerController.file(file);
 
-      final String assetId =
-          (cloudinaryData['asset_id'] ?? '')
-              .toString()
-              .trim();
+      await checkController.initialize();
 
-      final String resourceType =
-          (cloudinaryData['resource_type'] ?? 'video')
-              .toString();
+      final duration =
+          checkController.value.duration;
+
+      await checkController.dispose();
+
+      if (duration > _maxVideoDuration) {
+        throw Exception(
+          'ভিডিও সর্বোচ্চ 3 মিনিটের হতে পারবে।',
+        );
+      }
 
       // --------------------------------------------------------
-      // FIRESTORE STATUS
+      // User profile
       // --------------------------------------------------------
 
       if (mounted) {
         setState(() {
           _uploadStatus =
-              'PALOK-এ পোস্ট সংরক্ষণ হচ্ছে...';
+              'আপনার Profile তথ্য নেওয়া হচ্ছে...';
         });
       }
 
-      // --------------------------------------------------------
-      // VIDEO DOCUMENT
-      // --------------------------------------------------------
-
-      final DocumentReference<
-          Map<String, dynamic>> videoRef =
-          _firestore
-              .collection('videos')
-              .doc();
-
-      // --------------------------------------------------------
-      // IMPORTANT
-      //
-      // Canonical owner field = userId
-      //
-      // HomeScreen reads userId.
-      // So ownerId is NOT used here.
-      // --------------------------------------------------------
-
-      await videoRef.set(
-        <String, dynamic>{
-          // ----------------------------------------------------
-          // OWNER
-          // ----------------------------------------------------
-
-          'userId': user.uid,
-
-          // ----------------------------------------------------
-          // CREATOR INFO
-          // ----------------------------------------------------
-
-          'username': username,
-
-          'profileImage': profileImage,
-
-          // ----------------------------------------------------
-          // VIDEO
-          // ----------------------------------------------------
-
-          'videoUrl': videoUrl,
-
-          // Don't use the MP4 URL as an image thumbnail.
-          // Home can safely fall back to video.
-          'thumbnailUrl': '',
-
-          // ----------------------------------------------------
-          // CLOUDINARY
-          // ----------------------------------------------------
-
-          'cloudinaryPublicId': publicId,
-
-          'cloudinaryAssetId': assetId,
-
-          'resourceType': resourceType,
-
-          // ----------------------------------------------------
-          // CONTENT
-          // ----------------------------------------------------
-
-          'caption': caption,
-
-          'hashtags': hashtags,
-
-          'soundName': 'Original sound',
-
-          // ----------------------------------------------------
-          // COUNTERS
-          // ----------------------------------------------------
-
-          'likeCount': 0,
-
-          'commentCount': 0,
-
-          'saveCount': 0,
-
-          'shareCount': 0,
-
-          // ----------------------------------------------------
-          // CREATED
-          // ----------------------------------------------------
-
-          'createdAt':
-              FieldValue.serverTimestamp(),
-        },
+      final profile =
+          await _getUserProfile(
+        user.uid,
+        user,
       );
 
+      final String username =
+          profile['username'].toString();
+
       // --------------------------------------------------------
-      // ENSURE USER DOCUMENT
+      // Cloudinary
       // --------------------------------------------------------
 
-      final DocumentReference<
-          Map<String, dynamic>> userRef =
-          _firestore
-              .collection('users')
-              .doc(user.uid);
+      final cloudinaryData =
+          await _uploadToCloudinary(file);
 
-      final Map<String, dynamic>
-          userUpdate =
-          <String, dynamic>{
-        'uid': user.uid,
-        'updatedAt':
+      if (cloudinaryData == null) {
+        throw Exception(
+          'ভিডিও Upload করা যায়নি।',
+        );
+      }
+
+      final String videoUrl =
+          (cloudinaryData['secure_url'] ?? '')
+              .toString();
+
+      if (videoUrl.isEmpty) {
+        throw Exception(
+          'Cloudinary থেকে ভিডিও URL পাওয়া যায়নি।',
+        );
+      }
+
+      final String publicId =
+          (cloudinaryData['public_id'] ?? '')
+              .toString();
+
+      final String assetId =
+          (cloudinaryData['asset_id'] ?? '')
+              .toString();
+
+      // --------------------------------------------------------
+      // Thumbnail
+      // --------------------------------------------------------
+
+      String thumbnailUrl = '';
+
+      final String cloudinaryPublicId =
+          publicId;
+
+      if (cloudinaryPublicId.isNotEmpty) {
+        final String thumbnailPublicId =
+            cloudinaryPublicId
+                .replaceFirst(
+                  RegExp(r'\.[^.]+$'),
+                  '',
+                );
+
+        thumbnailUrl =
+            'https://res.cloudinary.com/'
+            '$_cloudName/video/upload/'
+            'so_0/'
+            '$thumbnailPublicId.jpg';
+      }
+
+      // --------------------------------------------------------
+      // Firestore
+      // --------------------------------------------------------
+
+      if (mounted) {
+        setState(() {
+          _uploadStatus =
+              'PALOK-এ ভিডিও তথ্য সংরক্ষণ হচ্ছে...';
+          _uploadProgress = 0.95;
+        });
+      }
+
+      final videoDocument =
+          _firestore.collection('videos').doc();
+
+      await videoDocument.set({
+        'ownerId': user.uid,
+        'userId': user.uid,
+
+        'username': username,
+
+        'videoUrl': videoUrl,
+
+        'cloudinaryPublicId':
+            publicId,
+
+        'cloudinaryAssetId':
+            assetId,
+
+        'thumbnailUrl':
+            thumbnailUrl,
+
+        'caption': caption,
+
+        'hashtags': hashtags,
+
+        'soundName': '',
+
+        'likeCount': 0,
+        'commentCount': 0,
+        'saveCount': 0,
+        'shareCount': 0,
+
+        'createdAt':
             FieldValue.serverTimestamp(),
-      };
-
-      // Only add missing basic fields.
-      if (!profile.containsKey('followersCount')) {
-        userUpdate['followersCount'] = 0;
-      }
-
-      if (!profile.containsKey('followingCount')) {
-        userUpdate['followingCount'] = 0;
-      }
-
-      if (!profile.containsKey('email') &&
-          user.email != null) {
-        userUpdate['email'] =
-            user.email;
-      }
-
-      if (!profile.containsKey('profileImage') &&
-          profileImage.isNotEmpty) {
-        userUpdate['profileImage'] =
-            profileImage;
-      }
-
-      await userRef.set(
-        userUpdate,
-        SetOptions(merge: true),
-      );
-
-      // --------------------------------------------------------
-      // SUCCESS
-      // --------------------------------------------------------
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _uploading = false;
-        _uploadProgress = 1.0;
-        _uploadStatus = '';
       });
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        const SnackBar(
-          content: Text(
-            'ভিডিও সফলভাবে PALOK-এ পোস্ট হয়েছে 🎉',
-          ),
-          duration:
-              Duration(seconds: 2),
-        ),
-      );
+      if (!mounted) return;
 
-      // --------------------------------------------------------
-      // RETURN HOME
-      // --------------------------------------------------------
+      setState(() {
+        _uploadProgress = 1.0;
+        _uploadStatus =
+            'ভিডিও সফলভাবে PALOK-এ Upload হয়েছে!';
+      });
 
       await Future.delayed(
-        const Duration(
-          milliseconds: 800,
-        ),
+        const Duration(milliseconds: 700),
       );
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       Navigator.pop(
         context,
         true,
       );
     } catch (e) {
-      // --------------------------------------------------------
-      // ERROR
-      // --------------------------------------------------------
-
-      debugPrint(
-        'Video upload error: $e',
-      );
-
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
-        _uploading = false;
         _uploadStatus = '';
+        _uploadProgress = 0.0;
       });
 
-      _showMessage(
-        'ভিডিও পোস্ট করা যায়নি:\n'
-        '${e.toString().replaceFirst(
-          'Exception: ',
-          '',
-        )}',
+      _showError(
+        _friendlyUploadError(e),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _uploading = false;
+        });
+      }
     }
   }
 
   // ============================================================
-  // MESSAGE
+  // ERROR
   // ============================================================
 
-  void _showMessage(
-    String message,
-  ) {
-    if (!mounted) {
-      return;
+  String _friendlyUploadError(Object error) {
+    final message = error.toString();
+
+    if (message.contains('100 MB')) {
+      return 'ভিডিও 100 MB-এর বেশি হতে পারবে না।';
     }
 
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            message,
-          ),
-        ),
-      );
+    if (message.contains('3 মিনিট')) {
+      return 'ভিডিও সর্বোচ্চ 3 মিনিটের হতে পারবে।';
+    }
+
+    if (message.contains('permission-denied')) {
+      return 'ভিডিও সংরক্ষণ করার Permission পাওয়া যায়নি।';
+    }
+
+    if (message.contains('network')) {
+      return 'Internet connection পরীক্ষা করে আবার চেষ্টা করুন।';
+    }
+
+    if (message.contains('Cloudinary')) {
+      return 'ভিডিও Upload করা যায়নি। Cloudinary সেটিং পরীক্ষা করুন।';
+    }
+
+    return 'ভিডিও Upload করা যায়নি। আবার চেষ্টা করুন।';
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+
+    setState(() {
+      _errorMessage = message;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+      ),
+    );
   }
 
   // ============================================================
-  // FORMAT DURATION
+  // BACK
   // ============================================================
 
-  String _formatDuration(
-    Duration duration,
-  ) {
-    final int minutes =
-        duration.inMinutes;
+  Future<bool> _handleBack() async {
+    if (_uploading) {
+      return false;
+    }
 
-    final int seconds =
-        duration.inSeconds % 60;
-
-    return '$minutes:'
-        '${seconds.toString().padLeft(2, '0')}';
+    return true;
   }
 
   // ============================================================
-  // PREVIEW
+  // UI
   // ============================================================
 
-  Widget _buildPreview() {
-    final VideoPlayerController? controller =
-        _videoController;
-
-    if (controller == null ||
-        !controller.value.isInitialized) {
-      return Container(
-        width: double.infinity,
-        height: 430,
-
-        decoration: BoxDecoration(
-          color: const Color(0xFF111111),
-          borderRadius:
-              BorderRadius.circular(18),
-
-          border: Border.all(
-            color: Colors.white12,
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !_uploading,
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          title: const Text(
+            'Upload Video',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.stretch,
+              children: [
+                // ------------------------------------------------
+                // VIDEO AREA
+                // ------------------------------------------------
 
-        child: Column(
-          mainAxisAlignment:
-              MainAxisAlignment.center,
+                _buildVideoArea(),
 
-          children: [
-            Container(
-              width: 82,
-              height: 82,
+                const SizedBox(height: 20),
 
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient:
-                    const LinearGradient(
-                  colors: [
-                    _pink,
-                    _cyan,
-                  ],
+                // ------------------------------------------------
+                // CAPTION
+                // ------------------------------------------------
+
+                TextField(
+                  controller: _captionController,
+                  enabled: !_uploading,
+                  maxLines: 4,
+                  maxLength: 500,
+                  style: const TextStyle(
+                    color: Colors.white,
+                  ),
+                  decoration:
+                      _inputDecoration(
+                    label: 'Caption',
+                    hint:
+                        'আপনার ভিডিও সম্পর্কে কিছু লিখুন...',
+                    icon: Icons.edit,
+                  ),
                 ),
-              ),
 
-              child: const Icon(
+                const SizedBox(height: 12),
+
+                // ------------------------------------------------
+                // HASHTAGS
+                // ------------------------------------------------
+
+                TextField(
+                  controller: _hashtagController,
+                  enabled: !_uploading,
+                  maxLines: 2,
+                  style: const TextStyle(
+                    color: Colors.white,
+                  ),
+                  decoration:
+                      _inputDecoration(
+                    label: 'Hashtags',
+                    hint:
+                        '#PALOK #Bangladesh #Creator',
+                    icon: Icons.tag,
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // ------------------------------------------------
+                // ERROR
+                // ------------------------------------------------
+
+                if (_errorMessage != null)
+                  Container(
+                    padding:
+                        const EdgeInsets.all(12),
+                    margin:
+                        const EdgeInsets.only(
+                      bottom: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius:
+                          BorderRadius.circular(12),
+                      color: Colors.red.withOpacity(
+                        0.12,
+                      ),
+                    ),
+                    child: Text(
+                      _errorMessage!,
+                      style: const TextStyle(
+                        color: Colors.redAccent,
+                      ),
+                    ),
+                  ),
+
+                // ------------------------------------------------
+                // UPLOAD PROGRESS
+                // ------------------------------------------------
+
+                if (_uploading) ...[
+                  Text(
+                    _uploadStatus,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  LinearProgressIndicator(
+                    value: _uploadProgress,
+                    minHeight: 6,
+                    borderRadius:
+                        BorderRadius.circular(10),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  Text(
+                    '${(_uploadProgress * 100).toStringAsFixed(0)}%',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+                ],
+
+                // ------------------------------------------------
+                // UPLOAD BUTTON
+                // ------------------------------------------------
+
+                SizedBox(
+                  height: 54,
+                  child: ElevatedButton.icon(
+                    onPressed:
+                        _uploading ||
+                                _videoFile == null
+                            ? null
+                            : _uploadVideo,
+                    icon: _uploading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child:
+                                CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.cloud_upload,
+                          ),
+                    label: Text(
+                      _uploading
+                          ? 'Uploading...'
+                          : 'Upload to PALOK',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight:
+                            FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // ------------------------------------------------
+                // INFO
+                // ------------------------------------------------
+
+                const Text(
+                  'ভিডিও সীমা: সর্বোচ্চ 100 MB এবং 3 মিনিট',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white54,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // VIDEO AREA UI
+  // ============================================================
+
+  Widget _buildVideoArea() {
+    if (_videoController == null ||
+        _videoFile == null) {
+      return InkWell(
+        onTap: _uploading
+            ? null
+            : _pickVideo,
+        borderRadius:
+            BorderRadius.circular(18),
+        child: Container(
+          height: 430,
+          decoration: BoxDecoration(
+            borderRadius:
+                BorderRadius.circular(18),
+            border: Border.all(
+              color: Colors.white24,
+            ),
+            color: const Color(0xFF111111),
+          ),
+          child: const Column(
+            mainAxisAlignment:
+                MainAxisAlignment.center,
+            children: [
+              Icon(
                 Icons.video_library_outlined,
                 color: Colors.white,
-                size: 42,
+                size: 64,
               ),
-            ),
-
-            const SizedBox(height: 18),
-
-            const Text(
-              'Select a video',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 17,
-                fontWeight:
-                    FontWeight.w700,
+              SizedBox(height: 16),
+              Text(
+                'ভিডিও নির্বাচন করুন',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-
-            const SizedBox(height: 6),
-
-            Text(
-              'Maximum 100 MB • 3 minutes',
-              style: TextStyle(
-                color: Colors.white
-                    .withValues(alpha: 0.5),
-                fontSize: 13,
+              SizedBox(height: 8),
+              Text(
+                'সর্বোচ্চ 100 MB • 3 মিনিট',
+                style: TextStyle(
+                  color: Colors.white54,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
     }
 
-    final Duration duration =
-        controller.value.duration;
+    final controller =
+        _videoController!;
 
     return Container(
-      width: double.infinity,
-      height: 430,
-
-      clipBehavior:
-          Clip.antiAlias,
-
+      height: 500,
       decoration: BoxDecoration(
         color: Colors.black,
         borderRadius:
             BorderRadius.circular(18),
       ),
-
+      clipBehavior: Clip.antiAlias,
       child: Stack(
-        alignment: Alignment.center,
-
+        fit: StackFit.expand,
         children: [
-          // ------------------------------------------------------
-          // VIDEO
-          // ------------------------------------------------------
+          GestureDetector(
+            onTap: () {
+              if (!controller.value.isInitialized) {
+                return;
+              }
 
-          FittedBox(
-            fit: BoxFit.cover,
+              if (controller.value.isPlaying) {
+                controller.pause();
+              } else {
+                controller.play();
+              }
 
-            child: SizedBox(
-              width:
-                  controller.value.size.width,
-
-              height:
-                  controller.value.size.height,
-
-              child: VideoPlayer(
-                controller,
+              setState(() {});
+            },
+            child: FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                width:
+                    controller.value.size.width,
+                height:
+                    controller.value.size.height,
+                child: VideoPlayer(controller),
               ),
-            ),
-          ),
-
-          // ------------------------------------------------------
-          // TAP AREA
-          // ------------------------------------------------------
-
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: () async {
-                if (controller.value.isPlaying) {
-                  await controller.pause();
-                } else {
-                  await controller.play();
-                }
-
-                if (mounted) {
-                  setState(() {});
-                }
-              },
-
-              child:
-                  const SizedBox.expand(),
             ),
           ),
 
@@ -1151,55 +906,54 @@ class _UploadVideoScreenState
           // PLAY ICON
           // ------------------------------------------------------
 
-          if (!controller.value.isPlaying)
-            Container(
-              width: 72,
-              height: 72,
+          Center(
+            child: ValueListenableBuilder<
+                VideoPlayerValue>(
+              valueListenable: controller,
+              builder: (
+                context,
+                value,
+                child,
+              ) {
+                if (value.isPlaying) {
+                  return const SizedBox();
+                }
 
-              decoration:
-                  const BoxDecoration(
-                color: Colors.black54,
-                shape: BoxShape.circle,
-              ),
-
-              child: const Icon(
-                Icons.play_arrow_rounded,
-                color: Colors.white,
-                size: 44,
-              ),
+                return Container(
+                  padding:
+                      const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.play_arrow,
+                    color: Colors.white,
+                    size: 40,
+                  ),
+                );
+              },
             ),
+          ),
 
           // ------------------------------------------------------
-          // DURATION
+          // REMOVE BUTTON
           // ------------------------------------------------------
 
           Positioned(
+            top: 12,
             right: 12,
-            bottom: 12,
-
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 6,
-              ),
-
-              decoration: BoxDecoration(
-                color: Colors.black
-                    .withValues(alpha: 0.65),
-
-                borderRadius:
-                    BorderRadius.circular(20),
-              ),
-
-              child: Text(
-                _formatDuration(duration),
-
-                style:
-                    const TextStyle(
+            child: Material(
+              color: Colors.black54,
+              shape: const CircleBorder(),
+              child: IconButton(
+                onPressed:
+                    _uploading
+                        ? null
+                        : _removeVideo,
+                icon: const Icon(
+                  Icons.close,
                   color: Colors.white,
-                  fontWeight:
-                      FontWeight.bold,
                 ),
               ),
             ),
@@ -1214,455 +968,44 @@ class _UploadVideoScreenState
   // ============================================================
 
   InputDecoration _inputDecoration({
+    required String label,
     required String hint,
+    required IconData icon,
   }) {
     return InputDecoration(
+      labelText: label,
       hintText: hint,
-
-      hintStyle: TextStyle(
-        color: Colors.white
-            .withValues(alpha: 0.35),
+      labelStyle: const TextStyle(
+        color: Colors.white70,
       ),
-
+      hintStyle: const TextStyle(
+        color: Colors.white38,
+      ),
+      prefixIcon: Icon(
+        icon,
+        color: Colors.white70,
+      ),
       filled: true,
-
-      fillColor:
-          const Color(0xFF181818),
-
-      contentPadding:
-          const EdgeInsets.symmetric(
-        horizontal: 15,
-        vertical: 15,
-      ),
-
-      border:
-          OutlineInputBorder(
+      fillColor: const Color(0xFF111111),
+      enabledBorder: OutlineInputBorder(
         borderRadius:
             BorderRadius.circular(14),
-        borderSide:
-            BorderSide.none,
+        borderSide: const BorderSide(
+          color: Colors.white12,
+        ),
       ),
-
-      enabledBorder:
-          OutlineInputBorder(
+      focusedBorder: OutlineInputBorder(
         borderRadius:
             BorderRadius.circular(14),
-        borderSide: BorderSide(
-          color: Colors.white
-              .withValues(alpha: 0.05),
+        borderSide: const BorderSide(
+          color: Color(0xFFFF2D55),
         ),
       ),
-
-      focusedBorder:
-          OutlineInputBorder(
+      disabledBorder: OutlineInputBorder(
         borderRadius:
             BorderRadius.circular(14),
-        borderSide:
-            const BorderSide(
-          color: _pink,
-          width: 1.2,
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // BUILD
-  // ============================================================
-
-  @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        elevation: 0,
-
-        centerTitle: true,
-
-        title: const Text(
-          'Post Video',
-          style: TextStyle(
-            fontWeight:
-                FontWeight.w800,
-          ),
-        ),
-      ),
-
-      body: SafeArea(
-        child: SingleChildScrollView(
-          keyboardDismissBehavior:
-              ScrollViewKeyboardDismissBehavior
-                  .onDrag,
-
-          padding:
-              const EdgeInsets.fromLTRB(
-            18,
-            10,
-            18,
-            35,
-          ),
-
-          child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
-
-            children: [
-              // ------------------------------------------------
-              // PREVIEW
-              // ------------------------------------------------
-
-              _buildPreview(),
-
-              const SizedBox(
-                height: 14,
-              ),
-
-              // ------------------------------------------------
-              // SELECT VIDEO
-              // ------------------------------------------------
-
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-
-                child:
-                    OutlinedButton.icon(
-                  onPressed:
-                      _uploading
-                          ? null
-                          : _pickVideo,
-
-                  icon: const Icon(
-                    Icons.video_library_rounded,
-                  ),
-
-                  label: Text(
-                    _videoFile == null
-                        ? 'Choose Video'
-                        : 'Change Video',
-                  ),
-
-                  style:
-                      OutlinedButton.styleFrom(
-                    foregroundColor:
-                        Colors.white,
-
-                    side: BorderSide(
-                      color: Colors.white
-                          .withValues(
-                        alpha: 0.14,
-                      ),
-                    ),
-
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(
-                        14,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(
-                height: 18,
-              ),
-
-              // ------------------------------------------------
-              // DURATION
-              // ------------------------------------------------
-
-              if (_videoFile != null)
-                Container(
-                  width: double.infinity,
-
-                  padding:
-                      const EdgeInsets.all(
-                    13,
-                  ),
-
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        const Color(
-                      0xFF171717,
-                    ),
-
-                    borderRadius:
-                        BorderRadius.circular(
-                      12,
-                    ),
-                  ),
-
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.timer_outlined,
-                        color:
-                            Colors.white70,
-                      ),
-
-                      const SizedBox(
-                        width: 9,
-                      ),
-
-                      Text(
-                        'Duration: '
-                        '${_formatDuration(
-                          _videoDuration,
-                        )} / 3:00 max',
-
-                        style:
-                            const TextStyle(
-                          color:
-                              Colors.white70,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-              const SizedBox(
-                height: 22,
-              ),
-
-              // ------------------------------------------------
-              // CAPTION
-              // ------------------------------------------------
-
-              const Text(
-                'Caption',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight:
-                      FontWeight.w700,
-                ),
-              ),
-
-              const SizedBox(
-                height: 8,
-              ),
-
-              TextField(
-                controller:
-                    _captionController,
-
-                enabled:
-                    !_uploading,
-
-                maxLines: 4,
-
-                maxLength: 500,
-
-                style:
-                    const TextStyle(
-                  color: Colors.white,
-                ),
-
-                cursorColor: _pink,
-
-                decoration:
-                    _inputDecoration(
-                  hint:
-                      'Write something about your video...',
-                ),
-              ),
-
-              const SizedBox(
-                height: 10,
-              ),
-
-              // ------------------------------------------------
-              // HASHTAGS
-              // ------------------------------------------------
-
-              const Text(
-                'Hashtags',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight:
-                      FontWeight.w700,
-                ),
-              ),
-
-              const SizedBox(
-                height: 8,
-              ),
-
-              TextField(
-                controller:
-                    _hashtagController,
-
-                enabled:
-                    !_uploading,
-
-                style:
-                    const TextStyle(
-                  color: Colors.white,
-                ),
-
-                cursorColor: _pink,
-
-                decoration:
-                    _inputDecoration(
-                  hint:
-                      '#PALOK #ShortVideo #Bangladesh',
-                ),
-              ),
-
-              const SizedBox(
-                height: 24,
-              ),
-
-              // ------------------------------------------------
-              // UPLOAD PROGRESS
-              // ------------------------------------------------
-
-              if (_uploading) ...[
-                Text(
-                  _uploadStatus.isEmpty
-                      ? 'Uploading video...'
-                      : _uploadStatus,
-
-                  style:
-                      const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight:
-                        FontWeight.w500,
-                  ),
-                ),
-
-                const SizedBox(
-                  height: 9,
-                ),
-
-                ClipRRect(
-                  borderRadius:
-                      BorderRadius.circular(
-                    10,
-                  ),
-
-                  child:
-                      LinearProgressIndicator(
-                    value:
-                        _uploadProgress,
-
-                    minHeight: 6,
-
-                    backgroundColor:
-                        Colors.white
-                            .withValues(
-                      alpha: 0.08,
-                    ),
-
-                    valueColor:
-                        const AlwaysStoppedAnimation<
-                            Color>(
-                      _pink,
-                    ),
-                  ),
-                ),
-
-                const SizedBox(
-                  height: 8,
-                ),
-
-                Text(
-                  '${(
-                    _uploadProgress * 100
-                  ).toStringAsFixed(0)}%',
-
-                  style:
-                      const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                  ),
-                ),
-
-                const SizedBox(
-                  height: 18,
-                ),
-              ],
-
-              // ------------------------------------------------
-              // POST
-              // ------------------------------------------------
-
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-
-                child:
-                    ElevatedButton.icon(
-                  onPressed:
-                      _uploading
-                          ? null
-                          : _uploadVideo,
-
-                  icon: _uploading
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-
-                          child:
-                              CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color:
-                                Colors.white,
-                          ),
-                        )
-                      : const Icon(
-                          Icons
-                              .send_rounded,
-                        ),
-
-                  label: Text(
-                    _uploading
-                        ? 'Posting...'
-                        : 'Post Video',
-
-                    style:
-                        const TextStyle(
-                      fontSize: 17,
-                      fontWeight:
-                          FontWeight.w800,
-                    ),
-                  ),
-
-                  style:
-                      ElevatedButton.styleFrom(
-                    backgroundColor:
-                        _pink,
-
-                    foregroundColor:
-                        Colors.white,
-
-                    disabledBackgroundColor:
-                        _pink.withValues(
-                      alpha: 0.4,
-                    ),
-
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(
-                        16,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+        borderSide: const BorderSide(
+          color: Colors.white12,
         ),
       ),
     );
