@@ -953,3 +953,297 @@ class _HomeScreenState extends State<HomeScreen>
       'Search: $query',
     );
   }
+
+                  ),
+              ),
+              child: Icon(
+                icon,
+                color: active ? _pink : Colors.white,
+                size: 23,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                shadows: [
+                  Shadow(
+                    color: Colors.black,
+                    blurRadius: 5,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVideoInfo(VideoPost video) {
+    return Positioned(
+      left: 18,
+      right: 92,
+      bottom: 124,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _profileAvatar(
+                imageUrl: '',
+                size: 40,
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  video.username.startsWith('@')
+                      ? video.username
+                      : '@${video.username}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black,
+                        blurRadius: 5,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          if (video.caption.isNotEmpty)
+            Text(
+              video.caption,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                height: 1.25,
+                fontWeight: FontWeight.w500,
+                shadows: [
+                  Shadow(
+                    color: Colors.black,
+                    blurRadius: 5,
+                  ),
+                ],
+              ),
+            ),
+          if (video.hashtags.isNotEmpty) ...[
+            const SizedBox(height: 5),
+            Text(
+              video.hashtags,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                shadows: [
+                  Shadow(
+                    color: Colors.black,
+                    blurRadius: 5,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFriendsScreen() {
+    final user = _auth.currentUser;
+
+    final creators = <String, VideoPost>{};
+
+    for (final video in _videos) {
+      if (video.userId.isEmpty) continue;
+      if (user != null && video.userId == user.uid) continue;
+
+      creators.putIfAbsent(video.userId, () => video);
+    }
+
+    final followingCreators = creators.values
+        .where(
+          (video) => _followingIds.contains(video.userId),
+        )
+        .toList();
+
+    final suggestedCreators = creators.values
+        .where(
+          (video) => !_followingIds.contains(video.userId),
+        )
+        .toList();
+
+    return SafeArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(18, 16, 18, 4),
+            child: Text(
+              'Friends',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(18, 0, 18, 14),
+            child: Text(
+              'Connect with creators on PALOK',
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(
+                18,
+                4,
+                18,
+                100,
+              ),
+              children: [
+                if (followingCreators.isNotEmpty) ...[
+                  const Text(
+                    'Following',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ...followingCreators.map(
+                    (video) => _creatorCard(video, true),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+                const Text(
+                  'Suggested creators',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (suggestedCreators.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 35),
+                    child: Center(
+                      child: Text(
+                        'কোনো creator পাওয়া যায়নি',
+                        style: TextStyle(
+                          color: Colors.white54,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  ...suggestedCreators.map(
+                    (video) => _creatorCard(video, false),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _creatorCard(
+    VideoPost video,
+    bool following,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          _profileAvatar(
+            imageUrl: '',
+            size: 48,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Text(
+                  video.username,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${_formatCount(video.likeCount)} likes',
+                  style: const TextStyle(
+                    color: Colors.white54,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          OutlinedButton(
+            onPressed: () {
+              unawaited(
+                _toggleFollow(video),
+              );
+            },
+            style: OutlinedButton.styleFrom(
+              foregroundColor:
+                  following
+                      ? Colors.white54
+                      : Colors.white,
+              side: BorderSide(
+                color:
+                    following
+                        ? Colors.white24
+                        : _pink,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius:
+                    BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              following
+                  ? 'Following'
+                  : 'Follow',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
