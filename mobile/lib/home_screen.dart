@@ -143,36 +143,15 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _loadUserProfile() async {
     final user = _auth.currentUser;
 
-    if (user == null) {
-      return;
-    }
+    if (user == null) return;
 
     try {
-      final doc = await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .get();
+      final doc =
+          await _firestore.collection('users').doc(user.uid).get();
 
       final data = doc.data();
 
-      if (data == null) {
-        if (mounted) {
-          setState(() {
-            _username =
-                user.displayName?.trim().isNotEmpty == true
-                    ? user.displayName!.trim()
-                    : 'PALOK User';
-
-            _email = user.email ?? '';
-          });
-        }
-
-        return;
-      }
-
-      if (!mounted) return;
-
-      setState(() {
+      if (data != null) {
         final username =
             (data['username'] ?? '').toString().trim();
 
@@ -189,50 +168,42 @@ class _HomeScreenState extends State<HomeScreen>
 
         _bio = (data['bio'] ?? '').toString();
 
+        final email =
+            (data['email'] ?? '').toString().trim();
+
         _email =
-            (data['email'] ?? '').toString().trim().isNotEmpty
-                ? (data['email'] ?? '').toString()
-                : (user.email ?? '');
+            email.isNotEmpty ? email : (user.email ?? '');
 
         _profileImage =
             (data['profileImage'] ?? '').toString();
 
         _followersCount =
-            (data['followersCount'] ?? 0) is int
-                ? data['followersCount'] as int
-                : int.tryParse(
-                      '${data['followersCount'] ?? 0}',
-                    ) ??
-                    0;
+            _toInt(data['followersCount']);
 
         _followingCount =
-            (data['followingCount'] ?? 0) is int
-                ? data['followingCount'] as int
-                : int.tryParse(
-                      '${data['followingCount'] ?? 0}',
-                    ) ??
-                    0;
-      });
-    } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
+            _toInt(data['followingCount']);
+      } else {
         _username =
             user.displayName?.trim().isNotEmpty == true
                 ? user.displayName!.trim()
                 : 'PALOK User';
 
         _email = user.email ?? '';
-      });
+      }
+    } catch (_) {
+      _username =
+          user.displayName?.trim().isNotEmpty == true
+              ? user.displayName!.trim()
+              : 'PALOK User';
+
+      _email = user.email ?? '';
     }
   }
 
   Future<void> _loadUserData() async {
     final user = _auth.currentUser;
 
-    if (user == null) {
-      return;
-    }
+    if (user == null) return;
 
     try {
       final likedSnapshot = await _firestore
@@ -282,7 +253,7 @@ class _HomeScreenState extends State<HomeScreen>
       });
     } catch (_) {
       // User data loading failure should not
-      // prevent the Home Screen from opening.
+      // prevent Home Screen from opening.
     }
   }
 
@@ -319,7 +290,7 @@ class _HomeScreenState extends State<HomeScreen>
         return;
       }
     } catch (_) {
-      // Use demo videos below if Firebase fails.
+      // Firebase failure -> demo videos
     }
 
     if (!mounted) return;
@@ -332,10 +303,7 @@ class _HomeScreenState extends State<HomeScreen>
           userId: 'demo_user_0',
           username: '@palok_creator',
           caption: 'Welcome to PALOK ✨',
-          hashtags: const [
-            '#PALOK',
-            '#ForYou',
-          ],
+          hashtags: '#PALOK #ForYou',
           likeCount: 11700,
           commentCount: 234,
           saveCount: 811,
@@ -348,10 +316,7 @@ class _HomeScreenState extends State<HomeScreen>
           userId: 'demo_user_1',
           username: '@nature_palok',
           caption: 'Beautiful moments on PALOK 🌿',
-          hashtags: const [
-            '#Nature',
-            '#PALOK',
-          ],
+          hashtags: '#Nature #PALOK',
           likeCount: 8500,
           commentCount: 128,
           saveCount: 452,
@@ -364,10 +329,7 @@ class _HomeScreenState extends State<HomeScreen>
           userId: 'demo_user_2',
           username: '@palok_video',
           caption: 'Create. Share. Connect. 🚀',
-          hashtags: const [
-            '#PALOK',
-            '#ShortVideo',
-          ],
+          hashtags: '#PALOK #ShortVideo',
           likeCount: 4200,
           commentCount: 75,
           saveCount: 210,
@@ -379,32 +341,37 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _prepareVideo(int index) async {
-    if (index < 0 || index >= _videos.length) {
+    if (!mounted ||
+        index < 0 ||
+        index >= _videos.length) {
       return;
     }
 
     if (_controllers.containsKey(index)) {
-      final existing = _controllers[index];
+      final existing = _controllers[index]!;
 
-      if (existing != null &&
-          existing.value.isInitialized) {
-        await existing.play();
+      if (existing.value.isInitialized) {
+        if (index == _currentIndex &&
+            _bottomIndex == 0) {
+          await existing.play();
+        }
+
+        return;
       }
-
-      return;
     }
 
     final video = _videos[index];
 
     late VideoPlayerController controller;
 
-    if (video.videoUrl.startsWith('http://') ||
-        video.videoUrl.startsWith('https://')) {
-      controller = VideoPlayerController.networkUrl(
+    if (_isNetworkUrl(video.videoUrl)) {
+      controller =
+          VideoPlayerController.networkUrl(
         Uri.parse(video.videoUrl),
       );
     } else {
-      controller = VideoPlayerController.asset(
+      controller =
+          VideoPlayerController.asset(
         video.videoUrl,
       );
     }
@@ -416,44 +383,80 @@ class _HomeScreenState extends State<HomeScreen>
 
       await controller.setLooping(true);
 
-      if (index == _currentIndex) {
+      if (!mounted) return;
+
+      if (index == _currentIndex &&
+          _bottomIndex == 0) {
         await controller.play();
       }
 
-      if (mounted) {
-        setState(() {});
+      if (index + 1 < _videos.length) {
+        unawaited(
+          _prepareVideo(index + 1),
+        );
       }
+
+      if (index - 1 >= 0) {
+        unawaited(
+          _prepareVideo(index - 1),
+        );
+      }
+
+      _disposeFarControllers(index);
     } catch (_) {
       await controller.dispose();
       _controllers.remove(index);
-
-      if (mounted) {
-        setState(() {});
-      }
     }
 
-    final keysToDispose = _controllers.keys
-        .where(
-          (key) => (key - _currentIndex).abs() > 1,
-        )
-        .toList();
+    if (mounted) {
+      setState(() {});
+    }
+  }
 
-    for (final key in keysToDispose) {
-      final oldController = _controllers.remove(key);
+  void _disposeFarControllers(
+    int centerIndex,
+  ) {
+    final keys =
+        _controllers.keys.toList();
 
-      if (oldController != null) {
-        await oldController.dispose();
+    for (final key in keys) {
+      if ((key - centerIndex).abs() > 1) {
+        final controller =
+            _controllers.remove(key);
+
+        controller?.dispose();
       }
     }
   }
 
-  Future<void> _onVideoChanged(int index) async {
-    if (index < 0 || index >= _videos.length) {
+  bool _isNetworkUrl(String value) {
+    return value.startsWith('http://') ||
+        value.startsWith('https://');
+  }
+
+  Future<void> _onVideoChanged(
+    int pageIndex,
+    List<VideoPost> feed,
+  ) async {
+    if (pageIndex < 0 ||
+        pageIndex >= feed.length) {
       return;
     }
 
-    for (final entry in _controllers.entries) {
-      if (entry.key != index) {
+    final selectedVideo =
+        feed[pageIndex];
+
+    final actualIndex =
+        _videos.indexWhere(
+      (video) =>
+          video.id == selectedVideo.id,
+    );
+
+    if (actualIndex < 0) return;
+
+    for (final entry
+        in _controllers.entries) {
+      if (entry.key != actualIndex) {
         await entry.value.pause();
       }
     }
@@ -461,30 +464,21 @@ class _HomeScreenState extends State<HomeScreen>
     if (!mounted) return;
 
     setState(() {
-      _currentIndex = index;
+      _currentIndex = actualIndex;
     });
 
-    await _prepareVideo(index);
-
-    if (index + 1 < _videos.length) {
-      unawaited(
-        _prepareVideo(index + 1),
-      );
-    }
-
-    if (index - 1 >= 0) {
-      unawaited(
-        _prepareVideo(index - 1),
-      );
-    }
+    await _prepareVideo(actualIndex);
   }
 
-  Future<void> _togglePlay(int index) async {
-    final controller = _controllers[index];
+  Future<void> _togglePlay(
+    int actualIndex,
+  ) async {
+    final controller =
+        _controllers[actualIndex];
 
     if (controller == null ||
         !controller.value.isInitialized) {
-      await _prepareVideo(index);
+      await _prepareVideo(actualIndex);
       return;
     }
 
@@ -499,15 +493,20 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  Future<void> _toggleLike(VideoPost video) async {
+  Future<void> _toggleLike(
+    VideoPost video,
+  ) async {
     final user = _auth.currentUser;
 
     if (user == null) {
-      _showMessage('Like করতে Login করতে হবে');
+      _showMessage(
+        'Like করতে Login করতে হবে',
+      );
       return;
     }
 
-    final wasLiked = _likedIds.contains(video.id);
+    final wasLiked =
+        _likedIds.contains(video.id);
 
     setState(() {
       if (wasLiked) {
@@ -532,7 +531,9 @@ class _HomeScreenState extends State<HomeScreen>
       );
 
       if (isLiked != !wasLiked) {
-        throw Exception('Like state mismatch');
+        throw Exception(
+          'Like state mismatch',
+        );
       }
     } catch (_) {
       if (!mounted) return;
@@ -551,19 +552,26 @@ class _HomeScreenState extends State<HomeScreen>
         }
       });
 
-      _showMessage('Like পরিবর্তন করা যায়নি');
+      _showMessage(
+        'Like পরিবর্তন করা যায়নি',
+      );
     }
   }
 
-  Future<void> _toggleSave(VideoPost video) async {
+  Future<void> _toggleSave(
+    VideoPost video,
+  ) async {
     final user = _auth.currentUser;
 
     if (user == null) {
-      _showMessage('Save করতে Login করতে হবে');
+      _showMessage(
+        'Save করতে Login করতে হবে',
+      );
       return;
     }
 
-    final wasSaved = _savedIds.contains(video.id);
+    final wasSaved =
+        _savedIds.contains(video.id);
 
     setState(() {
       if (wasSaved) {
@@ -586,7 +594,9 @@ class _HomeScreenState extends State<HomeScreen>
       );
 
       if (isSaved != !wasSaved) {
-        throw Exception('Save state mismatch');
+        throw Exception(
+          'Save state mismatch',
+        );
       }
 
       if (mounted) {
@@ -613,11 +623,15 @@ class _HomeScreenState extends State<HomeScreen>
         }
       });
 
-      _showMessage('Save করা যায়নি');
+      _showMessage(
+        'Save করা যায়নি',
+      );
     }
   }
 
-  Future<void> _shareVideo(VideoPost video) async {
+  Future<void> _shareVideo(
+    VideoPost video,
+  ) async {
     try {
       await _interactionService.shareVideo(
         videoId: video.id,
@@ -630,153 +644,13 @@ class _HomeScreenState extends State<HomeScreen>
             (_shareDeltas[video.id] ?? 0) + 1;
       });
     } catch (_) {
-      // Share was cancelled or failed.
+      // Share cancelled or failed.
     }
   }
 
-  Future<void> _toggleFollow(VideoPost video) async {
-    final user = _auth.currentUser;
-
-    if (user == null) {
-      _showMessage('Follow করতে Login করতে হবে');
-      return;
-    }
-
-    if (video.userId.isEmpty ||
-        video.userId == user.uid ||
-        video.id.startsWith('demo_')) {
-      return;
-    }
-
-    final isFollowing =
-        _followingIds.contains(video.userId);
-
-    setState(() {
-      if (isFollowing) {
-        _followingIds.remove(video.userId);
-      } else {
-        _followingIds.add(video.userId);
-      }
-    });
-
-    try {
-      final followingRef = _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('following')
-          .doc(video.userId);
-
-      final targetUserRef = _firestore
-          .collection('users')
-          .doc(video.userId);
-
-      if (isFollowing) {
-        await followingRef.delete();
-
-        await _firestore.runTransaction(
-          (transaction) async {
-            final snapshot =
-                await transaction.get(targetUserRef);
-
-            final data = snapshot.data();
-
-            final current =
-                (data?['followersCount'] ?? 0) is int
-                    ? data?['followersCount'] as int
-                    : int.tryParse(
-                          '${data?['followersCount'] ?? 0}',
-                        ) ??
-                        0;
-
-            transaction.set(
-              targetUserRef,
-              {
-                'followersCount':
-                    current > 0 ? current - 1 : 0,
-              },
-              SetOptions(merge: true),
-            );
-          },
-        );
-
-        await _firestore
-            .collection('users')
-            .doc(user.uid)
-            .set(
-          {
-            'followingCount': FieldValue.increment(-1),
-          },
-          SetOptions(merge: true),
-        );
-      } else {
-        await followingRef.set({
-          'userId': video.userId,
-          'username': video.username,
-          'createdAt':
-              FieldValue.serverTimestamp(),
-        });
-
-        await targetUserRef.set(
-          {
-            'followersCount':
-                FieldValue.increment(1),
-          },
-          SetOptions(merge: true),
-        );
-
-        await _firestore
-            .collection('users')
-            .doc(user.uid)
-            .set(
-          {
-            'followingCount':
-                FieldValue.increment(1),
-          },
-          SetOptions(merge: true),
-        );
-
-        try {
-          await _firestore
-              .collection('users')
-              .doc(video.userId)
-              .collection('notifications')
-              .add({
-            'type': 'follow',
-            'fromUserId': user.uid,
-            'fromUsername': _username,
-            'text': 'তোমাকে Follow করেছে',
-            'read': false,
-            'createdAt':
-                FieldValue.serverTimestamp(),
-          });
-        } catch (_) {}
-      }
-
-      if (mounted) {
-        setState(() {
-          if (video.userId == user.uid) {
-            _followingCount =
-                _followingCount +
-                    (isFollowing ? -1 : 1);
-          }
-        });
-      }
-    } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        if (isFollowing) {
-          _followingIds.add(video.userId);
-        } else {
-          _followingIds.remove(video.userId);
-        }
-      });
-
-      _showMessage('Follow পরিবর্তন করা যায়নি');
-    }
-  }
-
-  void _showMessage(String message) {
+  void _showMessage(
+    String message,
+  ) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context)
@@ -784,60 +658,104 @@ class _HomeScreenState extends State<HomeScreen>
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          behavior: SnackBarBehavior.floating,
+          behavior:
+              SnackBarBehavior.floating,
         ),
       );
   }
 
-  String _formatCount(int count) {
-    if (count >= 1000000) {
-      final value = count / 1000000;
+  int _toInt(dynamic value) {
+    if (value is int) return value;
 
-      return '${value.toStringAsFixed(value >= 10 ? 0 : 1)}M';
+    if (value is num) {
+      return value.toInt();
     }
 
-    if (count >= 1000) {
-      final value = count / 1000;
-
-      return '${value.toStringAsFixed(value >= 10 ? 0 : 1)}K';
-    }
-
-    return count.toString();
+    return int.tryParse(
+          value?.toString() ?? '',
+        ) ??
+        0;
   }
 
-  int _likeCount(VideoPost video) {
+  String _hashtagsToString(
+    dynamic value,
+  ) {
+    if (value is List) {
+      return value
+          .map((e) => e.toString())
+          .join(' ');
+    }
+
+    return value?.toString() ?? '';
+  }
+
+  int _likeCount(
+    VideoPost video,
+  ) {
     return (video.likeCount +
             (_likeDeltas[video.id] ?? 0))
         .clamp(0, 999999999);
   }
 
-  int _commentCount(VideoPost video) {
+  int _commentCount(
+    VideoPost video,
+  ) {
     return (video.commentCount +
             (_commentDeltas[video.id] ?? 0))
         .clamp(0, 999999999);
   }
 
-  int _saveCount(VideoPost video) {
+  int _saveCount(
+    VideoPost video,
+  ) {
     return (video.saveCount +
             (_saveDeltas[video.id] ?? 0))
         .clamp(0, 999999999);
   }
 
-  int _shareCount(VideoPost video) {
+  int _shareCount(
+    VideoPost video,
+  ) {
     return (video.shareCount +
             (_shareDeltas[video.id] ?? 0))
         .clamp(0, 999999999);
   }
 
+  String _formatCount(
+    int count,
+  ) {
+    if (count >= 1000000) {
+      final value =
+          count / 1000000;
+
+      return '${value.toStringAsFixed(
+        value >= 10 ? 0 : 1,
+      )}M';
+    }
+
+    if (count >= 1000) {
+      final value =
+          count / 1000;
+
+      return '${value.toStringAsFixed(
+        value >= 10 ? 0 : 1,
+      )}K';
+    }
+
+    return count.toString();
+  }
+
   Widget _avatar({
     double size = 44,
   }) {
-    final image = _profileImage.trim();
+    final image =
+        _profileImage.trim();
 
     if (image.isEmpty) {
       return CircleAvatar(
         radius: size / 2,
-        backgroundColor: Colors.white12,
+        backgroundColor:
+            Colors.white12,
         child: Icon(
           Icons.person,
           color: Colors.white70,
@@ -848,22 +766,30 @@ class _HomeScreenState extends State<HomeScreen>
 
     return CircleAvatar(
       radius: size / 2,
-      backgroundImage: NetworkImage(image),
-      backgroundColor: Colors.white12,
+      backgroundImage:
+          NetworkImage(image),
+      backgroundColor:
+          Colors.white12,
     );
   }
 
-  Future<void> _openComments(VideoPost video) async {
-    final result = await showModalBottomSheet<int>(
+  Future<void> _openComments(
+    VideoPost video,
+  ) async {
+    final result =
+        await showModalBottomSheet<int>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor:
+          Colors.transparent,
       builder: (_) {
         return _CommentsSheet(
           videoId: video.id,
           ownerId: video.userId,
-          ownerUsername: video.username,
-          currentUsername: _username,
+          ownerUsername:
+              video.username,
+          currentUsername:
+              _username,
           currentUserId:
               _auth.currentUser?.uid ?? '',
         );
@@ -872,10 +798,12 @@ class _HomeScreenState extends State<HomeScreen>
 
     if (!mounted) return;
 
-    if (result != null && result > 0) {
+    if (result != null &&
+        result > 0) {
       setState(() {
         _commentDeltas[video.id] =
-            (_commentDeltas[video.id] ?? 0) + result;
+            (_commentDeltas[video.id] ?? 0) +
+                result;
       });
     }
   }
@@ -884,65 +812,90 @@ class _HomeScreenState extends State<HomeScreen>
     final queryController =
         TextEditingController();
 
-    final query = await showModalBottomSheet<String>(
+    final query =
+        await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor:
+          Colors.transparent,
       builder: (context) {
         return AnimatedPadding(
-          duration: const Duration(milliseconds: 180),
+          duration:
+              const Duration(milliseconds: 180),
           padding: EdgeInsets.only(
-            bottom:
-                MediaQuery.of(context).viewInsets.bottom,
+            bottom: MediaQuery.of(context)
+                .viewInsets
+                .bottom,
           ),
           child: Container(
-            padding: const EdgeInsets.fromLTRB(
+            padding:
+                const EdgeInsets.fromLTRB(
               18,
               18,
               18,
               28,
             ),
-            decoration: const BoxDecoration(
+            decoration:
+                const BoxDecoration(
               color: Color(0xFF111111),
-              borderRadius: BorderRadius.vertical(
+              borderRadius:
+                  BorderRadius.vertical(
                 top: Radius.circular(24),
               ),
             ),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisSize:
+                  MainAxisSize.min,
               children: [
                 Container(
                   width: 42,
                   height: 4,
-                  decoration: BoxDecoration(
+                  decoration:
+                      BoxDecoration(
                     color: Colors.white24,
                     borderRadius:
-                        BorderRadius.circular(10),
+                        BorderRadius.circular(
+                      10,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(
+                  height: 18,
+                ),
                 TextField(
-                  controller: queryController,
+                  controller:
+                      queryController,
                   autofocus: true,
-                  style: const TextStyle(
+                  style:
+                      const TextStyle(
                     color: Colors.white,
                   ),
-                  decoration: InputDecoration(
+                  decoration:
+                      InputDecoration(
                     hintText:
                         'Search videos, users...',
-                    hintStyle: const TextStyle(
-                      color: Colors.white54,
+                    hintStyle:
+                        const TextStyle(
+                      color:
+                          Colors.white54,
                     ),
-                    prefixIcon: const Icon(
+                    prefixIcon:
+                        const Icon(
                       Icons.search,
-                      color: Colors.white70,
+                      color:
+                          Colors.white70,
                     ),
                     filled: true,
-                    fillColor: Colors.white10,
-                    border: OutlineInputBorder(
+                    fillColor:
+                        Colors.white10,
+                    border:
+                        OutlineInputBorder(
                       borderRadius:
-                          BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
+                          BorderRadius.circular(
+                        16,
+                      ),
+                      borderSide:
+                          BorderSide.none,
                     ),
                   ),
                   onSubmitted: (value) {
@@ -952,22 +905,34 @@ class _HomeScreenState extends State<HomeScreen>
                     );
                   },
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(
+                  height: 14,
+                ),
                 SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
+                  width:
+                      double.infinity,
+                  child:
+                      ElevatedButton(
                     onPressed: () {
                       Navigator.pop(
                         context,
-                        queryController.text.trim(),
+                        queryController
+                            .text
+                            .trim(),
                       );
                     },
                     style:
-                        ElevatedButton.styleFrom(
-                      backgroundColor: _pink,
-                      foregroundColor: Colors.white,
+                        ElevatedButton
+                            .styleFrom(
+                      backgroundColor:
+                          _pink,
+                      foregroundColor:
+                          Colors.white,
                     ),
-                    child: const Text('Search'),
+                    child:
+                        const Text(
+                      'Search',
+                    ),
                   ),
                 ),
               ],
@@ -979,7 +944,8 @@ class _HomeScreenState extends State<HomeScreen>
 
     queryController.dispose();
 
-    if (query == null || query.isEmpty) {
+    if (query == null ||
+        query.isEmpty) {
       return;
     }
 
