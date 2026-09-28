@@ -7,9 +7,9 @@ import 'home_controller.dart';
 class HomeWidgets {
   HomeWidgets._();
 
-  // ------------------------------------------------------------
+  // ============================================================
   // VIDEO CARD
-  // ------------------------------------------------------------
+  // ============================================================
 
   static Widget videoCard({
     required VideoPost video,
@@ -25,9 +25,20 @@ class HomeWidgets {
     return VideoCard(
       video: video,
       controller: controller.controllerFor(index),
+
+      // Current states
       isLiked: controller.isLiked(video.id),
       isSaved: controller.isSaved(video.id),
-      isFollowing: controller.isFollowing(video.ownerId),
+      isFollowing: controller.isFollowing(
+        video.ownerId,
+      ),
+
+      // Live counts
+      likeCount: controller.likeCount(video),
+      commentCount: controller.commentCount(video),
+      saveCount: controller.saveCount(video),
+      shareCount: controller.shareCount(video),
+
       onLike: onLike,
       onComment: onComment,
       onSave: onSave,
@@ -37,9 +48,9 @@ class HomeWidgets {
     );
   }
 
-  // ------------------------------------------------------------
+  // ============================================================
   // LOADING
-  // ------------------------------------------------------------
+  // ============================================================
 
   static Widget loading() {
     return const Center(
@@ -47,9 +58,9 @@ class HomeWidgets {
     );
   }
 
-  // ------------------------------------------------------------
+  // ============================================================
   // ERROR
-  // ------------------------------------------------------------
+  // ============================================================
 
   static Widget error({
     required String message,
@@ -63,18 +74,24 @@ class HomeWidgets {
           children: [
             const Icon(
               Icons.error_outline,
+              color: Colors.white,
               size: 48,
             ),
             const SizedBox(height: 16),
             Text(
               message,
               textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+              ),
             ),
             if (onRetry != null) ...[
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: onRetry,
-                child: const Text('আবার চেষ্টা করুন'),
+                child: const Text(
+                  'আবার চেষ্টা করুন',
+                ),
               ),
             ],
           ],
@@ -83,9 +100,9 @@ class HomeWidgets {
     );
   }
 
-  // ------------------------------------------------------------
+  // ============================================================
   // EMPTY FEED
-  // ------------------------------------------------------------
+  // ============================================================
 
   static Widget emptyFeed() {
     return const Center(
@@ -99,9 +116,9 @@ class HomeWidgets {
     );
   }
 
-  // ------------------------------------------------------------
+  // ============================================================
   // TOP BAR
-  // ------------------------------------------------------------
+  // ============================================================
 
   static Widget topBar({
     required VoidCallback onSearch,
@@ -150,9 +167,9 @@ class HomeWidgets {
     );
   }
 
-  // ------------------------------------------------------------
+  // ============================================================
   // SIMPLE ACTION BUTTON
-  // ------------------------------------------------------------
+  // ============================================================
 
   static Widget actionButton({
     required IconData icon,
@@ -167,7 +184,9 @@ class HomeWidgets {
           onPressed: onPressed,
           icon: Icon(
             icon,
-            color: active ? const Color(0xFFFF2D55) : Colors.white,
+            color: active
+                ? const Color(0xFFFF2D55)
+                : Colors.white,
             size: 30,
           ),
         ),
