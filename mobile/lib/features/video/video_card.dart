@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
@@ -13,6 +12,11 @@ class VideoCard extends StatelessWidget {
   final bool isSaved;
   final bool isFollowing;
 
+  final int? likeCount;
+  final int? commentCount;
+  final int? saveCount;
+  final int? shareCount;
+
   final VoidCallback? onLike;
   final VoidCallback? onComment;
   final VoidCallback? onSave;
@@ -24,9 +28,16 @@ class VideoCard extends StatelessWidget {
     super.key,
     required this.video,
     this.controller,
+
     this.isLiked = false,
     this.isSaved = false,
     this.isFollowing = false,
+
+    this.likeCount,
+    this.commentCount,
+    this.saveCount,
+    this.shareCount,
+
     this.onLike,
     this.onComment,
     this.onSave,
@@ -41,15 +52,16 @@ class VideoCard extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         _buildVideo(),
-
         _buildBottomGradient(),
-
         _buildVideoInfo(),
-
         _buildActionButtons(),
       ],
     );
   }
+
+  // ============================================================
+  // VIDEO
+  // ============================================================
 
   Widget _buildVideo() {
     if (controller == null) {
@@ -66,6 +78,10 @@ class VideoCard extends StatelessWidget {
       fit: BoxFit.cover,
     );
   }
+
+  // ============================================================
+  // GRADIENT
+  // ============================================================
 
   Widget _buildBottomGradient() {
     return IgnorePointer(
@@ -89,13 +105,18 @@ class VideoCard extends StatelessWidget {
     );
   }
 
+  // ============================================================
+  // VIDEO INFO
+  // ============================================================
+
   Widget _buildVideoInfo() {
     return Positioned(
       left: 16,
       right: 90,
       bottom: 24,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
           GestureDetector(
             onTap: onProfile,
@@ -106,7 +127,8 @@ class VideoCard extends StatelessWidget {
                   backgroundColor: Colors.white24,
                   child: Text(
                     video.username.isNotEmpty
-                        ? video.username[0].toUpperCase()
+                        ? video.username[0]
+                            .toUpperCase()
                         : 'P',
                     style: const TextStyle(
                       color: Colors.white,
@@ -114,10 +136,12 @@ class VideoCard extends StatelessWidget {
                     ),
                   ),
                 ),
+
                 const SizedBox(width: 10),
+
                 Expanded(
                   child: Text(
-                    '@${video.username}',
+                    '@${video.username.replaceFirst('@', '')}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -127,12 +151,15 @@ class VideoCard extends StatelessWidget {
                     ),
                   ),
                 ),
+
                 const SizedBox(width: 8),
+
                 if (!isFollowing)
                   GestureDetector(
                     onTap: onFollow,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
+                      padding:
+                          const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 6,
                       ),
@@ -140,7 +167,8 @@ class VideoCard extends StatelessWidget {
                         border: Border.all(
                           color: Colors.white,
                         ),
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius:
+                            BorderRadius.circular(6),
                       ),
                       child: const Text(
                         'Follow',
@@ -173,7 +201,11 @@ class VideoCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               video.hashtags
-                  .map((tag) => tag.startsWith('#') ? tag : '#$tag')
+                  .map(
+                    (tag) => tag.startsWith('#')
+                        ? tag
+                        : '#$tag',
+                  )
                   .join(' '),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -214,6 +246,10 @@ class VideoCard extends StatelessWidget {
     );
   }
 
+  // ============================================================
+  // ACTION BUTTONS
+  // ============================================================
+
   Widget _buildActionButtons() {
     return Positioned(
       right: 12,
@@ -225,7 +261,9 @@ class VideoCard extends StatelessWidget {
             icon: isLiked
                 ? Icons.favorite
                 : Icons.favorite_border,
-            label: _formatCount(video.likeCount),
+            label: _formatCount(
+              likeCount ?? video.likeCount,
+            ),
             active: isLiked,
             onTap: onLike,
           ),
@@ -234,7 +272,9 @@ class VideoCard extends StatelessWidget {
 
           _ActionButton(
             icon: Icons.comment_outlined,
-            label: _formatCount(video.commentCount),
+            label: _formatCount(
+              commentCount ?? video.commentCount,
+            ),
             onTap: onComment,
           ),
 
@@ -244,7 +284,9 @@ class VideoCard extends StatelessWidget {
             icon: isSaved
                 ? Icons.bookmark
                 : Icons.bookmark_border,
-            label: _formatCount(video.saveCount),
+            label: _formatCount(
+              saveCount ?? video.saveCount,
+            ),
             active: isSaved,
             onTap: onSave,
           ),
@@ -253,13 +295,19 @@ class VideoCard extends StatelessWidget {
 
           _ActionButton(
             icon: Icons.share_outlined,
-            label: _formatCount(video.shareCount),
+            label: _formatCount(
+              shareCount ?? video.shareCount,
+            ),
             onTap: onShare,
           ),
         ],
       ),
     );
   }
+
+  // ============================================================
+  // COUNT FORMAT
+  // ============================================================
 
   String _formatCount(int count) {
     if (count >= 1000000) {
@@ -273,6 +321,10 @@ class VideoCard extends StatelessWidget {
     return count.toString();
   }
 }
+
+// ================================================================
+// ACTION BUTTON
+// ================================================================
 
 class _ActionButton extends StatelessWidget {
   final IconData icon;
@@ -299,10 +351,14 @@ class _ActionButton extends StatelessWidget {
           children: [
             Icon(
               icon,
-              color: active ? Colors.redAccent : Colors.white,
+              color: active
+                  ? Colors.redAccent
+                  : Colors.white,
               size: 32,
             ),
+
             const SizedBox(height: 4),
+
             Text(
               label,
               style: const TextStyle(
