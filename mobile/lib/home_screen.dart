@@ -33,7 +33,7 @@ Widget _buildBottomNavigation() {
               ),
             ),
 
-            // ===== TikTok Style Center + Button =====
+            // TikTok Style Center + Button
             SizedBox(
               width: 78,
               child: Center(
@@ -48,8 +48,8 @@ Widget _buildBottomNavigation() {
                       borderRadius: BorderRadius.circular(10),
                       gradient: const LinearGradient(
                         colors: [
-                          Color(0xFF00F2EA), // Cyan
-                          Color(0xFFFF0050), // Pink/Red
+                          Color(0xFF00F2EA),
+                          Color(0xFFFF0050),
                         ],
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
@@ -65,7 +65,6 @@ Widget _buildBottomNavigation() {
                         Icons.add,
                         color: Colors.black,
                         size: 24,
-                        weight: 700,
                       ),
                     ),
                   ),
