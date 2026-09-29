@@ -19,8 +19,6 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-
-
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   static const Color _pink = Color(0xFFFF2D55);
@@ -879,11 +877,16 @@ class _HomeScreenState extends State<HomeScreen>
                                     return InkWell(
                                       borderRadius:
                                           BorderRadius.circular(16),
-                                      onTap: () async {
+                                      onTap: () {
                                         Navigator.pop(sheetContext);
 
                                         if (actualIndex >= 0) {
-                                          await _goToVideo(actualIndex);
+                                          WidgetsBinding.instance
+                                              .addPostFrameCallback((_) {
+                                            if (mounted) {
+                                              _goToVideo(actualIndex);
+                                            }
+                                          });
                                         }
                                       },
                                       child: Container(
@@ -2999,82 +3002,85 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                 },
               ),
             ),
-            Container(
-              padding: const EdgeInsets.fromLTRB(
-                12,
-                8,
-                12,
-                10,
-              ),
-              decoration: const BoxDecoration(
-                color: Color(0xFF151515),
-                border: Border(
-                  top: BorderSide(
-                    color: Colors.white10,
+            SafeArea(
+              top: false,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(
+                  12,
+                  8,
+                  12,
+                  10,
+                ),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF151515),
+                  border: Border(
+                    top: BorderSide(
+                      color: Colors.white10,
+                    ),
                   ),
                 ),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) {
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) {
+                          unawaited(_sendComment());
+                        },
+                        style: const TextStyle(
+                          color: Colors.white,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Add a comment...',
+                          hintStyle: const TextStyle(
+                            color: Colors.white38,
+                          ),
+                          filled: true,
+                          fillColor: Colors.white.withOpacity(0.07),
+                          border: OutlineInputBorder(
+                            borderRadius:
+                                BorderRadius.circular(22),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding:
+                              const EdgeInsets.symmetric(
+                            horizontal: 17,
+                            vertical: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () {
                         unawaited(_sendComment());
                       },
-                      style: const TextStyle(
-                        color: Colors.white,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'Add a comment...',
-                        hintStyle: const TextStyle(
-                          color: Colors.white38,
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFF2D55),
+                          shape: BoxShape.circle,
                         ),
-                        filled: true,
-                        fillColor: Colors.white.withOpacity(0.07),
-                        border: OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(22),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding:
-                            const EdgeInsets.symmetric(
-                          horizontal: 17,
-                          vertical: 12,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () {
-                      unawaited(_sendComment());
-                    },
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFF2D55),
-                        shape: BoxShape.circle,
-                      ),
-                      child: _sending
-                          ? const Padding(
-                              padding: EdgeInsets.all(12),
-                              child:
-                                  CircularProgressIndicator(
-                                strokeWidth: 2,
+                        child: _sending
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child:
+                                    CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.send_rounded,
                                 color: Colors.white,
+                                size: 20,
                               ),
-                            )
-                          : const Icon(
-                              Icons.send_rounded,
-                              color: Colors.white,
-                              size: 20,
-                            ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
