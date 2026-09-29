@@ -660,6 +660,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  IconButton(
+  icon: const Icon(Icons.search, color: Colors.white),
+  onPressed: () {
+    SearchScreen.open(context);
+  },
+)
+
+
   // ============================================================
   // BOTTOM NAVIGATION
   // ============================================================
