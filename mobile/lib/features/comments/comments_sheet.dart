@@ -1,6 +1,7 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'dart:async';
 
 class CommentsSheet extends StatefulWidget {
   final String videoId;
@@ -94,27 +95,23 @@ class _CommentsSheetState extends State<CommentsSheet> {
 
       _controller.clear();
 
-      if (!mounted) return;
-
-      setState(() {
-        _sending = false;
-      });
-
-      Navigator.pop(context, 1);
+      if (mounted) {
+        Navigator.pop(context, 1);
+      }
     } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        _sending = false;
-      });
-
-      _showError('Comment করা যায়নি');
+      if (mounted) {
+        _showError('Comment করা যায়নি');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sending = false;
+        });
+      }
     }
   }
 
   void _showError(String message) {
-    if (!mounted) return;
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -136,10 +133,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
 
     return AnimatedPadding(
       duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
-      padding: EdgeInsets.only(
-        bottom: bottomInset,
-      ),
+      padding: EdgeInsets.only(bottom: bottomInset),
       child: Container(
         height: MediaQuery.of(context).size.height * 0.62,
         decoration: const BoxDecoration(
@@ -260,9 +254,8 @@ class _CommentsSheetState extends State<CommentsSheet> {
                           (data['text'] ?? '').toString();
 
                       return Padding(
-                        padding: const EdgeInsets.only(
-                          bottom: 17,
-                        ),
+                        padding:
+                            const EdgeInsets.only(bottom: 17),
                         child: Row(
                           crossAxisAlignment:
                               CrossAxisAlignment.start,
@@ -270,8 +263,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
                             Container(
                               width: 38,
                               height: 38,
-                              decoration:
-                                  const BoxDecoration(
+                              decoration: const BoxDecoration(
                                 shape: BoxShape.circle,
                                 gradient: LinearGradient(
                                   colors: [
