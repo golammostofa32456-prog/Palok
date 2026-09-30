@@ -1,4 +1,5 @@
 import 'features/comments/comments_sheet.dart';
+import 'features/upload/upload_sheet.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -1158,7 +1159,7 @@ class _HomeScreenState extends State<HomeScreen>
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
         builder: (_) {
-          return _UploadSheet(
+          return UploadSheet(
             filePath: file.path,
             username: _username,
             userId: user.uid,
