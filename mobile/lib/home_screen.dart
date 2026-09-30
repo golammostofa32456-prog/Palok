@@ -720,7 +720,7 @@ class _HomeScreenState extends State<HomeScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) {
-        return _CommentsSheet(
+        return CommentsSheet(
           videoId: video.id,
           videoOwnerId: video.userId,
           videoOwnerUsername: video.username,
