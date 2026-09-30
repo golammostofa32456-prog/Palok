@@ -1,9 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-
-import 'comment_item.dart';
-import 'comment_model.dart';
-import 'comment_service.dart';
+import 'dart:async';
 
 class CommentsSheet extends StatefulWidget {
   final String videoId;
@@ -28,77 +25,23 @@ class CommentsSheet extends StatefulWidget {
 }
 
 class _CommentsSheetState extends State<CommentsSheet> {
-  late final CommentService _commentService;
+  final TextEditingController _controller = TextEditingController();
 
-  final TextEditingController _commentController =
-      TextEditingController();
-
-  final ScrollController _scrollController =
-      ScrollController();
-
-  List<CommentModel> _comments = [];
-
-  bool _loading = true;
   bool _sending = false;
 
   @override
-  void initState() {
-    super.initState();
-
-    _commentService = CommentService(
-      firestore: widget.firestore,
-    );
-
-    _loadComments();
-  }
-
-  @override
   void dispose() {
-    _commentController.dispose();
-    _scrollController.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
-  Future<void> _loadComments() async {
-    try {
-      final comments = await _commentService.getComments(
-        widget.videoId,
-      );
+  Future<void> _sendComment() async {
+    final text = _controller.text.trim();
 
-      if (!mounted) return;
+    if (text.isEmpty || _sending) return;
 
-      setState(() {
-        _comments = comments;
-        _loading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        _loading = false;
-      });
-
-      _showMessage(
-        'Comments লোড করা যায়নি',
-      );
-    }
-  }
-
-  Future<void> _addComment() async {
-    final text = _commentController.text.trim();
-
-    if (text.isEmpty) {
-      return;
-    }
-
-    if (widget.currentUserId.trim().isEmpty) {
-      _showMessage(
-        'Comment করতে Login করতে হবে',
-      );
-      return;
-    }
-
-    if (_sending) {
+    if (widget.currentUserId.isEmpty) {
+      _showError('Comment করতে Login করতে হবে');
       return;
     }
 
@@ -107,439 +50,366 @@ class _CommentsSheetState extends State<CommentsSheet> {
     });
 
     try {
-      final commentId =
-          await _commentService.addComment(
-        videoId: widget.videoId,
-        userId: widget.currentUserId,
-        username: widget.currentUsername.isNotEmpty
-            ? widget.currentUsername
-            : 'PALOK User',
-        userPhoto: '',
-        text: text,
-      );
-
-      final newComment = CommentModel(
-        id: commentId,
-        userId: widget.currentUserId,
-        username: widget.currentUsername.isNotEmpty
-            ? widget.currentUsername
-            : 'PALOK User',
-        userPhoto: '',
-        text: text,
-        createdAt: DateTime.now(),
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _comments.insert(0, newComment);
-      });
-
-      _commentController.clear();
-
-      await _updateCommentCount(1);
-
-      if (widget.videoOwnerId.isNotEmpty &&
-          widget.videoOwnerId != widget.currentUserId) {
-        await _sendCommentNotification();
-      }
-
-      if (!mounted) return;
-
-      setState(() {
-        _sending = false;
-      });
-
-      _scrollToTop();
-    } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        _sending = false;
-      });
-
-      _showMessage(
-        'Comment করা যায়নি',
-      );
-    }
-  }
-
-  Future<void> _deleteComment(
-    CommentModel comment,
-  ) async {
-    if (comment.userId != widget.currentUserId) {
-      return;
-    }
-
-    try {
-      await _commentService.deleteComment(
-        videoId: widget.videoId,
-        commentId: comment.id,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _comments.removeWhere(
-          (item) => item.id == comment.id,
-        );
-      });
-
-      await _updateCommentCount(-1);
-    } catch (_) {
-      if (!mounted) return;
-
-      _showMessage(
-        'Comment মুছে ফেলা যায়নি',
-      );
-    }
-  }
-
-  Future<void> _updateCommentCount(int amount) async {
-    if (widget.videoId.startsWith('demo_')) {
-      return;
-    }
-
-    try {
       await widget.firestore
           .collection('videos')
           .doc(widget.videoId)
-          .set(
-        {
-          'commentCount': FieldValue.increment(amount),
-        },
-        SetOptions(merge: true),
-      );
-    } catch (_) {
-      // Comment itself already succeeded.
-    }
-  }
-
-  Future<void> _sendCommentNotification() async {
-    try {
-      await widget.firestore
-          .collection('users')
-          .doc(widget.videoOwnerId)
-          .collection('notifications')
+          .collection('comments')
           .add({
-        'type': 'comment',
-        'fromUserId': widget.currentUserId,
-        'fromUsername': widget.currentUsername,
-        'text': 'তোমার ভিডিওতে Comment করেছে',
-        'videoId': widget.videoId,
-        'read': false,
+        'userId': widget.currentUserId,
+        'username': widget.currentUsername,
+        'text': text,
         'createdAt': FieldValue.serverTimestamp(),
       });
+
+      if (!widget.videoId.startsWith('demo_')) {
+        await widget.firestore
+            .collection('videos')
+            .doc(widget.videoId)
+            .set(
+          {
+            'commentCount': FieldValue.increment(1),
+          },
+          SetOptions(merge: true),
+        );
+      }
+
+      if (widget.videoOwnerId.isNotEmpty &&
+          widget.videoOwnerId != widget.currentUserId) {
+        try {
+          await widget.firestore
+              .collection('users')
+              .doc(widget.videoOwnerId)
+              .collection('notifications')
+              .add({
+            'type': 'comment',
+            'fromUserId': widget.currentUserId,
+            'fromUsername': widget.currentUsername,
+            'text': 'তোমার ভিডিওতে Comment করেছে',
+            'videoId': widget.videoId,
+            'read': false,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        } catch (_) {}
+      }
+
+      _controller.clear();
+
+      if (!mounted) return;
+
+      setState(() {
+        _sending = false;
+      });
+
+      Navigator.pop(context, 1);
     } catch (_) {
-      // Notification failure should not break commenting.
+      if (!mounted) return;
+
+      setState(() {
+        _sending = false;
+      });
+
+      _showError('Comment করা যায়নি');
     }
   }
 
-  void _scrollToTop() {
-    if (!_scrollController.hasClients) {
-      return;
-    }
-
-    _scrollController.animateTo(
-      0,
-      duration: const Duration(
-        milliseconds: 250,
-      ),
-      curve: Curves.easeOut,
-    );
-  }
-
-  void _showMessage(String message) {
+  void _showError(String message) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset =
-        MediaQuery.of(context).viewInsets.bottom;
+    final mediaQuery = MediaQuery.of(context);
 
-    return SafeArea(
-      top: false,
+    final keyboardInset = mediaQuery.viewInsets.bottom;
+    final systemBottomInset = mediaQuery.viewPadding.bottom;
+
+    final bottomInset = keyboardInset > systemBottomInset
+        ? keyboardInset
+        : systemBottomInset;
+
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.only(
+        bottom: bottomInset,
+      ),
       child: Container(
-        height: MediaQuery.of(context).size.height * 0.78,
+        height: MediaQuery.of(context).size.height * 0.62,
         decoration: const BoxDecoration(
-          color: Color(0xFF111111),
+          color: Color(0xFF101010),
           borderRadius: BorderRadius.vertical(
             top: Radius.circular(24),
           ),
         ),
         child: Column(
           children: [
-            _buildHeader(),
-            const Divider(
-              height: 1,
-              color: Colors.white12,
-            ),
-            Expanded(
-              child: _buildCommentsList(),
-            ),
-            _buildInput(bottomInset),
-          ],
-        ),
-      ),
-    );
-  }
+            const SizedBox(height: 12),
 
-  Widget _buildHeader() {
-    return SizedBox(
-      height: 58,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          const Text(
-            'Comments',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          Positioned(
-            left: 8,
-            child: IconButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              icon: const Icon(
-                Icons.close_rounded,
-                color: Colors.white,
-              ),
-            ),
-          ),
-          Positioned(
-            right: 16,
-            child: Text(
-              '${_comments.length}',
-              style: const TextStyle(
-                color: Colors.white54,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCommentsList() {
-    if (_loading) {
-      return const Center(
-        child: CircularProgressIndicator(
-          color: Colors.white,
-        ),
-      );
-    }
-
-    if (_comments.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(30),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.chat_bubble_outline_rounded,
-                color: Colors.white38,
-                size: 52,
-              ),
-              SizedBox(height: 14),
-              Text(
-                'No comments yet',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              SizedBox(height: 6),
-              Text(
-                'প্রথম Comment করুন।',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white54,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.symmetric(
-        vertical: 10,
-      ),
-      itemCount: _comments.length,
-      itemBuilder: (context, index) {
-        final comment = _comments[index];
-
-        return CommentItem(
-          key: ValueKey(comment.id),
-          comment: comment,
-          isCurrentUser:
-              comment.userId == widget.currentUserId,
-          onDelete: comment.userId ==
-                  widget.currentUserId
-              ? () => _confirmDelete(comment)
-              : null,
-        );
-      },
-    );
-  }
-
-  Widget _buildInput(double bottomInset) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        12,
-        8,
-        12,
-        8 + bottomInset,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: Container(
-              constraints: const BoxConstraints(
-                minHeight: 44,
-                maxHeight: 120,
-              ),
+            Container(
+              width: 42,
+              height: 4,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: Colors.white12,
-                ),
-              ),
-              child: TextField(
-                controller: _commentController,
-                minLines: 1,
-                maxLines: 4,
-                textInputAction: TextInputAction.newline,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                ),
-                decoration: const InputDecoration(
-                  hintText: 'Write a comment...',
-                  hintStyle: TextStyle(
-                    color: Colors.white38,
-                  ),
-                  border: InputBorder.none,
-                  contentPadding:
-                      EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 11,
-                  ),
-                ),
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(20),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Material(
-            color: const Color(0xFFFF2D55),
-            shape: const CircleBorder(),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: _sending
-                  ? null
-                  : _addComment,
-              child: SizedBox(
-                width: 44,
-                height: 44,
-                child: Center(
-                  child: _sending
-                      ? const SizedBox(
-                          width: 19,
-                          height: 19,
-                          child:
-                              CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(
-                          Icons.send_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Future<void> _confirmDelete(
-    CommentModel comment,
-  ) async {
-    final shouldDelete =
-        await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF242424),
-          title: const Text(
-            'Delete comment?',
-            style: TextStyle(
-              color: Colors.white,
-            ),
-          ),
-          content: const Text(
-            'এই Comment মুছে ফেলতে চান?',
-            style: TextStyle(
-              color: Colors.white70,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(false);
-              },
-              child: const Text(
-                'Cancel',
-                style: TextStyle(
-                  color: Colors.white70,
+            const SizedBox(height: 12),
+
+            Row(
+              children: [
+                const SizedBox(width: 18),
+
+                const Text(
+                  'Comments',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
+
+                const Spacer(),
+
+                IconButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: Colors.white70,
+                  ),
+                ),
+              ],
+            ),
+
+            const Divider(
+              color: Colors.white10,
+              height: 1,
+            ),
+
+            Expanded(
+              child: StreamBuilder<
+                  QuerySnapshot<Map<String, dynamic>>>(
+                stream: widget.firestore
+                    .collection('videos')
+                    .doc(widget.videoId)
+                    .collection('comments')
+                    .limit(100)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState ==
+                      ConnectionState.waiting) {
+                    return const Center(
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                      ),
+                    );
+                  }
+
+                  final docs = snapshot.data?.docs ?? [];
+
+                  if (docs.isEmpty) {
+                    return const Center(
+                      child: Text(
+                        'No comments yet',
+                        style: TextStyle(
+                          color: Colors.white54,
+                        ),
+                      ),
+                    );
+                  }
+
+                  final comments = [...docs];
+
+                  comments.sort((a, b) {
+                    final aTime = a.data()['createdAt'];
+                    final bTime = b.data()['createdAt'];
+
+                    if (aTime is Timestamp &&
+                        bTime is Timestamp) {
+                      return aTime.compareTo(bTime);
+                    }
+
+                    return 0;
+                  });
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(
+                      18,
+                      12,
+                      18,
+                      12,
+                    ),
+                    itemCount: comments.length,
+                    itemBuilder: (_, index) {
+                      final data = comments[index].data();
+
+                      final username =
+                          (data['username'] ?? 'PALOK User')
+                              .toString();
+
+                      final text =
+                          (data['text'] ?? '').toString();
+
+                      return Padding(
+                        padding: const EdgeInsets.only(
+                          bottom: 17,
+                        ),
+                        child: Row(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration:
+                                  const BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Color(0xFFFF2D55),
+                                    Color(0xFF00E5FF),
+                                  ],
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.person,
+                                color: Colors.white,
+                                size: 21,
+                              ),
+                            ),
+
+                            const SizedBox(width: 10),
+
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    username,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight:
+                                          FontWeight.w700,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 3),
+
+                                  Text(
+                                    text,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 14,
+                                      height: 1.25,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
               ),
             ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(true);
-              },
-              child: const Text(
-                'Delete',
-                style: TextStyle(
-                  color: Color(0xFFFF2D55),
+
+            Container(
+              padding: const EdgeInsets.fromLTRB(
+                12,
+                8,
+                12,
+                10,
+              ),
+              decoration: const BoxDecoration(
+                color: Color(0xFF151515),
+                border: Border(
+                  top: BorderSide(
+                    color: Colors.white10,
+                  ),
                 ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) {
+                        unawaited(_sendComment());
+                      },
+                      style: const TextStyle(
+                        color: Colors.white,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Add a comment...',
+                        hintStyle: const TextStyle(
+                          color: Colors.white38,
+                        ),
+                        filled: true,
+                        fillColor:
+                            Colors.white.withOpacity(0.07),
+                        border: OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius.circular(22),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding:
+                            const EdgeInsets.symmetric(
+                          horizontal: 17,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(width: 8),
+
+                  GestureDetector(
+                    onTap: () {
+                      unawaited(_sendComment());
+                    },
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFF2D55),
+                        shape: BoxShape.circle,
+                      ),
+                      child: _sending
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child:
+                                  CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.send_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
-        );
-      },
+        ),
+      ),
     );
-
-    if (shouldDelete == true) {
-      await _deleteComment(comment);
-    }
   }
 }
