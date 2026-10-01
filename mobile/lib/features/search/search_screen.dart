@@ -1,375 +1,353 @@
 import 'package:flutter/material.dart';
 
-import 'search_service.dart';
-
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  final List<dynamic> videos;
+  final Future<void> Function(int actualIndex)? onVideoSelected;
+
+  const SearchScreen({
+    super.key,
+    required this.videos,
+    this.onVideoSelected,
+  });
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
 class _SearchScreenState extends State<SearchScreen> {
-  final TextEditingController _searchController =
-      TextEditingController();
+  late final TextEditingController _controller;
 
-  final SearchService _searchService = SearchService();
-
-  bool _loading = false;
-
-  List<Map<String, dynamic>> _users = [];
-  List<Map<String, dynamic>> _videos = [];
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
 
   @override
   void dispose() {
-    _searchController.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
-  Future<void> _search() async {
-    final query = _searchController.text.trim();
+  List<dynamic> _searchVideos(String query) {
+    final text = query.trim().toLowerCase();
 
-    if (query.isEmpty) {
-      setState(() {
-        _users = [];
-        _videos = [];
-      });
-      return;
+    if (text.isEmpty) {
+      return [];
     }
 
-    setState(() {
-      _loading = true;
-    });
+    return widget.videos.where((video) {
+      final username =
+          _readString(video, 'username').toLowerCase();
 
+      final caption =
+          _readString(video, 'caption').toLowerCase();
+
+      final hashtags =
+          _readString(video, 'hashtags').toLowerCase();
+
+      final searchableText =
+          '$username $caption $hashtags';
+
+      return searchableText.contains(text);
+    }).toList();
+  }
+
+  String _readString(
+    dynamic object,
+    String field,
+  ) {
     try {
-      final results = await Future.wait([
-        _searchService.searchUsers(query),
-        _searchService.searchVideos(query),
-      ]);
+      switch (field) {
+        case 'id':
+          return object.id?.toString() ?? '';
 
-      if (!mounted) return;
+        case 'username':
+          return object.username?.toString() ?? '';
 
-      setState(() {
-        _users = results[0];
-        _videos = results[1];
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
+        case 'caption':
+          return object.caption?.toString() ?? '';
 
-      setState(() {
-        _loading = false;
-        _users = [];
-        _videos = [];
-      });
+        case 'hashtags':
+          return object.hashtags?.toString() ?? '';
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Search করা যায়নি'),
-        ),
-      );
+        case 'thumbnailUrl':
+          return object.thumbnailUrl?.toString() ?? '';
+
+        default:
+          return '';
+      }
+    } catch (_) {
+      return '';
     }
   }
 
-  void _clearSearch() {
-    _searchController.clear();
+  int _findActualIndex(dynamic video) {
+    final selectedId = _readString(video, 'id');
 
-    setState(() {
-      _users = [];
-      _videos = [];
-    });
+    return widget.videos.indexWhere(
+      (item) => _readString(item, 'id') == selectedId,
+    );
+  }
+
+  Future<void> _selectVideo(
+    BuildContext sheetContext,
+    dynamic video,
+  ) async {
+    final actualIndex = _findActualIndex(video);
+
+    Navigator.of(sheetContext).pop();
+
+    if (actualIndex < 0) {
+      return;
+    }
+
+    if (widget.onVideoSelected != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await widget.onVideoSelected!(actualIndex);
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final hasResults =
-        _users.isNotEmpty || _videos.isNotEmpty;
+    final query = _controller.text.trim().toLowerCase();
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: const Text('Search'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
+    final results = _searchVideos(query);
+
+    return SafeArea(
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.78,
+        decoration: const BoxDecoration(
+          color: Color(0xFF101010),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(24),
+          ),
+        ),
         child: Column(
           children: [
-            TextField(
-              controller: _searchController,
-              autofocus: true,
-              style: const TextStyle(
-                color: Colors.white,
+            const SizedBox(height: 12),
+
+            Container(
+              width: 42,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(20),
               ),
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) => _search(),
-              decoration: InputDecoration(
-                hintText: 'Search videos, users...',
-                hintStyle: const TextStyle(
-                  color: Colors.white54,
-                ),
-                prefixIcon: const Icon(
-                  Icons.search,
+            ),
+
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                18,
+                18,
+                18,
+                10,
+              ),
+              child: TextField(
+                controller: _controller,
+                autofocus: true,
+                onChanged: (_) {
+                  setState(() {});
+                },
+                style: const TextStyle(
                   color: Colors.white,
                 ),
-                suffixIcon: _searchController.text.isEmpty
-                    ? IconButton(
-                        onPressed: _search,
-                        icon: const Icon(
-                          Icons.arrow_forward,
-                          color: Colors.white,
-                        ),
-                      )
-                    : IconButton(
-                        onPressed: _clearSearch,
-                        icon: const Icon(
-                          Icons.close,
-                          color: Colors.white54,
-                        ),
-                      ),
-                filled: true,
-                fillColor: const Color(0xFF1E1E1E),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-              onChanged: (_) {
-                setState(() {});
-              },
-            ),
-            const SizedBox(height: 18),
-
-            if (_loading)
-              const Expanded(
-                child: Center(
-                  child: CircularProgressIndicator(),
-                ),
-              )
-            else if (!hasResults &&
-                _searchController.text.trim().isNotEmpty)
-              const Expanded(
-                child: Center(
-                  child: Text(
-                    'কোনো ফলাফল পাওয়া যায়নি',
-                    style: TextStyle(
+                decoration: InputDecoration(
+                  hintText: 'Search videos, users...',
+                  hintStyle: const TextStyle(
+                    color: Colors.white54,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    color: Colors.white,
+                  ),
+                  suffixIcon: IconButton(
+                    icon: const Icon(
+                      Icons.close,
                       color: Colors.white54,
-                      fontSize: 16,
                     ),
+                    onPressed: () {
+                      _controller.clear();
+
+                      setState(() {});
+                    },
                   ),
-                ),
-              )
-            else if (!hasResults)
-              const Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.search,
-                        color: Colors.white30,
-                        size: 52,
-                      ),
-                      SizedBox(height: 12),
-                      Text(
-                        'Search PALOK',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      SizedBox(height: 6),
-                      Text(
-                        'Users এবং videos খুঁজুন',
-                        style: TextStyle(
-                          color: Colors.white54,
-                        ),
-                      ),
-                    ],
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.08),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
                   ),
-                ),
-              )
-            else
-              Expanded(
-                child: ListView(
-                  children: [
-                    if (_users.isNotEmpty) ...[
-                      const Text(
-                        'Users',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      ..._users.map(
-                        (user) => _buildUserItem(user),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
-                    if (_videos.isNotEmpty) ...[
-                      const Text(
-                        'Videos',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      ..._videos.map(
-                        (video) => _buildVideoItem(video),
-                      ),
-                    ],
-                  ],
                 ),
               ),
+            ),
+
+            Expanded(
+              child: query.isEmpty
+                  ? const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.search,
+                            size: 52,
+                            color: Colors.white30,
+                          ),
+                          SizedBox(height: 12),
+                          Text(
+                            'Search PALOK',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          SizedBox(height: 5),
+                          Text(
+                            'Users, captions and hashtags খুঁজুন',
+                            style: TextStyle(
+                              color: Colors.white54,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : results.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'কোনো ফলাফল পাওয়া যায়নি',
+                            style: TextStyle(
+                              color: Colors.white54,
+                              fontSize: 16,
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.all(18),
+                          itemCount: results.length,
+                          separatorBuilder: (_, __) {
+                            return const SizedBox(height: 10);
+                          },
+                          itemBuilder: (_, index) {
+                            final video = results[index];
+
+                            final username =
+                                _readString(
+                              video,
+                              'username',
+                            );
+
+                            final caption =
+                                _readString(
+                              video,
+                              'caption',
+                            );
+
+                            final hashtags =
+                                _readString(
+                              video,
+                              'hashtags',
+                            );
+
+                            return InkWell(
+                              borderRadius:
+                                  BorderRadius.circular(16),
+                              onTap: () async {
+                                await _selectVideo(
+                                  context,
+                                  video,
+                                );
+                              },
+                              child: Container(
+                                padding:
+                                    const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white
+                                      .withOpacity(0.06),
+                                  borderRadius:
+                                      BorderRadius.circular(16),
+                                ),
+                                child: Row(
+                                  children: [
+                                    _smallVideoThumbnail(
+                                      video,
+                                    ),
+
+                                    const SizedBox(width: 12),
+
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment
+                                                .start,
+                                        children: [
+                                          Text(
+                                            username,
+                                            style:
+                                                const TextStyle(
+                                              color:
+                                                  Colors.white,
+                                              fontWeight:
+                                                  FontWeight
+                                                      .w700,
+                                            ),
+                                          ),
+
+                                          const SizedBox(
+                                            height: 4,
+                                          ),
+
+                                          Text(
+                                            caption.isEmpty
+                                                ? hashtags
+                                                : caption,
+                                            maxLines: 2,
+                                            overflow:
+                                                TextOverflow
+                                                    .ellipsis,
+                                            style:
+                                                const TextStyle(
+                                              color:
+                                                  Colors.white60,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                    const Icon(
+                                      Icons.chevron_right,
+                                      color: Colors.white54,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildUserItem(
-    Map<String, dynamic> user,
+  Widget _smallVideoThumbnail(
+    dynamic video,
   ) {
-    final username =
-        user['username']?.toString() ?? '';
-
-    final name =
-        user['name']?.toString() ?? '';
-
-    final photoUrl =
-        user['photoURL']?.toString() ?? '';
-
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
+      width: 58,
+      height: 76,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(14),
+        color: Colors.white10,
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 25,
-            backgroundColor: Colors.white12,
-            backgroundImage: photoUrl.isNotEmpty
-                ? NetworkImage(photoUrl)
-                : null,
-            child: photoUrl.isEmpty
-                ? const Icon(
-                    Icons.person,
-                    color: Colors.white70,
-                  )
-                : null,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name.isEmpty ? username : name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                if (username.isNotEmpty)
-                  Text(
-                    '@$username',
-                    style: const TextStyle(
-                      color: Colors.white54,
-                      fontSize: 13,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildVideoItem(
-    Map<String, dynamic> video,
-  ) {
-    final username =
-        video['username']?.toString() ?? '';
-
-    final caption =
-        video['caption']?.toString() ?? '';
-
-    final thumbnailUrl =
-        video['thumbnailUrl']?.toString() ?? '';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 60,
-            height: 76,
-            decoration: BoxDecoration(
-              color: Colors.white12,
-              borderRadius: BorderRadius.circular(10),
-              image: thumbnailUrl.isNotEmpty
-                  ? DecorationImage(
-                      image: NetworkImage(thumbnailUrl),
-                      fit: BoxFit.cover,
-                    )
-                  : null,
-            ),
-            child: thumbnailUrl.isEmpty
-                ? const Icon(
-                    Icons.play_arrow_rounded,
-                    color: Colors.white70,
-                    size: 30,
-                  )
-                : null,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                Text(
-                  username.isEmpty
-                      ? 'PALOK User'
-                      : '@$username',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  caption.isEmpty
-                      ? 'PALOK Video'
-                      : caption,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white60,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+      child: const Icon(
+        Icons.play_arrow_rounded,
+        color: Colors.white70,
+        size: 30,
       ),
     );
   }
