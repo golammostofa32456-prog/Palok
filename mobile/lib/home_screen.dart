@@ -1250,18 +1250,17 @@ class _HomeScreenState extends State<HomeScreen>
 
     if (!mounted) return;
 
-    if (index == 2) {
-      await _openCreateSheet();
+if (index == 2) {
+  await _openCreateScreen();
 
-      if (!mounted) return;
+  if (!mounted) return;
 
-      if (_bottomIndex == 0) {
-        await _prepareVideo(_currentIndex);
-      }
+  if (_bottomIndex == 0) {
+    await _prepareVideo(_currentIndex);
+  }
 
-      return;
-    }
-
+  return;
+}
     setState(() {
       _bottomIndex = index;
     });
