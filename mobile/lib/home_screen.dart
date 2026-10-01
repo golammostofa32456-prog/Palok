@@ -1,6 +1,7 @@
 import 'features/comments/comments_sheet.dart';
 import 'features/upload/upload_sheet.dart';
 import 'features/create/create_video_screen.dart';
+import 'features/search/search_screen.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
