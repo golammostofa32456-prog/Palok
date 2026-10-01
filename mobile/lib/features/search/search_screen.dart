@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+
+import 'search_service.dart';
 
 class SearchScreen extends StatefulWidget {
   final List<dynamic> videos;
@@ -15,105 +19,334 @@ class SearchScreen extends StatefulWidget {
 }
 
 class _SearchScreenState extends State<SearchScreen> {
+  final SearchService _searchService = SearchService();
+
   late final TextEditingController _controller;
+
+  Timer? _debounce;
+
+  bool _loading = false;
+
+  List<Map<String, dynamic>> _users = [];
+  List<Map<String, dynamic>> _videos = [];
+
+  int _searchRequestId = 0;
 
   @override
   void initState() {
     super.initState();
+
     _controller = TextEditingController();
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _controller.dispose();
+
     super.dispose();
   }
 
-  List<dynamic> _searchVideos(String query) {
-    final text = query.trim().toLowerCase();
+  Future<void> _performSearch(String query) async {
+    final text = query.trim();
+
+    _debounce?.cancel();
 
     if (text.isEmpty) {
-      return [];
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+        _users = [];
+        _videos = [];
+      });
+
+      return;
     }
 
-    return widget.videos.where((video) {
-      final username =
-          _readString(video, 'username').toLowerCase();
+    _debounce = Timer(
+      const Duration(milliseconds: 350),
+      () async {
+        final requestId = ++_searchRequestId;
 
-      final caption =
-          _readString(video, 'caption').toLowerCase();
+        if (!mounted) return;
 
-      final hashtags =
-          _readString(video, 'hashtags').toLowerCase();
+        setState(() {
+          _loading = true;
+        });
 
-      final searchableText =
-          '$username $caption $hashtags';
+        try {
+          final results = await Future.wait([
+            _searchService.searchUsers(text),
+            _searchService.searchVideos(text),
+          ]);
 
-      return searchableText.contains(text);
-    }).toList();
-  }
+          if (!mounted || requestId != _searchRequestId) {
+            return;
+          }
 
-  String _readString(
-    dynamic object,
-    String field,
-  ) {
-    try {
-      switch (field) {
-        case 'id':
-          return object.id?.toString() ?? '';
+          setState(() {
+            _users = List<Map<String, dynamic>>.from(
+              results[0],
+            );
 
-        case 'username':
-          return object.username?.toString() ?? '';
+            _videos = List<Map<String, dynamic>>.from(
+              results[1],
+            );
 
-        case 'caption':
-          return object.caption?.toString() ?? '';
+            _loading = false;
+          });
+        } catch (_) {
+          if (!mounted || requestId != _searchRequestId) {
+            return;
+          }
 
-        case 'hashtags':
-          return object.hashtags?.toString() ?? '';
-
-        case 'thumbnailUrl':
-          return object.thumbnailUrl?.toString() ?? '';
-
-        default:
-          return '';
-      }
-    } catch (_) {
-      return '';
-    }
-  }
-
-  int _findActualIndex(dynamic video) {
-    final selectedId = _readString(video, 'id');
-
-    return widget.videos.indexWhere(
-      (item) => _readString(item, 'id') == selectedId,
+          setState(() {
+            _users = [];
+            _videos = [];
+            _loading = false;
+          });
+        }
+      },
     );
   }
 
-  Future<void> _selectVideo(
+  int _findHomeVideoIndex(String videoId) {
+    if (videoId.isEmpty) {
+      return -1;
+    }
+
+    return widget.videos.indexWhere(
+      (video) {
+        try {
+          return video.id?.toString() == videoId;
+        } catch (_) {
+          return false;
+        }
+      },
+    );
+  }
+
+  Future<void> _openVideo(
     BuildContext sheetContext,
-    dynamic video,
+    Map<String, dynamic> video,
   ) async {
-    final actualIndex = _findActualIndex(video);
+    final videoId = video['id']?.toString() ?? '';
+
+    final actualIndex = _findHomeVideoIndex(videoId);
 
     Navigator.of(sheetContext).pop();
 
     if (actualIndex < 0) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'এই ভিডিওটি বর্তমানে Home feed-এ নেই',
+          ),
+        ),
+      );
+
       return;
     }
 
     if (widget.onVideoSelected != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
-        await widget.onVideoSelected!(actualIndex);
+        if (!mounted) return;
+
+        await widget.onVideoSelected!(
+          actualIndex,
+        );
       });
     }
   }
 
+  String _userName(
+    Map<String, dynamic> user,
+  ) {
+    final username =
+        user['username']?.toString().trim() ?? '';
+
+    final name =
+        user['name']?.toString().trim() ?? '';
+
+    if (username.isNotEmpty) {
+      return '@$username';
+    }
+
+    if (name.isNotEmpty) {
+      return name;
+    }
+
+    return 'PALOK User';
+  }
+
+  String _userPhoto(
+    Map<String, dynamic> user,
+  ) {
+    return user['photoURL']?.toString() ?? '';
+  }
+
+  Widget _userAvatar(
+    Map<String, dynamic> user,
+  ) {
+    final photoUrl = _userPhoto(user);
+
+    if (photoUrl.isEmpty) {
+      return Container(
+        width: 52,
+        height: 52,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.08),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(
+          Icons.person,
+          color: Colors.white70,
+          size: 28,
+        ),
+      );
+    }
+
+    return ClipOval(
+      child: Image.network(
+        photoUrl,
+        width: 52,
+        height: 52,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) {
+          return Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.08),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.person,
+              color: Colors.white70,
+              size: 28,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _videoThumbnail(
+    Map<String, dynamic> video,
+  ) {
+    final thumbnailUrl =
+        video['thumbnailUrl']?.toString() ?? '';
+
+    if (thumbnailUrl.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          thumbnailUrl,
+          width: 58,
+          height: 76,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) {
+            return _videoPlaceholder();
+          },
+        ),
+      );
+    }
+
+    return _videoPlaceholder();
+  }
+
+  Widget _videoPlaceholder() {
+    return Container(
+      width: 58,
+      height: 76,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Icon(
+        Icons.play_arrow_rounded,
+        color: Colors.white70,
+        size: 30,
+      ),
+    );
+  }
+
+  Widget _sectionTitle(
+    String title,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        18,
+        8,
+        18,
+        10,
+      ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _emptySearch() {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.search,
+            size: 52,
+            color: Colors.white30,
+          ),
+          SizedBox(height: 12),
+          Text(
+            'Search PALOK',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          SizedBox(height: 5),
+          Text(
+            'Users, captions and hashtags খুঁজুন',
+            style: TextStyle(
+              color: Colors.white54,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _noResults() {
+    return const Center(
+      child: Text(
+        'কোনো ফলাফল পাওয়া যায়নি',
+        style: TextStyle(
+          color: Colors.white54,
+          fontSize: 16,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final query = _controller.text.trim().toLowerCase();
+    final query = _controller.text.trim();
 
-    final results = _searchVideos(query);
+    final hasResults =
+        _users.isNotEmpty || _videos.isNotEmpty;
 
     return SafeArea(
       child: Container(
@@ -147,14 +380,13 @@ class _SearchScreenState extends State<SearchScreen> {
               child: TextField(
                 controller: _controller,
                 autofocus: true,
-                onChanged: (_) {
-                  setState(() {});
-                },
+                onChanged: _performSearch,
                 style: const TextStyle(
                   color: Colors.white,
                 ),
                 decoration: InputDecoration(
-                  hintText: 'Search videos, users...',
+                  hintText:
+                      'Search videos, users...',
                   hintStyle: const TextStyle(
                     color: Colors.white54,
                   ),
@@ -170,13 +402,21 @@ class _SearchScreenState extends State<SearchScreen> {
                     onPressed: () {
                       _controller.clear();
 
-                      setState(() {});
+                      _debounce?.cancel();
+
+                      setState(() {
+                        _users = [];
+                        _videos = [];
+                        _loading = false;
+                      });
                     },
                   ),
                   filled: true,
-                  fillColor: Colors.white.withOpacity(0.08),
+                  fillColor:
+                      Colors.white.withOpacity(0.08),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius:
+                        BorderRadius.circular(16),
                     borderSide: BorderSide.none,
                   ),
                 ),
@@ -185,169 +425,260 @@ class _SearchScreenState extends State<SearchScreen> {
 
             Expanded(
               child: query.isEmpty
-                  ? const Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.search,
-                            size: 52,
-                            color: Colors.white30,
-                          ),
-                          SizedBox(height: 12),
-                          Text(
-                            'Search PALOK',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          SizedBox(height: 5),
-                          Text(
-                            'Users, captions and hashtags খুঁজুন',
-                            style: TextStyle(
-                              color: Colors.white54,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : results.isEmpty
+                  ? _emptySearch()
+                  : _loading
                       ? const Center(
-                          child: Text(
-                            'কোনো ফলাফল পাওয়া যায়নি',
-                            style: TextStyle(
-                              color: Colors.white54,
-                              fontSize: 16,
-                            ),
+                          child:
+                              CircularProgressIndicator(
+                            color: Color(0xFFFF2D55),
                           ),
                         )
-                      : ListView.separated(
-                          padding: const EdgeInsets.all(18),
-                          itemCount: results.length,
-                          separatorBuilder: (_, __) {
-                            return const SizedBox(height: 10);
-                          },
-                          itemBuilder: (_, index) {
-                            final video = results[index];
-
-                            final username =
-                                _readString(
-                              video,
-                              'username',
-                            );
-
-                            final caption =
-                                _readString(
-                              video,
-                              'caption',
-                            );
-
-                            final hashtags =
-                                _readString(
-                              video,
-                              'hashtags',
-                            );
-
-                            return InkWell(
-                              borderRadius:
-                                  BorderRadius.circular(16),
-                              onTap: () async {
-                                await _selectVideo(
-                                  context,
-                                  video,
-                                );
-                              },
-                              child: Container(
-                                padding:
-                                    const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.white
-                                      .withOpacity(0.06),
-                                  borderRadius:
-                                      BorderRadius.circular(16),
-                                ),
-                                child: Row(
-                                  children: [
-                                    _smallVideoThumbnail(
-                                      video,
-                                    ),
-
-                                    const SizedBox(width: 12),
-
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment
-                                                .start,
-                                        children: [
-                                          Text(
-                                            username,
-                                            style:
-                                                const TextStyle(
-                                              color:
-                                                  Colors.white,
-                                              fontWeight:
-                                                  FontWeight
-                                                      .w700,
-                                            ),
-                                          ),
-
-                                          const SizedBox(
-                                            height: 4,
-                                          ),
-
-                                          Text(
-                                            caption.isEmpty
-                                                ? hashtags
-                                                : caption,
-                                            maxLines: 2,
-                                            overflow:
-                                                TextOverflow
-                                                    .ellipsis,
-                                            style:
-                                                const TextStyle(
-                                              color:
-                                                  Colors.white60,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-
-                                    const Icon(
-                                      Icons.chevron_right,
-                                      color: Colors.white54,
-                                    ),
-                                  ],
-                                ),
+                      : !hasResults
+                          ? _noResults()
+                          : ListView(
+                              padding:
+                                  const EdgeInsets.only(
+                                bottom: 24,
                               ),
-                            );
-                          },
-                        ),
+                              children: [
+                                if (_users.isNotEmpty) ...[
+                                  _sectionTitle(
+                                    'Users',
+                                  ),
+
+                                  ..._users.map(
+                                    (user) {
+                                      return Padding(
+                                        padding:
+                                            const EdgeInsets
+                                                .symmetric(
+                                          horizontal: 18,
+                                          vertical: 5,
+                                        ),
+                                        child: Container(
+                                          padding:
+                                              const EdgeInsets
+                                                  .all(12),
+                                          decoration:
+                                              BoxDecoration(
+                                            color: Colors
+                                                .white
+                                                .withOpacity(
+                                              0.06,
+                                            ),
+                                            borderRadius:
+                                                BorderRadius
+                                                    .circular(
+                                              16,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              _userAvatar(
+                                                user,
+                                              ),
+                                              const SizedBox(
+                                                width: 12,
+                                              ),
+                                              Expanded(
+                                                child:
+                                                    Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment
+                                                          .start,
+                                                  children: [
+                                                    Text(
+                                                      _userName(
+                                                        user,
+                                                      ),
+                                                      style:
+                                                          const TextStyle(
+                                                        color:
+                                                            Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        fontSize:
+                                                            15,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(
+                                                      height:
+                                                          4,
+                                                    ),
+                                                    Text(
+                                                      user['name']
+                                                              ?.toString() ??
+                                                          '',
+                                                      maxLines:
+                                                          1,
+                                                      overflow:
+                                                          TextOverflow
+                                                              .ellipsis,
+                                                      style:
+                                                          const TextStyle(
+                                                        color:
+                                                            Colors.white54,
+                                                        fontSize:
+                                                            13,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              const Icon(
+                                                Icons
+                                                    .person_outline,
+                                                color:
+                                                    Colors.white54,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+
+                                if (_videos.isNotEmpty) ...[
+                                  const SizedBox(
+                                    height: 12,
+                                  ),
+
+                                  _sectionTitle(
+                                    'Videos',
+                                  ),
+
+                                  ..._videos.map(
+                                    (video) {
+                                      final username =
+                                          video['username']
+                                                  ?.toString() ??
+                                              '';
+
+                                      final caption =
+                                          video['caption']
+                                                  ?.toString() ??
+                                              '';
+
+                                      return Padding(
+                                        padding:
+                                            const EdgeInsets
+                                                .symmetric(
+                                          horizontal: 18,
+                                          vertical: 5,
+                                        ),
+                                        child: InkWell(
+                                          borderRadius:
+                                              BorderRadius
+                                                  .circular(
+                                            16,
+                                          ),
+                                          onTap: () async {
+                                            await _openVideo(
+                                              context,
+                                              video,
+                                            );
+                                          },
+                                          child:
+                                              Container(
+                                            padding:
+                                                const EdgeInsets
+                                                    .all(12),
+                                            decoration:
+                                                BoxDecoration(
+                                              color: Colors
+                                                  .white
+                                                  .withOpacity(
+                                                0.06,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius
+                                                      .circular(
+                                                16,
+                                              ),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                _videoThumbnail(
+                                                  video,
+                                                ),
+
+                                                const SizedBox(
+                                                  width: 12,
+                                                ),
+
+                                                Expanded(
+                                                  child:
+                                                      Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Text(
+                                                        username
+                                                                .isEmpty
+                                                            ? 'PALOK Video'
+                                                            : username,
+                                                        maxLines:
+                                                            1,
+                                                        overflow:
+                                                            TextOverflow
+                                                                .ellipsis,
+                                                        style:
+                                                            const TextStyle(
+                                                          color:
+                                                              Colors.white,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                        ),
+                                                      ),
+
+                                                      const SizedBox(
+                                                        height:
+                                                            4,
+                                                      ),
+
+                                                      Text(
+                                                        caption
+                                                                .isEmpty
+                                                            ? 'PALOK Video'
+                                                            : caption,
+                                                        maxLines:
+                                                            2,
+                                                        overflow:
+                                                            TextOverflow
+                                                                .ellipsis,
+                                                        style:
+                                                            const TextStyle(
+                                                          color:
+                                                              Colors.white60,
+                                                          fontSize:
+                                                              13,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+
+                                                const Icon(
+                                                  Icons
+                                                      .chevron_right,
+                                                  color:
+                                                      Colors.white54,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ],
+                            ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _smallVideoThumbnail(
-    dynamic video,
-  ) {
-    return Container(
-      width: 58,
-      height: 76,
-      decoration: BoxDecoration(
-        color: Colors.white10,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Icon(
-        Icons.play_arrow_rounded,
-        color: Colors.white70,
-        size: 30,
       ),
     );
   }
