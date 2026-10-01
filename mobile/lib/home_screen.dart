@@ -998,7 +998,41 @@ class _HomeScreenState extends State<HomeScreen>
       await _prepareVideo(actualIndex);
     }
   }
+Future<void> _openCreateScreen() async {
+  final user = _auth.currentUser;
 
+  if (user == null) {
+    _showMessage('Video upload করতে Login করতে হবে');
+    return;
+  }
+
+  final videoPath = await Navigator.of(context).push<String>(
+    MaterialPageRoute(
+      builder: (_) => const CreateVideoScreen(),
+    ),
+  );
+
+  if (videoPath == null || videoPath.isEmpty || !mounted) {
+    return;
+  }
+
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) {
+      return UploadSheet(
+        filePath: videoPath,
+        username: _username,
+        userId: user.uid,
+        firestore: _firestore,
+        onPosted: () async {
+          await _reloadAfterUpload();
+        },
+      );
+    },
+  );
+}
   Future<void> _openCreateSheet() async {
     await showModalBottomSheet(
       context: context,
