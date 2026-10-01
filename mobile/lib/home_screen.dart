@@ -742,7 +742,19 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-
+Future<void> _openSearch() async {
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) {
+      return SearchScreen(
+        videos: _videos,
+        onVideoSelected: _goToVideo,
+      );
+    },
+  );
+}
                                                     
   Future<void> _goToVideo(int actualIndex) async {
     if (!mounted) return;
