@@ -18,6 +18,9 @@ class SearchScreen extends StatefulWidget {
 }
 
 class _SearchScreenState extends State<SearchScreen> {
+  static const Color _pink = Color(0xFFFF2D55);
+  static const Color _cyan = Color(0xFF00E5FF);
+
   final TextEditingController _controller =
       TextEditingController();
 
@@ -33,15 +36,40 @@ class _SearchScreenState extends State<SearchScreen> {
   String _lastQuery = '';
 
   @override
+  void initState() {
+    super.initState();
+
+    _controller.addListener(() {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _searchTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
-  void _onSearchChanged(String value) {
-    setState(() {});
+  // ============================================================
+  // SEARCH TEXT NORMALIZE
+  // ============================================================
 
+  String _normalize(String value) {
+    return value
+        .trim()
+        .toLowerCase()
+        .replaceAll('@', '')
+        .replaceAll('#', '');
+  }
+
+  // ============================================================
+  // SEARCH TEXT CHANGED
+  // ============================================================
+
+  void _onSearchChanged(String value) {
     _searchTimer?.cancel();
 
     final query = value.trim();
@@ -53,6 +81,7 @@ class _SearchScreenState extends State<SearchScreen> {
         _searching = false;
         _lastQuery = '';
       });
+
       return;
     }
 
@@ -64,49 +93,98 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  Future<void> _performSearch(String query) async {
-    final text = query.trim().toLowerCase();
+  // ============================================================
+  // MAIN SEARCH
+  // ============================================================
 
-    if (text.isEmpty) return;
+  Future<void> _performSearch(String query) async {
+    final text = _normalize(query);
+
+    if (text.isEmpty) {
+      return;
+    }
 
     setState(() {
       _searching = true;
       _lastQuery = text;
     });
 
+    // ----------------------------------------------------------
+    // IMPORTANT:
+    // Local search must work even if Firestore search fails.
+    // ----------------------------------------------------------
+
+    final localResults = _searchLocalVideos(text);
+
+    List<Map<String, dynamic>> users = [];
+    List<Map<String, dynamic>> firestoreVideos = [];
+
+    // ----------------------------------------------------------
+    // USER SEARCH
+    // ----------------------------------------------------------
+
     try {
-      final results = await Future.wait([
-        _searchUsers(text),
-        _searchVideos(text),
-      ]);
-
-      if (!mounted) return;
-
-      if (_lastQuery != text) return;
-
-      setState(() {
-        _users = results[0] as List<Map<String, dynamic>>;
-        _firestoreVideos =
-            results[1] as List<Map<String, dynamic>>;
-        _searching = false;
-      });
+      users = await _searchUsers(text);
     } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        _users = [];
-        _firestoreVideos = [];
-        _searching = false;
-      });
+      users = [];
     }
+
+    // ----------------------------------------------------------
+    // VIDEO SEARCH
+    // ----------------------------------------------------------
+
+    try {
+      firestoreVideos = await _searchVideos(text);
+    } catch (_) {
+      firestoreVideos = [];
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    if (_lastQuery != text) {
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // Remove Firestore video duplicates that are already
+    // present in the Home feed.
+    // ----------------------------------------------------------
+
+    final localIds = <String>{};
+
+    for (final video in localResults) {
+      final id = _readString(video, 'id');
+
+      if (id.isNotEmpty) {
+        localIds.add(id);
+      }
+    }
+
+    firestoreVideos = firestoreVideos.where((video) {
+      final id = (video['id'] ?? '').toString();
+
+      return id.isEmpty || !localIds.contains(id);
+    }).toList();
+
+    setState(() {
+      _users = users;
+      _firestoreVideos = firestoreVideos;
+      _searching = false;
+    });
   }
+
+  // ============================================================
+  // FIRESTORE USER SEARCH
+  // ============================================================
 
   Future<List<Map<String, dynamic>>> _searchUsers(
     String query,
   ) async {
     final snapshot = await _firestore
         .collection('users')
-        .limit(100)
+        .limit(200)
         .get();
 
     final users = <Map<String, dynamic>>[];
@@ -123,10 +201,20 @@ class _SearchScreenState extends State<SearchScreen> {
       final displayName =
           (data['displayName'] ?? '').toString();
 
-      final searchText =
-          '$name $username $displayName'.toLowerCase();
+      final email =
+          (data['email'] ?? '').toString();
 
-      if (!searchText.contains(query)) {
+      final searchText = [
+        name,
+        username,
+        displayName,
+        email,
+      ].join(' ').toLowerCase();
+
+      if (!_containsSearchText(
+        searchText,
+        query,
+      )) {
         continue;
       }
 
@@ -135,23 +223,30 @@ class _SearchScreenState extends State<SearchScreen> {
         'name': name,
         'username': username,
         'displayName': displayName,
+        'email': email,
         'photoURL':
-            (data['photoURL'] ??
-                    data['profileImage'] ??
-                    '')
-                .toString(),
+            (
+              data['photoURL'] ??
+              data['profileImage'] ??
+              data['photoUrl'] ??
+              ''
+            ).toString(),
       });
     }
 
     return users;
   }
 
+  // ============================================================
+  // FIRESTORE VIDEO SEARCH
+  // ============================================================
+
   Future<List<Map<String, dynamic>>> _searchVideos(
     String query,
   ) async {
     final snapshot = await _firestore
         .collection('videos')
-        .limit(100)
+        .limit(200)
         .get();
 
     final videos = <Map<String, dynamic>>[];
@@ -166,12 +261,22 @@ class _SearchScreenState extends State<SearchScreen> {
           (data['caption'] ?? '').toString();
 
       final hashtags =
-          (data['hashtags'] ?? '').toString();
+          _valueToSearchString(data['hashtags']);
 
-      final searchText =
-          '$username $caption $hashtags'.toLowerCase();
+      final userId =
+          (data['userId'] ?? '').toString();
 
-      if (!searchText.contains(query)) {
+      final searchText = [
+        username,
+        caption,
+        hashtags,
+        userId,
+      ].join(' ').toLowerCase();
+
+      if (!_containsSearchText(
+        searchText,
+        query,
+      )) {
         continue;
       }
 
@@ -180,18 +285,41 @@ class _SearchScreenState extends State<SearchScreen> {
         'username': username,
         'caption': caption,
         'hashtags': hashtags,
+        'userId': userId,
         'videoUrl':
             (data['videoUrl'] ?? '').toString(),
         'thumbnailUrl':
             (data['thumbnailUrl'] ?? '').toString(),
+        'creatorImage':
+            (
+              data['creatorImage'] ??
+              data['profileImage'] ??
+              data['photoURL'] ??
+              ''
+            ).toString(),
       });
     }
 
     return videos;
   }
 
+  // ============================================================
+  // LOCAL HOME VIDEO SEARCH
+  // ============================================================
+
   List<dynamic> _searchLocalVideos(String query) {
-    return widget.videos.where((video) {
+    final textQuery = _normalize(query);
+
+    if (textQuery.isEmpty) {
+      return [];
+    }
+
+    final results = <dynamic>[];
+
+    for (final video in widget.videos) {
+      final id =
+          _readString(video, 'id').toLowerCase();
+
       final username =
           _readString(video, 'username').toLowerCase();
 
@@ -201,18 +329,68 @@ class _SearchScreenState extends State<SearchScreen> {
       final hashtags =
           _readString(video, 'hashtags').toLowerCase();
 
-      final text =
-          '$username $caption $hashtags';
+      final userId =
+          _readString(video, 'userId').toLowerCase();
 
-      return text.contains(query);
-    }).toList();
+      final text = [
+        id,
+        username,
+        caption,
+        hashtags,
+        userId,
+      ].join(' ');
+
+      if (_containsSearchText(
+        text,
+        textQuery,
+      )) {
+        results.add(video);
+      }
+    }
+
+    return results;
   }
+
+  // ============================================================
+  // SEARCH MATCH HELPER
+  // ============================================================
+
+  bool _containsSearchText(
+    String source,
+    String query,
+  ) {
+    final normalizedSource =
+        _normalize(source);
+
+    final normalizedQuery =
+        _normalize(query);
+
+    if (normalizedQuery.isEmpty) {
+      return true;
+    }
+
+    return normalizedSource.contains(
+      normalizedQuery,
+    );
+  }
+
+  // ============================================================
+  // READ OBJECT FIELD SAFELY
+  // ============================================================
 
   String _readString(
     dynamic object,
     String field,
   ) {
     try {
+      if (object == null) {
+        return '';
+      }
+
+      if (object is Map) {
+        return object[field]?.toString() ?? '';
+      }
+
       switch (field) {
         case 'id':
           return object.id?.toString() ?? '';
@@ -226,6 +404,18 @@ class _SearchScreenState extends State<SearchScreen> {
         case 'hashtags':
           return object.hashtags?.toString() ?? '';
 
+        case 'userId':
+          return object.userId?.toString() ?? '';
+
+        case 'creatorImage':
+          return object.creatorImage?.toString() ?? '';
+
+        case 'videoUrl':
+          return object.videoUrl?.toString() ?? '';
+
+        case 'thumbnailUrl':
+          return object.thumbnailUrl?.toString() ?? '';
+
         default:
           return '';
       }
@@ -234,15 +424,53 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
-  int _findActualIndex(dynamic video) {
+  // ============================================================
+  // FIRESTORE VALUE -> STRING
+  // ============================================================
+
+  String _valueToSearchString(
+    dynamic value,
+  ) {
+    if (value == null) {
+      return '';
+    }
+
+    if (value is Iterable) {
+      return value
+          .map((item) => item.toString())
+          .join(' ');
+    }
+
+    return value.toString();
+  }
+
+  // ============================================================
+  // FIND LOCAL VIDEO INDEX
+  // ============================================================
+
+  int _findActualIndex(
+    dynamic video,
+  ) {
     final selectedId =
         _readString(video, 'id');
 
+    if (selectedId.isEmpty) {
+      return -1;
+    }
+
     return widget.videos.indexWhere(
-      (item) =>
-          _readString(item, 'id') == selectedId,
+      (item) {
+        final itemId =
+            _readString(item, 'id');
+
+        return itemId == selectedId;
+      },
     );
   }
+
+  // ============================================================
+  // SELECT LOCAL VIDEO
+  // ============================================================
 
   Future<void> _selectLocalVideo(
     BuildContext sheetContext,
@@ -251,630 +479,1082 @@ class _SearchScreenState extends State<SearchScreen> {
     final actualIndex =
         _findActualIndex(video);
 
-    Navigator.of(sheetContext).pop();
-
     if (actualIndex < 0) {
       return;
     }
 
+    Navigator.of(sheetContext).pop();
+
     if (widget.onVideoSelected != null) {
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) async {
-        await widget.onVideoSelected!(
-          actualIndex,
-        );
-      });
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) async {
+          await widget.onVideoSelected!(
+            actualIndex,
+          );
+        },
+      );
     }
   }
+
+  // ============================================================
+  // SELECT FIRESTORE VIDEO
+  // ============================================================
+
+  Future<void> _selectFirestoreVideo(
+    BuildContext sheetContext,
+    Map<String, dynamic> video,
+  ) async {
+    final selectedId =
+        (video['id'] ?? '').toString();
+
+    if (selectedId.isEmpty) {
+      return;
+    }
+
+    final actualIndex =
+        widget.videos.indexWhere(
+      (item) {
+        final id =
+            _readString(item, 'id');
+
+        return id == selectedId;
+      },
+    );
+
+    if (actualIndex >= 0) {
+      Navigator.of(sheetContext).pop();
+
+      if (widget.onVideoSelected != null) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) async {
+            await widget.onVideoSelected!(
+              actualIndex,
+            );
+          },
+        );
+      }
+
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'ভিডিওটি বর্তমানে Home feed-এ নেই',
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // CLEAR SEARCH
+  // ============================================================
+
+  void _clearSearch() {
+    _controller.clear();
+
+    setState(() {
+      _users = [];
+      _firestoreVideos = [];
+      _searching = false;
+      _lastQuery = '';
+    });
+  }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
+
+  @override
+  Widget build(BuildContext context) {
+    final query =
+        _controller.text.trim();
+
+    final localVideos =
+        query.isEmpty
+            ? <dynamic>[]
+            : _searchLocalVideos(
+                _normalize(query),
+              );
+
+    final hasResults =
+        _users.isNotEmpty ||
+        localVideos.isNotEmpty ||
+        _firestoreVideos.isNotEmpty;
+
+    return Material(
+      color: Colors.transparent,
+      child: SafeArea(
+        top: false,
+        child: DraggableScrollableSheet(
+          initialChildSize: .78,
+          minChildSize: .55,
+          maxChildSize: .95,
+          expand: false,
+          builder: (
+            context,
+            scrollController,
+          ) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFF101010),
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(26),
+                ),
+              ),
+              child: Column(
+                children: [
+                  // ------------------------------------------------
+                  // DRAG HANDLE
+                  // ------------------------------------------------
+
+                  const SizedBox(height: 10),
+
+                  Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius:
+                          BorderRadius.circular(10),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ------------------------------------------------
+                  // TITLE
+                  // ------------------------------------------------
+
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(
+                      horizontal: 18,
+                    ),
+                    child: Row(
+                      children: [
+                        const Text(
+                          'Search',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight:
+                                FontWeight.w800,
+                          ),
+                        ),
+
+                        const Spacer(),
+
+                        IconButton(
+                          onPressed: () {
+                            Navigator.of(
+                              context,
+                            ).pop();
+                          },
+                          icon: const Icon(
+                            Icons.close,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // ------------------------------------------------
+                  // SEARCH FIELD
+                  // ------------------------------------------------
+
+                  Padding(
+                    padding:
+                        const EdgeInsets.fromLTRB(
+                      16,
+                      0,
+                      16,
+                      12,
+                    ),
+                    child: TextField(
+                      controller: _controller,
+                      autofocus: true,
+                      onChanged:
+                          _onSearchChanged,
+                      textInputAction:
+                          TextInputAction.search,
+                      style: const TextStyle(
+                        color: Colors.white,
+                      ),
+                      decoration:
+                          InputDecoration(
+                        hintText:
+                            'Search videos, users...',
+                        hintStyle:
+                            const TextStyle(
+                          color: Colors.white38,
+                        ),
+
+                        prefixIcon:
+                            const Icon(
+                          Icons.search,
+                          color: Colors.white54,
+                        ),
+
+                        suffixIcon:
+                            query.isNotEmpty
+                                ? IconButton(
+                                    onPressed:
+                                        _clearSearch,
+                                    icon:
+                                        const Icon(
+                                      Icons.clear,
+                                      color:
+                                          Colors.white54,
+                                    ),
+                                  )
+                                : null,
+
+                        filled: true,
+                        fillColor:
+                            Colors.white10,
+
+                        contentPadding:
+                            const EdgeInsets
+                                .symmetric(
+                          horizontal: 16,
+                          vertical: 15,
+                        ),
+
+                        border:
+                            OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius
+                                  .circular(18),
+                          borderSide:
+                              BorderSide.none,
+                        ),
+
+                        enabledBorder:
+                            OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius
+                                  .circular(18),
+                          borderSide:
+                              BorderSide.none,
+                        ),
+
+                        focusedBorder:
+                            OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius
+                                  .circular(18),
+                          borderSide:
+                              const BorderSide(
+                            color: _pink,
+                            width: 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // ------------------------------------------------
+                  // SEARCH BODY
+                  // ------------------------------------------------
+
+                  Expanded(
+                    child: _searching
+                        ? const Center(
+                            child:
+                                CircularProgressIndicator(
+                              color: _pink,
+                            ),
+                          )
+                        : query.isEmpty
+                            ? _buildEmptySearch()
+                            : !hasResults
+                                ? _buildNoResults(
+                                    query,
+                                  )
+                                : ListView(
+                                    controller:
+                                        scrollController,
+                                    padding:
+                                        const EdgeInsets
+                                            .fromLTRB(
+                                      16,
+                                      4,
+                                      16,
+                                      30,
+                                    ),
+                                    children: [
+                                      // --------------------------
+                                      // USERS
+                                      // --------------------------
+
+                                      if (_users
+                                          .isNotEmpty) ...[
+                                        const Padding(
+                                          padding:
+                                              EdgeInsets
+                                                  .only(
+                                            bottom: 10,
+                                          ),
+                                          child: Text(
+                                            'Users',
+                                            style:
+                                                TextStyle(
+                                              color:
+                                                  Colors.white,
+                                              fontSize:
+                                                  16,
+                                              fontWeight:
+                                                  FontWeight
+                                                      .w700,
+                                            ),
+                                          ),
+                                        ),
+
+                                        ..._users.map(
+                                          _buildUserItem,
+                                        ),
+
+                                        const SizedBox(
+                                          height: 18,
+                                        ),
+                                      ],
+
+                                      // --------------------------
+                                      // LOCAL VIDEOS
+                                      // --------------------------
+
+                                      if (localVideos
+                                          .isNotEmpty) ...[
+                                        const Padding(
+                                          padding:
+                                              EdgeInsets
+                                                  .only(
+                                            bottom: 10,
+                                          ),
+                                          child: Text(
+                                            'Videos',
+                                            style:
+                                                TextStyle(
+                                              color:
+                                                  Colors.white,
+                                              fontSize:
+                                                  16,
+                                              fontWeight:
+                                                  FontWeight
+                                                      .w700,
+                                            ),
+                                          ),
+                                        ),
+
+                                        ...localVideos
+                                            .map(
+                                          (
+                                            video,
+                                          ) =>
+                                              _buildLocalVideoItem(
+                                            context,
+                                            video,
+                                          ),
+                                        ),
+
+                                        const SizedBox(
+                                          height: 18,
+                                        ),
+                                      ],
+
+                                      // --------------------------
+                                      // FIRESTORE VIDEOS
+                                      // --------------------------
+
+                                      if (_firestoreVideos
+                                          .isNotEmpty) ...[
+                                        const Padding(
+                                          padding:
+                                              EdgeInsets
+                                                  .only(
+                                            bottom: 10,
+                                          ),
+                                          child: Text(
+                                            'More Videos',
+                                            style:
+                                                TextStyle(
+                                              color:
+                                                  Colors.white,
+                                              fontSize:
+                                                  16,
+                                              fontWeight:
+                                                  FontWeight
+                                                      .w700,
+                                            ),
+                                          ),
+                                        ),
+
+                                        ..._firestoreVideos
+                                            .map(
+                                          (
+                                            video,
+                                          ) =>
+                                              _buildFirestoreVideoItem(
+                                            context,
+                                            video,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // EMPTY SEARCH
+  // ============================================================
+
+  Widget _buildEmptySearch() {
+    return Center(
+      child: Padding(
+        padding:
+            const EdgeInsets.symmetric(
+          horizontal: 30,
+        ),
+        child: Column(
+          mainAxisAlignment:
+              MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 76,
+              height: 76,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient:
+                    const LinearGradient(
+                  colors: [
+                    _pink,
+                    _cyan,
+                  ],
+                ),
+              ),
+              child: const Icon(
+                Icons.search,
+                color: Colors.white,
+                size: 38,
+              ),
+            ),
+
+            const SizedBox(height: 18),
+
+            const Text(
+              'Search PALOK',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight:
+                    FontWeight.w800,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            const Text(
+              'Username, caption অথবা hashtag দিয়ে ভিডিও খুঁজুন',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // NO RESULTS
+  // ============================================================
+
+  Widget _buildNoResults(
+    String query,
+  ) {
+    return Center(
+      child: Padding(
+        padding:
+            const EdgeInsets.symmetric(
+          horizontal: 30,
+        ),
+        child: Column(
+          mainAxisAlignment:
+              MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.search_off_rounded,
+              color: Colors.white38,
+              size: 58,
+            ),
+
+            const SizedBox(height: 14),
+
+            const Text(
+              'কোনো ফলাফল পাওয়া যায়নি',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight:
+                    FontWeight.w700,
+              ),
+            ),
+
+            const SizedBox(height: 7),
+
+            Text(
+              '"$query" দিয়ে কোনো User বা Video পাওয়া যায়নি',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // USER ITEM
+  // ============================================================
 
   Widget _buildUserItem(
     Map<String, dynamic> user,
   ) {
     final username =
-        user['username'].toString();
+        (user['username'] ?? '')
+            .toString();
 
     final name =
-        user['name'].toString();
+        (user['name'] ?? '')
+            .toString();
 
     final displayName =
-        user['displayName'].toString();
+        (user['displayName'] ?? '')
+            .toString();
 
-    final photo =
-        user['photoURL'].toString();
+    final photoURL =
+        (user['photoURL'] ?? '')
+            .toString();
 
-    final title = username.isNotEmpty
-        ? '@$username'
-        : displayName.isNotEmpty
-            ? displayName
-            : name.isNotEmpty
-                ? name
-                : 'PALOK User';
+    String title = username;
+
+    if (title.isEmpty) {
+      title = displayName;
+    }
+
+    if (title.isEmpty) {
+      title = name;
+    }
+
+    if (title.isEmpty) {
+      title = 'PALOK User';
+    }
+
+    String subtitle = '';
+
+    if (displayName.isNotEmpty &&
+        displayName != title) {
+      subtitle = displayName;
+    } else if (name.isNotEmpty &&
+        name != title) {
+      subtitle = name;
+    }
 
     return Container(
-      margin: const EdgeInsets.only(
-        bottom: 10,
+      margin:
+          const EdgeInsets.only(
+        bottom: 8,
       ),
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white.withOpacity(.05),
+        borderRadius:
+            BorderRadius.circular(16),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white10,
-              image: photo.isNotEmpty
-                  ? DecorationImage(
-                      image: NetworkImage(photo),
-                      fit: BoxFit.cover,
-                    )
-                  : null,
-            ),
-            child: photo.isEmpty
-                ? const Icon(
-                    Icons.person,
-                    color: Colors.white70,
-                    size: 28,
-                  )
-                : null,
+      child: ListTile(
+        contentPadding:
+            const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 4,
+        ),
+
+        leading: _buildAvatar(
+          photoURL,
+          title,
+        ),
+
+        title: Text(
+          title.startsWith('@')
+              ? title
+              : '@$title',
+          maxLines: 1,
+          overflow:
+              TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight:
+                FontWeight.w700,
+            fontSize: 15,
           ),
+        ),
 
-          const SizedBox(width: 12),
-
-          Expanded(
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow:
-                      TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight:
-                        FontWeight.w700,
-                  ),
+        subtitle: subtitle.isNotEmpty
+            ? Text(
+                subtitle,
+                maxLines: 1,
+                overflow:
+                    TextOverflow.ellipsis,
+                style:
+                    const TextStyle(
+                  color:
+                      Colors.white54,
+                  fontSize: 13,
                 ),
+              )
+            : null,
 
-                if (name.isNotEmpty &&
-                    name != title) ...[
-                  const SizedBox(height: 4),
+        trailing: const Icon(
+          Icons.person_outline,
+          color: Colors.white38,
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // LOCAL VIDEO ITEM
+  // ============================================================
+
+  Widget _buildLocalVideoItem(
+    BuildContext sheetContext,
+    dynamic video,
+  ) {
+    final username =
+        _readString(
+          video,
+          'username',
+        );
+
+    final caption =
+        _readString(
+          video,
+          'caption',
+        );
+
+    final hashtags =
+        _readString(
+          video,
+          'hashtags',
+        );
+
+    final thumbnailUrl =
+        _readString(
+          video,
+          'thumbnailUrl',
+        );
+
+    return InkWell(
+      borderRadius:
+          BorderRadius.circular(16),
+      onTap: () async {
+        await _selectLocalVideo(
+          sheetContext,
+          video,
+        );
+      },
+      child: Container(
+        margin:
+            const EdgeInsets.only(
+          bottom: 10,
+        ),
+        padding:
+            const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color:
+              Colors.white.withOpacity(.05),
+          borderRadius:
+              BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            _buildVideoThumbnail(
+              thumbnailUrl,
+              username,
+            ),
+
+            const SizedBox(width: 12),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment
+                        .start,
+                children: [
                   Text(
-                    name,
+                    username.isEmpty
+                        ? '@PALOK'
+                        : '@$username',
                     maxLines: 1,
                     overflow:
                         TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white54,
-                      fontSize: 13,
+                    style:
+                        const TextStyle(
+                      color:
+                          Colors.white,
+                      fontWeight:
+                          FontWeight.w700,
+                      fontSize: 15,
                     ),
                   ),
-                ],
-              ],
-            ),
-          ),
 
-          const Icon(
-            Icons.person_outline,
-            color: Colors.white54,
-          ),
-        ],
+                  if (caption
+                      .trim()
+                      .isNotEmpty) ...[
+                    const SizedBox(
+                      height: 5,
+                    ),
+                    Text(
+                      caption,
+                      maxLines: 2,
+                      overflow:
+                          TextOverflow.ellipsis,
+                      style:
+                          const TextStyle(
+                        color:
+                            Colors.white70,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+
+                  if (hashtags
+                      .trim()
+                      .isNotEmpty) ...[
+                    const SizedBox(
+                      height: 4,
+                    ),
+                    Text(
+                      hashtags,
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow.ellipsis,
+                      style:
+                          const TextStyle(
+                        color: _cyan,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 8),
+
+            const Icon(
+              Icons.play_circle_outline,
+              color: Colors.white70,
+              size: 30,
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildVideoItem(
+  // ============================================================
+  // FIRESTORE VIDEO ITEM
+  // ============================================================
+
+  Widget _buildFirestoreVideoItem(
+    BuildContext sheetContext,
     Map<String, dynamic> video,
   ) {
     final username =
-        video['username'].toString();
+        (video['username'] ?? '')
+            .toString();
 
     final caption =
-        video['caption'].toString();
+        (video['caption'] ?? '')
+            .toString();
 
     final hashtags =
-        video['hashtags'].toString();
+        (video['hashtags'] ?? '')
+            .toString();
 
-    final thumbnail =
-        video['thumbnailUrl'].toString();
+    final thumbnailUrl =
+        (video['thumbnailUrl'] ?? '')
+            .toString();
 
-    return Container(
-      margin: const EdgeInsets.only(
-        bottom: 10,
-      ),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 58,
-            height: 76,
-            decoration: BoxDecoration(
-              color: Colors.white10,
-              borderRadius:
-                  BorderRadius.circular(12),
-              image: thumbnail.isNotEmpty
-                  ? DecorationImage(
-                      image: NetworkImage(
-                        thumbnail,
+    return InkWell(
+      borderRadius:
+          BorderRadius.circular(16),
+      onTap: () async {
+        await _selectFirestoreVideo(
+          sheetContext,
+          video,
+        );
+      },
+      child: Container(
+        margin:
+            const EdgeInsets.only(
+          bottom: 10,
+        ),
+        padding:
+            const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color:
+              Colors.white.withOpacity(.05),
+          borderRadius:
+              BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            _buildVideoThumbnail(
+              thumbnailUrl,
+              username,
+            ),
+
+            const SizedBox(width: 12),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment
+                        .start,
+                children: [
+                  Text(
+                    username.isEmpty
+                        ? '@PALOK'
+                        : '@$username',
+                    maxLines: 1,
+                    overflow:
+                        TextOverflow.ellipsis,
+                    style:
+                        const TextStyle(
+                      color:
+                          Colors.white,
+                      fontWeight:
+                          FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+
+                  if (caption
+                      .trim()
+                      .isNotEmpty) ...[
+                    const SizedBox(
+                      height: 5,
+                    ),
+                    Text(
+                      caption,
+                      maxLines: 2,
+                      overflow:
+                          TextOverflow.ellipsis,
+                      style:
+                          const TextStyle(
+                        color:
+                            Colors.white70,
+                        fontSize: 13,
                       ),
-                      fit: BoxFit.cover,
-                    )
-                  : null,
+                    ),
+                  ],
+
+                  if (hashtags
+                      .trim()
+                      .isNotEmpty) ...[
+                    const SizedBox(
+                      height: 4,
+                    ),
+                    Text(
+                      hashtags,
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow.ellipsis,
+                      style:
+                          const TextStyle(
+                        color: _cyan,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-            child: thumbnail.isEmpty
-                ? const Icon(
-                    Icons.play_arrow_rounded,
-                    color: Colors.white70,
-                    size: 30,
-                  )
-                : null,
-          ),
 
-          const SizedBox(width: 12),
+            const SizedBox(width: 8),
 
-          Expanded(
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                Text(
-                  username.isEmpty
-                      ? '@PALOK User'
-                      : username,
-                  maxLines: 1,
-                  overflow:
-                      TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight:
-                        FontWeight.w700,
-                  ),
-                ),
-
-                const SizedBox(height: 4),
-
-                Text(
-                  caption.isEmpty
-                      ? hashtags
-                      : caption,
-                  maxLines: 2,
-                  overflow:
-                      TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white60,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
+            const Icon(
+              Icons.play_circle_outline,
+              color: Colors.white70,
+              size: 30,
             ),
-          ),
-
-          const Icon(
-            Icons.chevron_right,
-            color: Colors.white54,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final query =
-        _controller.text.trim().toLowerCase();
+  // ============================================================
+  // VIDEO THUMBNAIL
+  // ============================================================
 
-    final localVideos =
-        query.isEmpty
-            ? <dynamic>[]
-            : _searchLocalVideos(query);
+  Widget _buildVideoThumbnail(
+    String imageUrl,
+    String username,
+  ) {
+    final firstLetter =
+        username.trim().isEmpty
+            ? 'P'
+            : username
+                .trim()
+                .substring(0, 1)
+                .toUpperCase();
 
-    final hasResults =
-        _users.isNotEmpty ||
-        _firestoreVideos.isNotEmpty ||
-        localVideos.isNotEmpty;
+    if (imageUrl.trim().isNotEmpty) {
+      return ClipRRect(
+        borderRadius:
+            BorderRadius.circular(12),
+        child: Image.network(
+          imageUrl,
+          width: 58,
+          height: 76,
+          fit: BoxFit.cover,
+          errorBuilder:
+              (_, __, ___) {
+            return _videoPlaceholder(
+              firstLetter,
+            );
+          },
+        ),
+      );
+    }
 
-    return SafeArea(
-      child: Container(
-        height:
-            MediaQuery.of(context).size.height *
-                0.78,
-        decoration:
-            const BoxDecoration(
-          color: Color(0xFF101010),
-          borderRadius:
-              BorderRadius.vertical(
-            top: Radius.circular(24),
+    return _videoPlaceholder(
+      firstLetter,
+    );
+  }
+
+  // ============================================================
+  // VIDEO PLACEHOLDER
+  // ============================================================
+
+  Widget _videoPlaceholder(
+    String letter,
+  ) {
+    return Container(
+      width: 58,
+      height: 76,
+      decoration: BoxDecoration(
+        borderRadius:
+            BorderRadius.circular(12),
+        gradient:
+            const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            _pink,
+            _cyan,
+          ],
+        ),
+      ),
+      child: Center(
+        child: Text(
+          letter,
+          style:
+              const TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight:
+                FontWeight.w900,
           ),
         ),
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
+      ),
+    );
+  }
 
-            Container(
-              width: 42,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius:
-                    BorderRadius.circular(20),
-              ),
-            ),
+  // ============================================================
+  // USER AVATAR
+  // ============================================================
 
-            Padding(
-              padding:
-                  const EdgeInsets.fromLTRB(
-                18,
-                18,
-                18,
-                10,
-              ),
-              child: TextField(
-                controller: _controller,
-                autofocus: true,
-                onChanged: _onSearchChanged,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                ),
-                decoration:
-                    InputDecoration(
-                  hintText:
-                      'Search videos, users...',
-                  hintStyle:
-                      const TextStyle(
-                    color: Colors.white54,
-                  ),
-                  prefixIcon:
-                      const Icon(
-                    Icons.search,
-                    color: Colors.white,
-                  ),
-                  suffixIcon:
-                      IconButton(
-                    icon: const Icon(
-                      Icons.close,
-                      color: Colors.white54,
-                    ),
-                    onPressed: () {
-                      _controller.clear();
+  Widget _buildAvatar(
+    String imageUrl,
+    String name,
+  ) {
+    final firstLetter =
+        name.trim().isEmpty
+            ? 'P'
+            : name
+                .trim()
+                .substring(0, 1)
+                .toUpperCase();
 
-                      setState(() {
-                        _users = [];
-                        _firestoreVideos =
-                            [];
-                        _searching = false;
-                        _lastQuery = '';
-                      });
-                    },
-                  ),
-                  filled: true,
-                  fillColor: Colors.white
-                      .withOpacity(0.08),
-                  border:
-                      OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(
-                      16,
-                    ),
-                    borderSide:
-                        BorderSide.none,
-                  ),
-                ),
-              ),
-            ),
+    if (imageUrl.trim().isNotEmpty) {
+      return ClipOval(
+        child: Image.network(
+          imageUrl,
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+          errorBuilder:
+              (_, __, ___) {
+            return _avatarPlaceholder(
+              firstLetter,
+            );
+          },
+        ),
+      );
+    }
 
-            Expanded(
-              child: query.isEmpty
-                  ? const Center(
-                      child: Column(
-                        mainAxisSize:
-                            MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.search,
-                            size: 52,
-                            color:
-                                Colors.white30,
-                          ),
-                          SizedBox(
-                            height: 12,
-                          ),
-                          Text(
-                            'Search PALOK',
-                            style:
-                                TextStyle(
-                              color:
-                                  Colors.white,
-                              fontSize: 18,
-                              fontWeight:
-                                  FontWeight.w600,
-                            ),
-                          ),
-                          SizedBox(
-                            height: 5,
-                          ),
-                          Text(
-                            'Users, captions and hashtags খুঁজুন',
-                            style:
-                                TextStyle(
-                              color:
-                                  Colors.white54,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : _searching
-                      ? const Center(
-                          child:
-                              CircularProgressIndicator(
-                            color:
-                                Color(
-                              0xFFFF2D55,
-                            ),
-                          ),
-                        )
-                      : !hasResults
-                          ? const Center(
-                              child: Text(
-                                'কোনো ফলাফল পাওয়া যায়নি',
-                                style:
-                                    TextStyle(
-                                  color:
-                                      Colors.white54,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            )
-                          : ListView(
-                              padding:
-                                  const EdgeInsets
-                                      .fromLTRB(
-                                18,
-                                8,
-                                18,
-                                24,
-                              ),
-                              children: [
-                                if (_users
-                                    .isNotEmpty) ...[
-                                  const Padding(
-                                    padding:
-                                        EdgeInsets
-                                            .only(
-                                      bottom: 10,
-                                    ),
-                                    child: Text(
-                                      'Users',
-                                      style:
-                                          TextStyle(
-                                        color:
-                                            Colors.white,
-                                        fontSize:
-                                            16,
-                                        fontWeight:
-                                            FontWeight
-                                                .w700,
-                                      ),
-                                    ),
-                                  ),
+    return _avatarPlaceholder(
+      firstLetter,
+    );
+  }
 
-                                  ..._users.map(
-                                    _buildUserItem,
-                                  ),
+  // ============================================================
+  // AVATAR PLACEHOLDER
+  // ============================================================
 
-                                  const SizedBox(
-                                    height: 12,
-                                  ),
-                                ],
-
-                                if (localVideos
-                                    .isNotEmpty) ...[
-                                  const Padding(
-                                    padding:
-                                        EdgeInsets
-                                            .only(
-                                      bottom: 10,
-                                    ),
-                                    child: Text(
-                                      'Videos',
-                                      style:
-                                          TextStyle(
-                                        color:
-                                            Colors.white,
-                                        fontSize:
-                                            16,
-                                        fontWeight:
-                                            FontWeight
-                                                .w700,
-                                      ),
-                                    ),
-                                  ),
-
-                                  ...localVideos.map(
-                                    (video) {
-                                      return InkWell(
-                                        borderRadius:
-                                            BorderRadius
-                                                .circular(
-                                          16,
-                                        ),
-                                        onTap: () async {
-                                          await _selectLocalVideo(
-                                            context,
-                                            video,
-                                          );
-                                        },
-                                        child:
-                                            Container(
-                                          margin:
-                                              const EdgeInsets
-                                                  .only(
-                                            bottom: 10,
-                                          ),
-                                          padding:
-                                              const EdgeInsets
-                                                  .all(
-                                            12,
-                                          ),
-                                          decoration:
-                                              BoxDecoration(
-                                            color: Colors
-                                                .white
-                                                .withOpacity(
-                                              0.06,
-                                            ),
-                                            borderRadius:
-                                                BorderRadius
-                                                    .circular(
-                                              16,
-                                            ),
-                                          ),
-                                          child:
-                                              Row(
-                                            children: [
-                                              Container(
-                                                width:
-                                                    58,
-                                                height:
-                                                    76,
-                                                decoration:
-                                                    BoxDecoration(
-                                                  color:
-                                                      Colors.white10,
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                    12,
-                                                  ),
-                                                ),
-                                                child:
-                                                    const Icon(
-                                                  Icons
-                                                      .play_arrow_rounded,
-                                                  color:
-                                                      Colors.white70,
-                                                  size:
-                                                      30,
-                                                ),
-                                              ),
-
-                                              const SizedBox(
-                                                width:
-                                                    12,
-                                              ),
-
-                                              Expanded(
-                                                child:
-                                                    Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      _readString(
-                                                        video,
-                                                        'username',
-                                                      ),
-                                                      style:
-                                                          const TextStyle(
-                                                        color:
-                                                            Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                      ),
-                                                    ),
-
-                                                    const SizedBox(
-                                                      height:
-                                                          4,
-                                                    ),
-
-                                                    Text(
-                                                      _readString(
-                                                        video,
-                                                        'caption',
-                                                      ).isEmpty
-                                                          ? _readString(
-                                                              video,
-                                                              'hashtags',
-                                                            )
-                                                          : _readString(
-                                                              video,
-                                                              'caption',
-                                                            ),
-                                                      maxLines:
-                                                          2,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                      style:
-                                                          const TextStyle(
-                                                        color:
-                                                            Colors.white60,
-                                                        fontSize:
-                                                            13,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-
-                                              const Icon(
-                                                Icons
-                                                    .chevron_right,
-                                                color:
-                                                    Colors.white54,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ],
-
-                                if (_firestoreVideos
-                                    .isNotEmpty) ...[
-                                  const Padding(
-                                    padding:
-                                        EdgeInsets
-                                            .only(
-                                      top: 6,
-                                      bottom: 10,
-                                    ),
-                                    child: Text(
-                                      'More Videos',
-                                      style:
-                                          TextStyle(
-                                        color:
-                                            Colors.white,
-                                        fontSize:
-                                            16,
-                                        fontWeight:
-                                            FontWeight
-                                                .w700,
-                                      ),
-                                    ),
-                                  ),
-
-                                  ..._firestoreVideos
-                                      .map(
-                                    _buildVideoItem,
-                                  ),
-                                ],
-                              ],
-                            ),
-            ),
+  Widget _avatarPlaceholder(
+    String letter,
+  ) {
+    return Container(
+      width: 48,
+      height: 48,
+      decoration:
+          const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient:
+            LinearGradient(
+          colors: [
+            _pink,
+            _cyan,
           ],
+        ),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        letter,
+        style:
+            const TextStyle(
+          color: Colors.white,
+          fontSize: 18,
+          fontWeight:
+              FontWeight.w900,
         ),
       ),
     );
