@@ -1,15 +1,449 @@
+import 'dart:async';
+
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
-class TikTokCameraScreen extends StatefulWidget {
-  const TikTokCameraScreen({Key? key}) : super(key: key);
+class CameraScreen extends StatefulWidget {
+  const CameraScreen({super.key});
 
   @override
-  State<TikTokCameraScreen> createState() => _TikTokCameraScreenState();
+  State<CameraScreen> createState() => _CameraScreenState();
 }
 
-class _TikTokCameraScreenState extends State<TikTokCameraScreen> {
-  int _selectedTimer = 15; // 15s, 60s, 10m
+class _CameraScreenState extends State<CameraScreen>
+    with WidgetsBindingObserver {
+  static const Color _pink = Color(0xFFFF2D55);
+
+  CameraController? _controller;
+  List<CameraDescription> _cameras = [];
+
+  int _cameraIndex = 0;
+
+  bool _isLoading = true;
   bool _isRecording = false;
+  bool _flashEnabled = false;
+
+  int _timerSeconds = 0;
+  int _countdown = 0;
+
+  Timer? _countdownTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _initializeCamera();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _countdownTimer?.cancel();
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final controller = _controller;
+
+    if (controller == null || !controller.value.isInitialized) {
+      return;
+    }
+
+    if (state == AppLifecycleState.inactive) {
+      controller.dispose();
+    } else if (state == AppLifecycleState.resumed) {
+      _initializeCamera();
+    }
+  }
+
+  Future<void> _initializeCamera() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      _cameras = await availableCameras();
+
+      if (_cameras.isEmpty) {
+        throw Exception('No camera found');
+      }
+
+      if (_cameraIndex >= _cameras.length) {
+        _cameraIndex = 0;
+      }
+
+      await _controller?.dispose();
+
+      final controller = CameraController(
+        _cameras[_cameraIndex],
+        ResolutionPreset.high,
+        enableAudio: true,
+      );
+
+      _controller = controller;
+
+      await controller.initialize();
+
+      await controller.setFlashMode(
+        _flashEnabled ? FlashMode.torch : FlashMode.off,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+    } on CameraException catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      _showMessage(
+        _cameraErrorMessage(e),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      _showMessage('Camera চালু করা যায়নি।');
+    }
+  }
+
+  String _cameraErrorMessage(CameraException e) {
+    switch (e.code) {
+      case 'CameraAccessDenied':
+        return 'Camera permission দেওয়া হয়নি।';
+      case 'CameraAccessDeniedWithoutPrompt':
+        return 'Camera permission Settings থেকে চালু করুন।';
+      case 'AudioAccessDenied':
+        return 'Microphone permission দেওয়া হয়নি।';
+      default:
+        return 'Camera চালু করা যায়নি।';
+    }
+  }
+
+  Future<void> _flipCamera() async {
+    if (_isRecording || _isLoading) return;
+
+    if (_cameras.length < 2) {
+      _showMessage('এই ফোনে অন্য camera পাওয়া যায়নি।');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    _cameraIndex = (_cameraIndex + 1) % _cameras.length;
+
+    await _initializeCamera();
+  }
+
+  Future<void> _toggleFlash() async {
+    final controller = _controller;
+
+    if (controller == null || !controller.value.isInitialized) {
+      return;
+    }
+
+    if (_isRecording) {
+      _showMessage('Recording চলার সময় Flash পরিবর্তন করা যাবে না।');
+      return;
+    }
+
+    try {
+      final newValue = !_flashEnabled;
+
+      await controller.setFlashMode(
+        newValue ? FlashMode.torch : FlashMode.off,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _flashEnabled = newValue;
+      });
+    } catch (e) {
+      _showMessage('এই camera-তে Flash control করা যায়নি।');
+    }
+  }
+
+  Future<void> _showTimerDialog() async {
+    if (_isRecording || _isLoading) return;
+
+    final selected = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: const Color(0xFF151515),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(24),
+        ),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Timer',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                _timerOption(0, 'Off'),
+                _timerOption(3, '3 seconds'),
+                _timerOption(5, '5 seconds'),
+                _timerOption(10, '10 seconds'),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selected == null || !mounted) return;
+
+    setState(() {
+      _timerSeconds = selected;
+    });
+
+    if (selected > 0) {
+      _showMessage('Timer: ${selected}s');
+    } else {
+      _showMessage('Timer বন্ধ');
+    }
+  }
+
+  Widget _timerOption(int seconds, String label) {
+    final selected = _timerSeconds == seconds;
+
+    return ListTile(
+      onTap: () => Navigator.pop(context, seconds),
+      leading: Icon(
+        selected ? Icons.radio_button_checked : Icons.radio_button_off,
+        color: selected ? _pink : Colors.white54,
+      ),
+      title: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _startRecording() async {
+    final controller = _controller;
+
+    if (controller == null ||
+        !controller.value.isInitialized ||
+        _isLoading ||
+        _isRecording) {
+      return;
+    }
+
+    if (_timerSeconds > 0) {
+      await _startCountdown();
+      return;
+    }
+
+    await _beginRecording();
+  }
+
+  Future<void> _startCountdown() async {
+    _countdownTimer?.cancel();
+
+    setState(() {
+      _countdown = _timerSeconds;
+    });
+
+    final completer = Completer<void>();
+
+    _countdownTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (timer) async {
+        if (!mounted) {
+          timer.cancel();
+          if (!completer.isCompleted) {
+            completer.complete();
+          }
+          return;
+        }
+
+        if (_countdown <= 1) {
+          timer.cancel();
+
+          setState(() {
+            _countdown = 0;
+          });
+
+          await _beginRecording();
+
+          if (!completer.isCompleted) {
+            completer.complete();
+          }
+        } else {
+          setState(() {
+            _countdown--;
+          });
+        }
+      },
+    );
+
+    await completer.future;
+  }
+
+  Future<void> _beginRecording() async {
+    final controller = _controller;
+
+    if (controller == null || !controller.value.isInitialized) {
+      return;
+    }
+
+    try {
+      await controller.startVideoRecording();
+
+      if (!mounted) return;
+
+      setState(() {
+        _isRecording = true;
+      });
+    } on CameraException catch (e) {
+      _showMessage(
+        e.description ?? 'Recording শুরু করা যায়নি।',
+      );
+    } catch (e) {
+      _showMessage('Recording শুরু করা যায়নি।');
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    final controller = _controller;
+
+    if (controller == null ||
+        !controller.value.isInitialized ||
+        !_isRecording) {
+      return;
+    }
+
+    try {
+      final XFile video = await controller.stopVideoRecording();
+
+      if (!mounted) return;
+
+      setState(() {
+        _isRecording = false;
+      });
+
+      Navigator.of(context).pop(video.path);
+    } on CameraException catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isRecording = false;
+      });
+
+      _showMessage(
+        e.description ?? 'Recording বন্ধ করা যায়নি।',
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isRecording = false;
+      });
+
+      _showMessage('Video save করা যায়নি।');
+    }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
+  Widget _toolButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool active = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: active
+                  ? _pink.withOpacity(0.25)
+                  : Colors.black.withOpacity(0.35),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: active ? _pink : Colors.white24,
+              ),
+            ),
+            child: Icon(
+              icon,
+              color: active ? _pink : Colors.white,
+              size: 23,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCameraPreview() {
+    final controller = _controller;
+
+    if (controller == null || !controller.value.isInitialized) {
+      return const Center(
+        child: CircularProgressIndicator(
+          color: _pink,
+        ),
+      );
+    }
+
+    return Center(
+      child: AspectRatio(
+        aspectRatio: controller.value.aspectRatio,
+        child: CameraPreview(controller),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,182 +451,348 @@ class _TikTokCameraScreenState extends State<TikTokCameraScreen> {
       backgroundColor: Colors.black,
       body: SafeArea(
         child: Stack(
+          fit: StackFit.expand,
           children: [
-            // ১. ক্যামেরা প্রিভিউ ব্যাকগ্রাউন্ড
-            Container(
-              color: Colors.black,
-              child: const Center(
-                child: Icon(Icons.camera_alt, size: 80, color: Colors.white24),
+            _buildCameraPreview(),
+
+            // Dark gradient for controls.
+            IgnorePointer(
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0x66000000),
+                      Colors.transparent,
+                      Color(0xAA000000),
+                    ],
+                    stops: [0.0, 0.45, 1.0],
+                  ),
+                ),
               ),
             ),
 
-            // ২. টপ হেডার (ক্লোজ বাটন ও অ্যাড সাউন্ড)
+            // Top controls.
             Positioned(
-              top: 10,
-              left: 10,
-              right: 10,
+              top: 12,
+              left: 12,
+              right: 12,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white, size: 28),
-                    onPressed: () => Navigator.pop(context),
+                  _circleButton(
+                    icon: Icons.close,
+                    onTap: () {
+                      if (_isRecording) {
+                        _showMessage(
+                          'আগে recording বন্ধ করুন।',
+                        );
+                        return;
+                      }
+
+                      Navigator.pop(context);
+                    },
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  const Text(
+                    'PALOK',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 21,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  _circleButton(
+                    icon: Icons.settings_outlined,
+                    onTap: () {
+                      _showMessage('Camera settings পরে যোগ করা হবে।');
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            // Right-side tools.
+            Positioned(
+              right: 14,
+              top: 145,
+              child: Column(
+                children: [
+                  _toolButton(
+                    icon: Icons.flip_camera_ios_outlined,
+                    label: 'Flip',
+                    onTap: _flipCamera,
+                  ),
+                  const SizedBox(height: 20),
+                  _toolButton(
+                    icon: Icons.speed,
+                    label: 'Speed',
+                    onTap: () {
+                      _showMessage(
+                        'Real recording Speed পরের ধাপে যোগ হবে।',
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  _toolButton(
+                    icon: Icons.timer_outlined,
+                    label: _timerSeconds == 0
+                        ? 'Timer'
+                        : '${_timerSeconds}s',
+                    onTap: _showTimerDialog,
+                    active: _timerSeconds > 0,
+                  ),
+                  const SizedBox(height: 20),
+                  _toolButton(
+                    icon: _flashEnabled
+                        ? Icons.flash_on
+                        : Icons.flash_off,
+                    label: 'Flash',
+                    onTap: _toggleFlash,
+                    active: _flashEnabled,
+                  ),
+                ],
+              ),
+            ),
+
+            // Countdown number.
+            if (_countdown > 0)
+              Center(
+                child: Container(
+                  width: 110,
+                  height: 110,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.55),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: _pink,
+                      width: 3,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '$_countdown',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 54,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+
+            // Recording indicator.
+            if (_isRecording)
+              Positioned(
+                top: 72,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.5),
+                      color: Colors.red.withOpacity(0.85),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Row(
-                      children: const [
-                        Icon(Icons.music_note, color: Colors.white, size: 16),
-                        SizedBox(width: 4),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.fiber_manual_record,
+                          color: Colors.white,
+                          size: 12,
+                        ),
+                        SizedBox(width: 6),
                         Text(
-                          'Add sound',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          'REC',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 28),
-                ],
+                ),
               ),
-            ),
 
-            // ৩. রাইট সাইডবার (ক্যামেরা কন্ট্রোল ও ইফেক্ট)
+            // Bottom controls.
             Positioned(
-              top: 60,
-              right: 12,
-              child: Column(
-                children: [
-                  _buildCameraOption(Icons.flip_camera_ios, 'Flip'),
-                  _buildCameraOption(Icons.speed, 'Speed'),
-                  _buildCameraOption(Icons.auto_awesome, 'Beauty'),
-                  _buildCameraOption(Icons.filter_vintage, 'Filters'),
-                  _buildCameraOption(Icons.timer, 'Timer'),
-                  _buildCameraOption(Icons.flash_on, 'Flash'),
-                ],
-              ),
-            ),
-
-            // ৪. বটম কন্ট্রোলস (রেকর্ড বাটন, টাইমার, গ্যালারি)
-            Positioned(
-              bottom: 20,
               left: 0,
               right: 0,
+              bottom: 20,
               child: Column(
                 children: [
-                  // টাইমার সিলেক্টর (15s / 60s / 10m)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [15, 60, 600].map((time) {
-                      bool isSelected = _selectedTimer == time;
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedTimer = time;
-                          });
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 10),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: isSelected ? Colors.white24 : Colors.transparent,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            time == 600 ? '10m' : '${time}s',
-                            style: TextStyle(
-                              color: isSelected ? Colors.white : Colors.grey,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // ক্যাপচার বাটন ও গ্যালারি অপশন
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      // ইফেক্টস আইকন
-                      Column(
-                        children: const [
-                          Icon(Icons.face, color: Colors.white, size: 32),
-                          SizedBox(height: 4),
-                          Text('Effects', style: TextStyle(color: Colors.white, fontSize: 11)),
-                        ],
+                      _bottomTool(
+                        icon: Icons.music_note,
+                        label: 'Sound',
+                        onTap: () {
+                          _showMessage(
+                            'Sound selection পরে যোগ হবে।',
+                          );
+                        },
+                      ),
+                      _bottomTool(
+                        icon: Icons.auto_awesome,
+                        label: 'Effects',
+                        onTap: () {
+                          _showMessage(
+                            'Effects editor পরে যোগ হবে।',
+                          );
+                        },
+                      ),
+                      _bottomTool(
+                        icon: Icons.text_fields,
+                        label: 'Text',
+                        onTap: () {
+                          _showMessage(
+                            'Text editor পরে যোগ হবে।',
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Gallery shortcut.
+                      _circleButton(
+                        icon: Icons.photo_library_outlined,
+                        onTap: () {
+                          _showMessage(
+                            'Gallery থেকে নিতে হলে Create screen-এর Gallery ব্যবহার করুন।',
+                          );
+                        },
                       ),
 
-                      // প্রধান লাল রেকর্ড বাটন (টিকটক স্টাইল)
+                      const SizedBox(width: 34),
+
+                      // Record button.
                       GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _isRecording = !_isRecording;
-                          });
-                        },
-                        child: Container(
-                          width: 80,
-                          height: 80,
-                          padding: const EdgeInsets.all(4),
+                        onTap: _isRecording
+                            ? _stopRecording
+                            : _startRecording,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          width: _isRecording ? 76 : 82,
+                          height: _isRecording ? 76 : 82,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.redAccent.withOpacity(0.6), width: 4),
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 5,
+                            ),
                           ),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.redAccent,
-                              shape: _isRecording ? BoxShape.rectangle : BoxShape.circle,
-                              borderRadius: _isRecording ? BorderRadius.circular(8) : null,
+                          child: Center(
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              width: _isRecording ? 30 : 64,
+                              height: _isRecording ? 30 : 64,
+                              decoration: BoxDecoration(
+                                color: _pink,
+                                borderRadius: BorderRadius.circular(
+                                  _isRecording ? 7 : 40,
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
 
-                      // গ্যালারি আপলোড বাটন
-                      Column(
-                        children: [
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.white, width: 2),
-                              borderRadius: BorderRadius.circular(6),
-                              color: Colors.grey[900],
-                            ),
-                            child: const Icon(Icons.photo_library, color: Colors.white, size: 18),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text('Upload', style: TextStyle(color: Colors.white, fontSize: 11)),
-                        ],
+                      const SizedBox(width: 34),
+
+                      // Placeholder for balance.
+                      _circleButton(
+                        icon: Icons.check,
+                        onTap: () {
+                          if (_isRecording) {
+                            _stopRecording();
+                          } else {
+                            _showMessage(
+                              'আগে একটি video record করুন।',
+                            );
+                          }
+                        },
                       ),
                     ],
                   ),
                 ],
               ),
             ),
+
+            if (_isLoading)
+              Container(
+                color: Colors.black54,
+                child: const Center(
+                  child: CircularProgressIndicator(
+                    color: _pink,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildCameraOption(IconData icon, String label) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+  Widget _bottomTool({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.white, size: 28),
-          const SizedBox(height: 2),
+          Icon(
+            icon,
+            color: Colors.white,
+            size: 24,
+          ),
+          const SizedBox(height: 5),
           Text(
             label,
-            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _circleButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.35),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: Colors.white24,
+          ),
+        ),
+        child: Icon(
+          icon,
+          color: Colors.white,
+          size: 22,
+        ),
       ),
     );
   }
