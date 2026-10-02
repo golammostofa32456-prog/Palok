@@ -797,3 +797,5 @@ class _CameraScreenState extends State<CameraScreen>
     );
   }
 }
+
+}-
