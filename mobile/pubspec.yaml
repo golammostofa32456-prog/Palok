@@ -18,7 +18,8 @@ dependencies:
 
   # Video
   video_player: ^2.9.5
-
+  # Camera
+  camera: ^0.12.1
   # Image / Video picking
   image_picker: ^1.1.2
 
