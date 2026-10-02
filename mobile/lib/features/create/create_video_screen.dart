@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:palok/features/create/camera_screen.dart';
 import 'package:video_player/video_player.dart';
 
 class CreateVideoScreen extends StatefulWidget {
@@ -44,7 +45,7 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
   }
 
   // ---------------------------------------------------------
-  // PICK VIDEO
+  // PICK VIDEO FROM GALLERY
   // ---------------------------------------------------------
 
   Future<void> _pickVideo(ImageSource source) async {
@@ -117,6 +118,88 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
   }
 
   // ---------------------------------------------------------
+  // OPEN REAL PALOK CAMERA
+  // ---------------------------------------------------------
+
+  Future<void> _openCamera() async {
+    if (_isLoading) return;
+
+    final String? videoPath =
+        await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => const CameraScreen(),
+      ),
+    );
+
+    if (videoPath == null || !mounted) return;
+
+    await _loadVideoFromPath(videoPath);
+  }
+
+  // ---------------------------------------------------------
+  // LOAD VIDEO FROM REAL CAMERA
+  // ---------------------------------------------------------
+
+  Future<void> _loadVideoFromPath(String path) async {
+    if (_isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final file = XFile(path);
+
+      await _videoController?.dispose();
+
+      final controller = VideoPlayerController.file(
+        File(path),
+      );
+
+      await controller.initialize();
+      await controller.setLooping(true);
+      await controller.setPlaybackSpeed(_playbackSpeed);
+      await controller.setVolume(
+        _isMuted ? 0.0 : 1.0,
+      );
+
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+
+      setState(() {
+        _selectedVideo = file;
+        _videoController = controller;
+        _isLoading = false;
+
+        _isFlipped = false;
+        _isMuted = false;
+        _flashEnabled = false;
+
+        _playbackSpeed = 1.0;
+        _timerSeconds = 0;
+        _countdown = 0;
+
+        _selectedEffect = 'None';
+        _overlayText = '';
+      });
+
+      await controller.play();
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      _showMessage(
+        'Camera video load করা যায়নি: $e',
+      );
+    }
+  }
+
+  // ---------------------------------------------------------
   // CLOSE
   // ---------------------------------------------------------
 
@@ -157,7 +240,9 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
     });
 
     _showMessage(
-      _isFlipped ? 'ভিডিও Flip করা হয়েছে' : 'Flip বন্ধ করা হয়েছে',
+      _isFlipped
+          ? 'ভিডিও Flip করা হয়েছে'
+          : 'Flip বন্ধ করা হয়েছে',
     );
   }
 
@@ -224,8 +309,7 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
                   runSpacing: 10,
                   alignment: WrapAlignment.center,
                   children: speeds.map((speed) {
-                    final active =
-                        _playbackSpeed == speed;
+                    final active = _playbackSpeed == speed;
 
                     return GestureDetector(
                       onTap: () {
@@ -240,8 +324,7 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
                           color: active
                               ? _pink
                               : Colors.white10,
-                          borderRadius:
-                              BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: active
                                 ? _pink
@@ -338,8 +421,7 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
                   runSpacing: 10,
                   alignment: WrapAlignment.center,
                   children: timers.map((seconds) {
-                    final active =
-                        _timerSeconds == seconds;
+                    final active = _timerSeconds == seconds;
 
                     return GestureDetector(
                       onTap: () {
@@ -354,8 +436,7 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
                           color: active
                               ? _pink
                               : Colors.white10,
-                          borderRadius:
-                              BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                         alignment: Alignment.center,
                         child: Text(
@@ -386,6 +467,7 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
 
     if (selected == 0) {
       _countdownTimer?.cancel();
+
       setState(() {
         _countdown = 0;
       });
@@ -466,7 +548,9 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
     );
 
     _showMessage(
-      _isMuted ? 'Sound mute করা হয়েছে' : 'Sound চালু হয়েছে',
+      _isMuted
+          ? 'Sound mute করা হয়েছে'
+          : 'Sound চালু হয়েছে',
     );
   }
 
@@ -544,8 +628,7 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
                           color: active
                               ? _pink
                               : Colors.white10,
-                          borderRadius:
-                              BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                         child: Text(
                           effect,
@@ -821,9 +904,7 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
         ),
       );
 
-      videoWidget = _applyEffect(
-        videoWidget,
-      );
+      videoWidget = _applyEffect(videoWidget);
 
       videoWidget = GestureDetector(
         onTap: _togglePlay,
@@ -894,15 +975,7 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // ---------------------------------------------------
-            // VIDEO / EMPTY BACKGROUND
-            // ---------------------------------------------------
-
             videoWidget,
-
-            // ---------------------------------------------------
-            // TOP GRADIENT
-            // ---------------------------------------------------
 
             IgnorePointer(
               child: Container(
@@ -919,10 +992,6 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
                 ),
               ),
             ),
-
-            // ---------------------------------------------------
-            // BOTTOM GRADIENT
-            // ---------------------------------------------------
 
             IgnorePointer(
               child: Align(
@@ -1157,16 +1226,11 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
                       GestureDetector(
                         onTap: hasVideo
                             ? _togglePlay
-                            : () {
-                                _pickVideo(
-                                  ImageSource.camera,
-                                );
-                              },
+                            : _openCamera,
                         child: Container(
                           width: 82,
                           height: 82,
-                          padding:
-                              const EdgeInsets.all(6),
+                          padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
@@ -1359,15 +1423,13 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
         height: 64,
         decoration: BoxDecoration(
           color: Colors.white12,
-          borderRadius:
-              BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: Colors.white38,
           ),
         ),
         child: const Column(
-          mainAxisAlignment:
-              MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               Icons.photo_library_outlined,
