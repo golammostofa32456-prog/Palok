@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:palok/features/create/camera_screen.dart';
+import 'package:palok/features/create/palok_camera_screen.dart';
 import 'package:video_player/video_player.dart';
 
 class CreateVideoScreen extends StatefulWidget {
