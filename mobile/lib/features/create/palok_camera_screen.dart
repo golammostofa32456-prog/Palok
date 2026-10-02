@@ -1,4 +1,4 @@
-}import 'dart:async';
+import 'dart:async';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
