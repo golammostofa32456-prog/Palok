@@ -67,7 +67,13 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
-  Future<void> _initializeCamera() async {
+  // =========================================================
+  // INITIALIZE CAMERA
+  // =========================================================
+
+  Future<void> _initializeCamera({
+    CameraLensDirection? targetDirection,
+  }) async {
     try {
       if (mounted) {
         setState(() {
@@ -79,6 +85,21 @@ class _CameraScreenState extends State<CameraScreen>
 
       if (_cameras.isEmpty) {
         throw Exception('No camera found');
+      }
+
+      // -------------------------------------------------------
+      // If a specific lens direction is requested,
+      // find that exact camera.
+      // -------------------------------------------------------
+      if (targetDirection != null) {
+        final targetIndex = _cameras.indexWhere(
+          (camera) =>
+              camera.lensDirection == targetDirection,
+        );
+
+        if (targetIndex != -1) {
+          _cameraIndex = targetIndex;
+        }
       }
 
       if (_cameraIndex >= _cameras.length) {
@@ -135,6 +156,10 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
+  // =========================================================
+  // CAMERA ERROR MESSAGE
+  // =========================================================
+
   String _cameraErrorMessage(
     CameraException e,
   ) {
@@ -169,26 +194,72 @@ class _CameraScreenState extends State<CameraScreen>
       return;
     }
 
+    // -------------------------------------------------------
+    // Current camera lens direction
+    // -------------------------------------------------------
+
     final currentCamera =
         _cameras[_cameraIndex];
 
-    int nextIndex = _cameras.indexWhere(
+    final currentDirection =
+        currentCamera.lensDirection;
+
+    // -------------------------------------------------------
+    // Target lens direction
+    // Front -> Back
+    // Back -> Front
+    // -------------------------------------------------------
+
+    final targetDirection =
+        currentDirection ==
+                CameraLensDirection.front
+            ? CameraLensDirection.back
+            : CameraLensDirection.front;
+
+    // -------------------------------------------------------
+    // Find exact target camera
+    // -------------------------------------------------------
+
+    final targetIndex =
+        _cameras.indexWhere(
       (camera) =>
-          camera.lensDirection !=
-          currentCamera.lensDirection,
+          camera.lensDirection ==
+          targetDirection,
     );
 
-    if (nextIndex == -1) {
-      nextIndex =
-          (_cameraIndex + 1) % _cameras.length;
+    if (targetIndex == -1) {
+      _showMessage(
+        'অন্য camera পাওয়া যায়নি.',
+      );
+      return;
     }
 
-    setState(() {
-      _cameraIndex = nextIndex;
-      _isLoading = true;
-    });
+    if (targetIndex == _cameraIndex) {
+      _showMessage(
+        'অন্য camera পাওয়া যায়নি.',
+      );
+      return;
+    }
 
-    await _initializeCamera();
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
+
+    // -------------------------------------------------------
+    // Store target index
+    // -------------------------------------------------------
+
+    _cameraIndex = targetIndex;
+
+    // -------------------------------------------------------
+    // Reinitialize using exact lens direction
+    // -------------------------------------------------------
+
+    await _initializeCamera(
+      targetDirection: targetDirection,
+    );
   }
 
   // =========================================================
@@ -243,34 +314,42 @@ class _CameraScreenState extends State<CameraScreen>
     final selected =
         await showModalBottomSheet<int>(
       context: context,
-      backgroundColor: const Color(0xFF151515),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
+      backgroundColor:
+          const Color(0xFF151515),
+      shape:
+          const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(
           top: Radius.circular(24),
         ),
       ),
       builder: (context) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(
+            padding:
+                const EdgeInsets.fromLTRB(
               20,
               20,
               20,
               30,
             ),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisSize:
+                  MainAxisSize.min,
               children: [
                 const Text(
                   'Timer',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                    fontWeight:
+                        FontWeight.bold,
                   ),
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(
+                  height: 20,
+                ),
 
                 _timerOption(
                   0,
@@ -542,14 +621,19 @@ class _CameraScreenState extends State<CameraScreen>
           Container(
             width: 48,
             height: 48,
-            decoration: BoxDecoration(
+            decoration:
+                BoxDecoration(
               color: active
-                  ? _pink.withOpacity(0.25)
+                  ? _pink.withOpacity(
+                      0.25,
+                    )
                   : Colors.black.withOpacity(
                       0.35,
                     ),
-              shape: BoxShape.circle,
-              border: Border.all(
+              shape:
+                  BoxShape.circle,
+              border:
+                  Border.all(
                 color: active
                     ? _pink
                     : Colors.white24,
@@ -564,7 +648,9 @@ class _CameraScreenState extends State<CameraScreen>
             ),
           ),
 
-          const SizedBox(height: 6),
+          const SizedBox(
+            height: 6,
+          ),
 
           Text(
             label,
@@ -590,7 +676,8 @@ class _CameraScreenState extends State<CameraScreen>
     if (controller == null ||
         !controller.value.isInitialized) {
       return const Center(
-        child: CircularProgressIndicator(
+        child:
+            CircularProgressIndicator(
           color: _pink,
         ),
       );
@@ -631,7 +718,8 @@ class _CameraScreenState extends State<CameraScreen>
     BuildContext context,
   ) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor:
+          Colors.black,
       body: SafeArea(
         child: Stack(
           fit: StackFit.expand,
@@ -674,7 +762,8 @@ class _CameraScreenState extends State<CameraScreen>
               right: 12,
               child: Row(
                 mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
+                    MainAxisAlignment
+                        .spaceBetween,
                 children: [
                   _circleButton(
                     icon: Icons.close,
@@ -797,8 +886,10 @@ class _CameraScreenState extends State<CameraScreen>
                         .withOpacity(
                       0.55,
                     ),
-                    shape: BoxShape.circle,
-                    border: Border.all(
+                    shape:
+                        BoxShape.circle,
+                    border:
+                        Border.all(
                       color: _pink,
                       width: 3,
                     ),
@@ -859,9 +950,11 @@ class _CameraScreenState extends State<CameraScreen>
                               Colors.white,
                           size: 12,
                         ),
+
                         SizedBox(
                           width: 6,
                         ),
+
                         Text(
                           'REC',
                           style:
@@ -1023,7 +1116,7 @@ class _CameraScreenState extends State<CameraScreen>
                         width: 34,
                       ),
 
-                      // Confirm / balance button.
+                      // Confirm button.
                       _circleButton(
                         icon:
                             Icons.check,
@@ -1119,8 +1212,10 @@ class _CameraScreenState extends State<CameraScreen>
             BoxDecoration(
           color: Colors.black
               .withOpacity(0.35),
-          shape: BoxShape.circle,
-          border: Border.all(
+          shape:
+              BoxShape.circle,
+          border:
+              Border.all(
             color: Colors.white24,
           ),
         ),
