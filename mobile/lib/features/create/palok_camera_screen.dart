@@ -457,33 +457,38 @@ class _CameraScreenState extends State<CameraScreen>
       ),
     );
   }
+Widget _buildCameraPreview() {
+  final controller = _controller;
 
-  Widget _buildCameraPreview() {
-    final controller = _controller;
-
-    if (controller == null ||
-        !controller.value.isInitialized) {
-      return const Center(
-        child: CircularProgressIndicator(
-          color: _pink,
-        ),
-      );
-    }
-
-    final size = MediaQuery.of(context).size;
-
-    return SizedBox.expand(
-      child: FittedBox(
-        fit: BoxFit.cover,
-        alignment: Alignment.center,
-        child: SizedBox(
-          width: size.height * controller.value.aspectRatio,
-          height: size.height,
-          child: CameraPreview(controller),
-        ),
+  if (controller == null || !controller.value.isInitialized) {
+    return const Center(
+      child: CircularProgressIndicator(
+        color: _pink,
       ),
     );
   }
+
+  final previewSize = controller.value.previewSize;
+
+  if (previewSize == null) {
+    return CameraPreview(controller);
+  }
+
+  return ClipRect(
+    child: SizedBox.expand(
+      child: FittedBox(
+        fit: BoxFit.contain,
+        alignment: Alignment.center,
+        child: SizedBox(
+          width: previewSize.height,
+          height: previewSize.width,
+          child: CameraPreview(controller),
+        ),
+      ),
+    ),
+  );
+}
+
 
   @override
   Widget build(BuildContext context) {
