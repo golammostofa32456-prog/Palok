@@ -17,7 +17,9 @@ class _CameraScreenState extends State<CameraScreen>
 
   CameraController? _controller;
   List<CameraDescription> _cameras = [];
+
   int _cameraIndex = 0;
+
   bool _isLoading = true;
   bool _isRecording = false;
   bool _flashEnabled = false;
@@ -30,23 +32,31 @@ class _CameraScreenState extends State<CameraScreen>
   @override
   void initState() {
     super.initState();
+
     WidgetsBinding.instance.addObserver(this);
+
     _initializeCamera();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+
     _countdownTimer?.cancel();
+
     _controller?.dispose();
+
     super.dispose();
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
+  void didChangeAppLifecycleState(
+    AppLifecycleState state,
+  ) {
     final controller = _controller;
 
-    if (controller == null || !controller.value.isInitialized) {
+    if (controller == null ||
+        !controller.value.isInitialized) {
       return;
     }
 
@@ -87,13 +97,14 @@ class _CameraScreenState extends State<CameraScreen>
 
       await controller.initialize();
 
-      // Keep video capture in portrait orientation.
       await controller.lockCaptureOrientation(
         DeviceOrientation.portraitUp,
       );
 
       await controller.setFlashMode(
-        _flashEnabled ? FlashMode.torch : FlashMode.off,
+        _flashEnabled
+            ? FlashMode.torch
+            : FlashMode.off,
       );
 
       if (!mounted) return;
@@ -118,44 +129,77 @@ class _CameraScreenState extends State<CameraScreen>
         _isLoading = false;
       });
 
-      _showMessage('Camera চালু করা যায়নি।');
+      _showMessage(
+        'Camera চালু করা যায়নি।',
+      );
     }
   }
 
-  String _cameraErrorMessage(CameraException e) {
+  String _cameraErrorMessage(
+    CameraException e,
+  ) {
     switch (e.code) {
       case 'CameraAccessDenied':
         return 'Camera permission দেওয়া হয়নি.';
+
       case 'CameraAccessDeniedWithoutPrompt':
         return 'Camera permission Settings থেকে চালু করুন.';
+
       case 'AudioAccessDenied':
         return 'Microphone permission দেওয়া হয়নি.';
+
       default:
         return 'Camera চালু করা যায়নি.';
     }
   }
 
-  Future<void> _flipCamera() async {
-    if (_isRecording || _isLoading) return;
+  // =========================================================
+  // FLIP CAMERA
+  // =========================================================
 
-    if (_cameras.length < 2) {
-      _showMessage('এই ফোনে অন্য camera পাওয়া যায়নি.');
+  Future<void> _flipCamera() async {
+    if (_isRecording || _isLoading) {
       return;
     }
 
+    if (_cameras.length < 2) {
+      _showMessage(
+        'এই ফোনে অন্য camera পাওয়া যায়নি.',
+      );
+      return;
+    }
+
+    final currentCamera =
+        _cameras[_cameraIndex];
+
+    int nextIndex = _cameras.indexWhere(
+      (camera) =>
+          camera.lensDirection !=
+          currentCamera.lensDirection,
+    );
+
+    if (nextIndex == -1) {
+      nextIndex =
+          (_cameraIndex + 1) % _cameras.length;
+    }
+
     setState(() {
+      _cameraIndex = nextIndex;
       _isLoading = true;
     });
-
-    _cameraIndex = (_cameraIndex + 1) % _cameras.length;
 
     await _initializeCamera();
   }
 
+  // =========================================================
+  // FLASH
+  // =========================================================
+
   Future<void> _toggleFlash() async {
     final controller = _controller;
 
-    if (controller == null || !controller.value.isInitialized) {
+    if (controller == null ||
+        !controller.value.isInitialized) {
       return;
     }
 
@@ -170,7 +214,9 @@ class _CameraScreenState extends State<CameraScreen>
       final newValue = !_flashEnabled;
 
       await controller.setFlashMode(
-        newValue ? FlashMode.torch : FlashMode.off,
+        newValue
+            ? FlashMode.torch
+            : FlashMode.off,
       );
 
       if (!mounted) return;
@@ -185,10 +231,17 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
-  Future<void> _showTimerDialog() async {
-    if (_isRecording || _isLoading) return;
+  // =========================================================
+  // TIMER
+  // =========================================================
 
-    final selected = await showModalBottomSheet<int>(
+  Future<void> _showTimerDialog() async {
+    if (_isRecording || _isLoading) {
+      return;
+    }
+
+    final selected =
+        await showModalBottomSheet<int>(
       context: context,
       backgroundColor: const Color(0xFF151515),
       shape: const RoundedRectangleBorder(
@@ -216,11 +269,28 @@ class _CameraScreenState extends State<CameraScreen>
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+
                 const SizedBox(height: 20),
-                _timerOption(0, 'Off'),
-                _timerOption(3, '3 seconds'),
-                _timerOption(5, '5 seconds'),
-                _timerOption(10, '10 seconds'),
+
+                _timerOption(
+                  0,
+                  'Off',
+                ),
+
+                _timerOption(
+                  3,
+                  '3 seconds',
+                ),
+
+                _timerOption(
+                  5,
+                  '5 seconds',
+                ),
+
+                _timerOption(
+                  10,
+                  '10 seconds',
+                ),
               ],
             ),
           ),
@@ -228,16 +298,22 @@ class _CameraScreenState extends State<CameraScreen>
       },
     );
 
-    if (selected == null || !mounted) return;
+    if (selected == null || !mounted) {
+      return;
+    }
 
     setState(() {
       _timerSeconds = selected;
     });
 
     if (selected > 0) {
-      _showMessage('Timer: ${selected}s');
+      _showMessage(
+        'Timer: ${selected}s',
+      );
     } else {
-      _showMessage('Timer বন্ধ');
+      _showMessage(
+        'Timer বন্ধ',
+      );
     }
   }
 
@@ -245,15 +321,23 @@ class _CameraScreenState extends State<CameraScreen>
     int seconds,
     String label,
   ) {
-    final selected = _timerSeconds == seconds;
+    final selected =
+        _timerSeconds == seconds;
 
     return ListTile(
-      onTap: () => Navigator.pop(context, seconds),
+      onTap: () {
+        Navigator.pop(
+          context,
+          seconds,
+        );
+      },
       leading: Icon(
         selected
             ? Icons.radio_button_checked
             : Icons.radio_button_off,
-        color: selected ? _pink : Colors.white54,
+        color: selected
+            ? _pink
+            : Colors.white54,
       ),
       title: Text(
         label,
@@ -264,6 +348,10 @@ class _CameraScreenState extends State<CameraScreen>
       ),
     );
   }
+
+  // =========================================================
+  // START RECORDING
+  // =========================================================
 
   Future<void> _startRecording() async {
     final controller = _controller;
@@ -283,6 +371,10 @@ class _CameraScreenState extends State<CameraScreen>
     await _beginRecording();
   }
 
+  // =========================================================
+  // COUNTDOWN
+  // =========================================================
+
   Future<void> _startCountdown() async {
     _countdownTimer?.cancel();
 
@@ -290,7 +382,8 @@ class _CameraScreenState extends State<CameraScreen>
       _countdown = _timerSeconds;
     });
 
-    final completer = Completer<void>();
+    final completer =
+        Completer<void>();
 
     _countdownTimer = Timer.periodic(
       const Duration(seconds: 1),
@@ -328,6 +421,10 @@ class _CameraScreenState extends State<CameraScreen>
     await completer.future;
   }
 
+  // =========================================================
+  // BEGIN RECORDING
+  // =========================================================
+
   Future<void> _beginRecording() async {
     final controller = _controller;
 
@@ -346,7 +443,8 @@ class _CameraScreenState extends State<CameraScreen>
       });
     } on CameraException catch (e) {
       _showMessage(
-        e.description ?? 'Recording শুরু করা যায়নি.',
+        e.description ??
+            'Recording শুরু করা যায়নি.',
       );
     } catch (e) {
       _showMessage(
@@ -354,6 +452,10 @@ class _CameraScreenState extends State<CameraScreen>
       );
     }
   }
+
+  // =========================================================
+  // STOP RECORDING
+  // =========================================================
 
   Future<void> _stopRecording() async {
     final controller = _controller;
@@ -374,7 +476,9 @@ class _CameraScreenState extends State<CameraScreen>
         _isRecording = false;
       });
 
-      Navigator.of(context).pop(video.path);
+      Navigator.of(context).pop(
+        video.path,
+      );
     } on CameraException catch (e) {
       if (!mounted) return;
 
@@ -383,7 +487,8 @@ class _CameraScreenState extends State<CameraScreen>
       });
 
       _showMessage(
-        e.description ?? 'Recording বন্ধ করা যায়নি.',
+        e.description ??
+            'Recording বন্ধ করা যায়নি.',
       );
     } catch (e) {
       if (!mounted) return;
@@ -398,7 +503,13 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
-  void _showMessage(String message) {
+  // =========================================================
+  // MESSAGE
+  // =========================================================
+
+  void _showMessage(
+    String message,
+  ) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context)
@@ -406,10 +517,15 @@ class _CameraScreenState extends State<CameraScreen>
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          behavior: SnackBarBehavior.floating,
+          behavior:
+              SnackBarBehavior.floating,
         ),
       );
   }
+
+  // =========================================================
+  // RIGHT SIDE TOOL
+  // =========================================================
 
   Widget _toolButton({
     required IconData icon,
@@ -420,7 +536,8 @@ class _CameraScreenState extends State<CameraScreen>
     return GestureDetector(
       onTap: onTap,
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize:
+            MainAxisSize.min,
         children: [
           Container(
             width: 48,
@@ -428,7 +545,9 @@ class _CameraScreenState extends State<CameraScreen>
             decoration: BoxDecoration(
               color: active
                   ? _pink.withOpacity(0.25)
-                  : Colors.black.withOpacity(0.35),
+                  : Colors.black.withOpacity(
+                      0.35,
+                    ),
               shape: BoxShape.circle,
               border: Border.all(
                 color: active
@@ -444,54 +563,73 @@ class _CameraScreenState extends State<CameraScreen>
               size: 23,
             ),
           ),
+
           const SizedBox(height: 6),
+
           Text(
             label,
             style: const TextStyle(
               color: Colors.white,
               fontSize: 11,
-              fontWeight: FontWeight.w500,
+              fontWeight:
+                  FontWeight.w500,
             ),
           ),
         ],
       ),
     );
   }
-Widget _buildCameraPreview() {
-  final controller = _controller;
 
-  if (controller == null || !controller.value.isInitialized) {
-    return const Center(
-      child: CircularProgressIndicator(
-        color: _pink,
+  // =========================================================
+  // CAMERA PREVIEW
+  // =========================================================
+
+  Widget _buildCameraPreview() {
+    final controller = _controller;
+
+    if (controller == null ||
+        !controller.value.isInitialized) {
+      return const Center(
+        child: CircularProgressIndicator(
+          color: _pink,
+        ),
+      );
+    }
+
+    final previewSize =
+        controller.value.previewSize;
+
+    if (previewSize == null) {
+      return CameraPreview(
+        controller,
+      );
+    }
+
+    return ClipRect(
+      child: SizedBox.expand(
+        child: FittedBox(
+          fit: BoxFit.contain,
+          alignment: Alignment.center,
+          child: SizedBox(
+            width: previewSize.height,
+            height: previewSize.width,
+            child: CameraPreview(
+              controller,
+            ),
+          ),
+        ),
       ),
     );
   }
 
-  final previewSize = controller.value.previewSize;
-
-  if (previewSize == null) {
-    return CameraPreview(controller);
-  }
-
-  return ClipRect(
-    child: SizedBox.expand(
-      child: FittedBox(
-        fit: BoxFit.contain,
-        alignment: Alignment.center,
-        child: SizedBox(
-          width: previewSize.height,
-          height: previewSize.width,
-          child: CameraPreview(controller),
-        ),
-      ),
-    ),
-  );
-}
-
+  // =========================================================
+  // BUILD
+  // =========================================================
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
@@ -503,10 +641,14 @@ Widget _buildCameraPreview() {
             // Dark gradient for controls.
             IgnorePointer(
               child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
+                decoration:
+                    const BoxDecoration(
+                  gradient:
+                      LinearGradient(
+                    begin:
+                        Alignment.topCenter,
+                    end:
+                        Alignment.bottomCenter,
                     colors: [
                       Color(0x66000000),
                       Colors.transparent,
@@ -522,7 +664,10 @@ Widget _buildCameraPreview() {
               ),
             ),
 
-            // Top controls.
+            // =================================================
+            // TOP CONTROLS
+            // =================================================
+
             Positioned(
               top: 12,
               left: 12,
@@ -541,7 +686,9 @@ Widget _buildCameraPreview() {
                         return;
                       }
 
-                      Navigator.pop(context);
+                      Navigator.pop(
+                        context,
+                      );
                     },
                   ),
 
@@ -550,13 +697,15 @@ Widget _buildCameraPreview() {
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 21,
-                      fontWeight: FontWeight.w800,
+                      fontWeight:
+                          FontWeight.w800,
                       letterSpacing: 1.5,
                     ),
                   ),
 
                   _circleButton(
-                    icon: Icons.settings_outlined,
+                    icon:
+                        Icons.settings_outlined,
                     onTap: () {
                       _showMessage(
                         'Camera settings পরে যোগ করা হবে.',
@@ -567,19 +716,26 @@ Widget _buildCameraPreview() {
               ),
             ),
 
-            // Right-side tools.
+            // =================================================
+            // RIGHT SIDE TOOLS
+            // =================================================
+
             Positioned(
               right: 14,
               top: 145,
               child: Column(
                 children: [
                   _toolButton(
-                    icon: Icons.flip_camera_ios_outlined,
+                    icon: Icons
+                        .flip_camera_ios_outlined,
                     label: 'Flip',
-                    onTap: _flipCamera,
+                    onTap:
+                        _flipCamera,
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(
+                    height: 20,
+                  ),
 
                   _toolButton(
                     icon: Icons.speed,
@@ -591,58 +747,81 @@ Widget _buildCameraPreview() {
                     },
                   ),
 
-                  const SizedBox(height: 20),
-
-                  _toolButton(
-                    icon: Icons.timer_outlined,
-                    label: _timerSeconds == 0
-                        ? 'Timer'
-                        : '${_timerSeconds}s',
-                    onTap: _showTimerDialog,
-                    active: _timerSeconds > 0,
+                  const SizedBox(
+                    height: 20,
                   ),
 
-                  const SizedBox(height: 20),
+                  _toolButton(
+                    icon:
+                        Icons.timer_outlined,
+                    label:
+                        _timerSeconds == 0
+                            ? 'Timer'
+                            : '${_timerSeconds}s',
+                    onTap:
+                        _showTimerDialog,
+                    active:
+                        _timerSeconds > 0,
+                  ),
+
+                  const SizedBox(
+                    height: 20,
+                  ),
 
                   _toolButton(
                     icon: _flashEnabled
                         ? Icons.flash_on
                         : Icons.flash_off,
                     label: 'Flash',
-                    onTap: _toggleFlash,
-                    active: _flashEnabled,
+                    onTap:
+                        _toggleFlash,
+                    active:
+                        _flashEnabled,
                   ),
                 ],
               ),
             ),
 
-            // Countdown number.
+            // =================================================
+            // COUNTDOWN
+            // =================================================
+
             if (_countdown > 0)
               Center(
                 child: Container(
                   width: 110,
                   height: 110,
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.55),
+                  decoration:
+                      BoxDecoration(
+                    color: Colors.black
+                        .withOpacity(
+                      0.55,
+                    ),
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: _pink,
                       width: 3,
                     ),
                   ),
-                  alignment: Alignment.center,
+                  alignment:
+                      Alignment.center,
                   child: Text(
                     '$_countdown',
-                    style: const TextStyle(
+                    style:
+                        const TextStyle(
                       color: Colors.white,
                       fontSize: 54,
-                      fontWeight: FontWeight.w800,
+                      fontWeight:
+                          FontWeight.w800,
                     ),
                   ),
                 ),
               ),
 
-            // Recording indicator.
+            // =================================================
+            // RECORDING INDICATOR
+            // =================================================
+
             if (_isRecording)
               Positioned(
                 top: 72,
@@ -650,29 +829,48 @@ Widget _buildCameraPreview() {
                 right: 0,
                 child: Center(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
+                    padding:
+                        const EdgeInsets
+                            .symmetric(
                       horizontal: 12,
                       vertical: 6,
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.85),
+                    decoration:
+                        BoxDecoration(
+                      color: Colors.red
+                          .withOpacity(
+                        0.85,
+                      ),
                       borderRadius:
-                          BorderRadius.circular(20),
+                          BorderRadius
+                              .circular(
+                        20,
+                      ),
                     ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
+                    child:
+                        const Row(
+                      mainAxisSize:
+                          MainAxisSize.min,
                       children: [
                         Icon(
-                          Icons.fiber_manual_record,
-                          color: Colors.white,
+                          Icons
+                              .fiber_manual_record,
+                          color:
+                              Colors.white,
                           size: 12,
                         ),
-                        SizedBox(width: 6),
+                        SizedBox(
+                          width: 6,
+                        ),
                         Text(
                           'REC',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                          style:
+                              TextStyle(
+                            color:
+                                Colors.white,
+                            fontWeight:
+                                FontWeight
+                                    .bold,
                             fontSize: 12,
                           ),
                         ),
@@ -682,7 +880,10 @@ Widget _buildCameraPreview() {
                 ),
               ),
 
-            // Bottom controls.
+            // =================================================
+            // BOTTOM CONTROLS
+            // =================================================
+
             Positioned(
               left: 0,
               right: 0,
@@ -691,10 +892,12 @@ Widget _buildCameraPreview() {
                 children: [
                   Row(
                     mainAxisAlignment:
-                        MainAxisAlignment.spaceEvenly,
+                        MainAxisAlignment
+                            .spaceEvenly,
                     children: [
                       _bottomTool(
-                        icon: Icons.music_note,
+                        icon:
+                            Icons.music_note,
                         label: 'Sound',
                         onTap: () {
                           _showMessage(
@@ -704,7 +907,8 @@ Widget _buildCameraPreview() {
                       ),
 
                       _bottomTool(
-                        icon: Icons.auto_awesome,
+                        icon:
+                            Icons.auto_awesome,
                         label: 'Effects',
                         onTap: () {
                           _showMessage(
@@ -714,7 +918,8 @@ Widget _buildCameraPreview() {
                       ),
 
                       _bottomTool(
-                        icon: Icons.text_fields,
+                        icon:
+                            Icons.text_fields,
                         label: 'Text',
                         onTap: () {
                           _showMessage(
@@ -725,15 +930,19 @@ Widget _buildCameraPreview() {
                     ],
                   ),
 
-                  const SizedBox(height: 18),
+                  const SizedBox(
+                    height: 18,
+                  ),
 
                   Row(
                     mainAxisAlignment:
-                        MainAxisAlignment.center,
+                        MainAxisAlignment
+                            .center,
                     children: [
                       // Gallery shortcut.
                       _circleButton(
-                        icon: Icons.photo_library_outlined,
+                        icon: Icons
+                            .photo_library_outlined,
                         onTap: () {
                           _showMessage(
                             'Gallery থেকে নিতে হলে Create screen-এর Gallery ব্যবহার করুন.',
@@ -741,39 +950,68 @@ Widget _buildCameraPreview() {
                         },
                       ),
 
-                      const SizedBox(width: 34),
+                      const SizedBox(
+                        width: 34,
+                      ),
 
                       // Record button.
                       GestureDetector(
                         onTap: _isRecording
                             ? _stopRecording
                             : _startRecording,
-                        child: AnimatedContainer(
+                        child:
+                            AnimatedContainer(
                           duration:
-                              const Duration(milliseconds: 180),
-                          width: _isRecording ? 76 : 82,
-                          height: _isRecording ? 76 : 82,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white,
+                              const Duration(
+                            milliseconds:
+                                180,
+                          ),
+                          width:
+                              _isRecording
+                                  ? 76
+                                  : 82,
+                          height:
+                              _isRecording
+                                  ? 76
+                                  : 82,
+                          decoration:
+                              BoxDecoration(
+                            shape:
+                                BoxShape
+                                    .circle,
+                            border:
+                                Border.all(
+                              color:
+                                  Colors.white,
                               width: 5,
                             ),
                           ),
                           child: Center(
-                            child: AnimatedContainer(
-                              duration: const Duration(
-                                milliseconds: 180,
+                            child:
+                                AnimatedContainer(
+                              duration:
+                                  const Duration(
+                                milliseconds:
+                                    180,
                               ),
                               width:
-                                  _isRecording ? 30 : 64,
+                                  _isRecording
+                                      ? 30
+                                      : 64,
                               height:
-                                  _isRecording ? 30 : 64,
-                              decoration: BoxDecoration(
-                                color: _pink,
+                                  _isRecording
+                                      ? 30
+                                      : 64,
+                              decoration:
+                                  BoxDecoration(
+                                color:
+                                    _pink,
                                 borderRadius:
-                                    BorderRadius.circular(
-                                  _isRecording ? 7 : 40,
+                                    BorderRadius
+                                        .circular(
+                                  _isRecording
+                                      ? 7
+                                      : 40,
                                 ),
                               ),
                             ),
@@ -781,11 +1019,14 @@ Widget _buildCameraPreview() {
                         ),
                       ),
 
-                      const SizedBox(width: 34),
+                      const SizedBox(
+                        width: 34,
+                      ),
 
-                      // Placeholder for balance.
+                      // Confirm / balance button.
                       _circleButton(
-                        icon: Icons.check,
+                        icon:
+                            Icons.check,
                         onTap: () {
                           if (_isRecording) {
                             _stopRecording();
@@ -802,11 +1043,17 @@ Widget _buildCameraPreview() {
               ),
             ),
 
+            // =================================================
+            // LOADING
+            // =================================================
+
             if (_isLoading)
               Container(
                 color: Colors.black54,
-                child: const Center(
-                  child: CircularProgressIndicator(
+                child:
+                    const Center(
+                  child:
+                      CircularProgressIndicator(
                     color: _pink,
                   ),
                 ),
@@ -817,6 +1064,10 @@ Widget _buildCameraPreview() {
     );
   }
 
+  // =========================================================
+  // BOTTOM TOOL
+  // =========================================================
+
   Widget _bottomTool({
     required IconData icon,
     required String label,
@@ -825,17 +1076,23 @@ Widget _buildCameraPreview() {
     return GestureDetector(
       onTap: onTap,
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize:
+            MainAxisSize.min,
         children: [
           Icon(
             icon,
             color: Colors.white,
             size: 24,
           ),
-          const SizedBox(height: 5),
+
+          const SizedBox(
+            height: 5,
+          ),
+
           Text(
             label,
-            style: const TextStyle(
+            style:
+                const TextStyle(
               color: Colors.white,
               fontSize: 11,
             ),
@@ -844,6 +1101,10 @@ Widget _buildCameraPreview() {
       ),
     );
   }
+
+  // =========================================================
+  // CIRCLE BUTTON
+  // =========================================================
 
   Widget _circleButton({
     required IconData icon,
@@ -854,8 +1115,10 @@ Widget _buildCameraPreview() {
       child: Container(
         width: 44,
         height: 44,
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.35),
+        decoration:
+            BoxDecoration(
+          color: Colors.black
+              .withOpacity(0.35),
           shape: BoxShape.circle,
           border: Border.all(
             color: Colors.white24,
