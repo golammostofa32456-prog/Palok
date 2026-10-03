@@ -17,7 +17,6 @@ class _CameraScreenState extends State<CameraScreen>
 
   CameraController? _controller;
   List<CameraDescription> _cameras = [];
-
   int _cameraIndex = 0;
   bool _isLoading = true;
   bool _isRecording = false;
@@ -88,7 +87,7 @@ class _CameraScreenState extends State<CameraScreen>
 
       await controller.initialize();
 
-      // Keep camera capture in portrait orientation.
+      // Keep video capture in portrait orientation.
       await controller.lockCaptureOrientation(
         DeviceOrientation.portraitUp,
       );
@@ -471,10 +470,17 @@ class _CameraScreenState extends State<CameraScreen>
       );
     }
 
-    return Center(
-      child: AspectRatio(
-        aspectRatio: controller.value.aspectRatio,
-        child: CameraPreview(controller),
+    final size = MediaQuery.of(context).size;
+
+    return SizedBox.expand(
+      child: FittedBox(
+        fit: BoxFit.cover,
+        alignment: Alignment.center,
+        child: SizedBox(
+          width: size.height * controller.value.aspectRatio,
+          height: size.height,
+          child: CameraPreview(controller),
+        ),
       ),
     );
   }
