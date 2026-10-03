@@ -77,6 +77,9 @@ class _UploadSheetState extends State<UploadSheet> {
       return;
     }
 
+    // Capture the ScaffoldMessenger while this context is still valid.
+    final messenger = ScaffoldMessenger.of(context);
+
     setState(() {
       _uploading = true;
     });
@@ -149,14 +152,18 @@ class _UploadSheetState extends State<UploadSheet> {
 
       if (!mounted) return;
 
-      Navigator.pop(context);
-
-      ScaffoldMessenger.of(context).showSnackBar(
+      // Show the SnackBar BEFORE closing this sheet.
+      messenger.showSnackBar(
         const SnackBar(
-          content: Text('ভিডিও সফলভাবে PALOK-এ পোস্ট হয়েছে 🎉'),
+          content: Text(
+            'ভিডিও সফলভাবে PALOK-এ পোস্ট হয়েছে 🎉',
+          ),
           behavior: SnackBarBehavior.floating,
         ),
       );
+
+      // Now close the UploadSheet.
+      Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
         _showError(
@@ -204,6 +211,8 @@ class _UploadSheetState extends State<UploadSheet> {
   }
 
   void _showError(String message) {
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -219,9 +228,12 @@ class _UploadSheetState extends State<UploadSheet> {
 
     return AnimatedPadding(
       duration: const Duration(milliseconds: 180),
-      padding: EdgeInsets.only(bottom: bottomInset),
+      padding: EdgeInsets.only(
+        bottom: bottomInset,
+      ),
       child: Container(
-        height: MediaQuery.of(context).size.height * 0.82,
+        height:
+            MediaQuery.of(context).size.height * 0.82,
         decoration: const BoxDecoration(
           color: Color(0xFF101010),
           borderRadius: BorderRadius.vertical(
@@ -263,7 +275,8 @@ class _UploadSheetState extends State<UploadSheet> {
                   20,
                 ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
                   children: [
                     ClipRRect(
                       borderRadius:
@@ -272,32 +285,35 @@ class _UploadSheetState extends State<UploadSheet> {
                         width: double.infinity,
                         height: 360,
                         color: Colors.black,
-                        child: _previewController != null &&
-                                _previewController!
-                                    .value
-                                    .isInitialized
-                            ? FittedBox(
-                                fit: BoxFit.cover,
-                                child: SizedBox(
-                                  width: _previewController!
-                                      .value
-                                      .size
-                                      .width,
-                                  height: _previewController!
-                                      .value
-                                      .size
-                                      .height,
-                                  child: VideoPlayer(
-                                    _previewController!,
+                        child:
+                            _previewController != null &&
+                                    _previewController!
+                                        .value
+                                        .isInitialized
+                                ? FittedBox(
+                                    fit: BoxFit.cover,
+                                    child: SizedBox(
+                                      width:
+                                          _previewController!
+                                              .value
+                                              .size
+                                              .width,
+                                      height:
+                                          _previewController!
+                                              .value
+                                              .size
+                                              .height,
+                                      child: VideoPlayer(
+                                        _previewController!,
+                                      ),
+                                    ),
+                                  )
+                                : const Center(
+                                    child:
+                                        CircularProgressIndicator(
+                                      color: Colors.white,
+                                    ),
                                   ),
-                                ),
-                              )
-                            : const Center(
-                                child:
-                                    CircularProgressIndicator(
-                                  color: Colors.white,
-                                ),
-                              ),
                       ),
                     ),
 
@@ -379,7 +395,9 @@ class _UploadSheetState extends State<UploadSheet> {
                                 color: Colors.white,
                               ),
                             ),
+
                             SizedBox(width: 10),
+
                             Text(
                               'Uploading...',
                               style: TextStyle(
