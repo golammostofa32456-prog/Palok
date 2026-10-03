@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -18,7 +19,6 @@ class _CameraScreenState extends State<CameraScreen>
   List<CameraDescription> _cameras = [];
 
   int _cameraIndex = 0;
-
   bool _isLoading = true;
   bool _isRecording = false;
   bool _flashEnabled = false;
@@ -60,9 +60,11 @@ class _CameraScreenState extends State<CameraScreen>
 
   Future<void> _initializeCamera() async {
     try {
-      setState(() {
-        _isLoading = true;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+        });
+      }
 
       _cameras = await availableCameras();
 
@@ -85,6 +87,11 @@ class _CameraScreenState extends State<CameraScreen>
       _controller = controller;
 
       await controller.initialize();
+
+      // Keep camera capture in portrait orientation.
+      await controller.lockCaptureOrientation(
+        DeviceOrientation.portraitUp,
+      );
 
       await controller.setFlashMode(
         _flashEnabled ? FlashMode.torch : FlashMode.off,
@@ -119,13 +126,13 @@ class _CameraScreenState extends State<CameraScreen>
   String _cameraErrorMessage(CameraException e) {
     switch (e.code) {
       case 'CameraAccessDenied':
-        return 'Camera permission দেওয়া হয়নি।';
+        return 'Camera permission দেওয়া হয়নি.';
       case 'CameraAccessDeniedWithoutPrompt':
-        return 'Camera permission Settings থেকে চালু করুন।';
+        return 'Camera permission Settings থেকে চালু করুন.';
       case 'AudioAccessDenied':
-        return 'Microphone permission দেওয়া হয়নি।';
+        return 'Microphone permission দেওয়া হয়নি.';
       default:
-        return 'Camera চালু করা যায়নি।';
+        return 'Camera চালু করা যায়নি.';
     }
   }
 
@@ -133,7 +140,7 @@ class _CameraScreenState extends State<CameraScreen>
     if (_isRecording || _isLoading) return;
 
     if (_cameras.length < 2) {
-      _showMessage('এই ফোনে অন্য camera পাওয়া যায়নি।');
+      _showMessage('এই ফোনে অন্য camera পাওয়া যায়নি.');
       return;
     }
 
@@ -154,7 +161,9 @@ class _CameraScreenState extends State<CameraScreen>
     }
 
     if (_isRecording) {
-      _showMessage('Recording চলার সময় Flash পরিবর্তন করা যাবে না।');
+      _showMessage(
+        'Recording চলার সময় Flash পরিবর্তন করা যাবে না.',
+      );
       return;
     }
 
@@ -171,7 +180,9 @@ class _CameraScreenState extends State<CameraScreen>
         _flashEnabled = newValue;
       });
     } catch (e) {
-      _showMessage('এই camera-তে Flash control করা যায়নি।');
+      _showMessage(
+        'এই camera-তে Flash control করা যায়নি.',
+      );
     }
   }
 
@@ -189,7 +200,12 @@ class _CameraScreenState extends State<CameraScreen>
       builder: (context) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
+            padding: const EdgeInsets.fromLTRB(
+              20,
+              20,
+              20,
+              30,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -226,13 +242,18 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
-  Widget _timerOption(int seconds, String label) {
+  Widget _timerOption(
+    int seconds,
+    String label,
+  ) {
     final selected = _timerSeconds == seconds;
 
     return ListTile(
       onTap: () => Navigator.pop(context, seconds),
       leading: Icon(
-        selected ? Icons.radio_button_checked : Icons.radio_button_off,
+        selected
+            ? Icons.radio_button_checked
+            : Icons.radio_button_off,
         color: selected ? _pink : Colors.white54,
       ),
       title: Text(
@@ -277,9 +298,11 @@ class _CameraScreenState extends State<CameraScreen>
       (timer) async {
         if (!mounted) {
           timer.cancel();
+
           if (!completer.isCompleted) {
             completer.complete();
           }
+
           return;
         }
 
@@ -309,7 +332,8 @@ class _CameraScreenState extends State<CameraScreen>
   Future<void> _beginRecording() async {
     final controller = _controller;
 
-    if (controller == null || !controller.value.isInitialized) {
+    if (controller == null ||
+        !controller.value.isInitialized) {
       return;
     }
 
@@ -323,10 +347,12 @@ class _CameraScreenState extends State<CameraScreen>
       });
     } on CameraException catch (e) {
       _showMessage(
-        e.description ?? 'Recording শুরু করা যায়নি।',
+        e.description ?? 'Recording শুরু করা যায়নি.',
       );
     } catch (e) {
-      _showMessage('Recording শুরু করা যায়নি।');
+      _showMessage(
+        'Recording শুরু করা যায়নি.',
+      );
     }
   }
 
@@ -340,7 +366,8 @@ class _CameraScreenState extends State<CameraScreen>
     }
 
     try {
-      final XFile video = await controller.stopVideoRecording();
+      final XFile video =
+          await controller.stopVideoRecording();
 
       if (!mounted) return;
 
@@ -357,7 +384,7 @@ class _CameraScreenState extends State<CameraScreen>
       });
 
       _showMessage(
-        e.description ?? 'Recording বন্ধ করা যায়নি।',
+        e.description ?? 'Recording বন্ধ করা যায়নি.',
       );
     } catch (e) {
       if (!mounted) return;
@@ -366,7 +393,9 @@ class _CameraScreenState extends State<CameraScreen>
         _isRecording = false;
       });
 
-      _showMessage('Video save করা যায়নি।');
+      _showMessage(
+        'Video save করা যায়নি.',
+      );
     }
   }
 
@@ -403,12 +432,16 @@ class _CameraScreenState extends State<CameraScreen>
                   : Colors.black.withOpacity(0.35),
               shape: BoxShape.circle,
               border: Border.all(
-                color: active ? _pink : Colors.white24,
+                color: active
+                    ? _pink
+                    : Colors.white24,
               ),
             ),
             child: Icon(
               icon,
-              color: active ? _pink : Colors.white,
+              color: active
+                  ? _pink
+                  : Colors.white,
               size: 23,
             ),
           ),
@@ -429,7 +462,8 @@ class _CameraScreenState extends State<CameraScreen>
   Widget _buildCameraPreview() {
     final controller = _controller;
 
-    if (controller == null || !controller.value.isInitialized) {
+    if (controller == null ||
+        !controller.value.isInitialized) {
       return const Center(
         child: CircularProgressIndicator(
           color: _pink,
@@ -467,7 +501,11 @@ class _CameraScreenState extends State<CameraScreen>
                       Colors.transparent,
                       Color(0xAA000000),
                     ],
-                    stops: [0.0, 0.45, 1.0],
+                    stops: [
+                      0.0,
+                      0.45,
+                      1.0,
+                    ],
                   ),
                 ),
               ),
@@ -479,14 +517,15 @@ class _CameraScreenState extends State<CameraScreen>
               left: 12,
               right: 12,
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment:
+                    MainAxisAlignment.spaceBetween,
                 children: [
                   _circleButton(
                     icon: Icons.close,
                     onTap: () {
                       if (_isRecording) {
                         _showMessage(
-                          'আগে recording বন্ধ করুন।',
+                          'আগে recording বন্ধ করুন.',
                         );
                         return;
                       }
@@ -494,6 +533,7 @@ class _CameraScreenState extends State<CameraScreen>
                       Navigator.pop(context);
                     },
                   ),
+
                   const Text(
                     'PALOK',
                     style: TextStyle(
@@ -503,10 +543,13 @@ class _CameraScreenState extends State<CameraScreen>
                       letterSpacing: 1.5,
                     ),
                   ),
+
                   _circleButton(
                     icon: Icons.settings_outlined,
                     onTap: () {
-                      _showMessage('Camera settings পরে যোগ করা হবে।');
+                      _showMessage(
+                        'Camera settings পরে যোগ করা হবে.',
+                      );
                     },
                   ),
                 ],
@@ -524,17 +567,21 @@ class _CameraScreenState extends State<CameraScreen>
                     label: 'Flip',
                     onTap: _flipCamera,
                   ),
+
                   const SizedBox(height: 20),
+
                   _toolButton(
                     icon: Icons.speed,
                     label: 'Speed',
                     onTap: () {
                       _showMessage(
-                        'Real recording Speed পরের ধাপে যোগ হবে।',
+                        'Real recording Speed পরের ধাপে যোগ হবে.',
                       );
                     },
                   ),
+
                   const SizedBox(height: 20),
+
                   _toolButton(
                     icon: Icons.timer_outlined,
                     label: _timerSeconds == 0
@@ -543,7 +590,9 @@ class _CameraScreenState extends State<CameraScreen>
                     onTap: _showTimerDialog,
                     active: _timerSeconds > 0,
                   ),
+
                   const SizedBox(height: 20),
+
                   _toolButton(
                     icon: _flashEnabled
                         ? Icons.flash_on
@@ -596,7 +645,8 @@ class _CameraScreenState extends State<CameraScreen>
                     ),
                     decoration: BoxDecoration(
                       color: Colors.red.withOpacity(0.85),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius:
+                          BorderRadius.circular(20),
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
@@ -629,47 +679,53 @@ class _CameraScreenState extends State<CameraScreen>
               child: Column(
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    mainAxisAlignment:
+                        MainAxisAlignment.spaceEvenly,
                     children: [
                       _bottomTool(
                         icon: Icons.music_note,
                         label: 'Sound',
                         onTap: () {
                           _showMessage(
-                            'Sound selection পরে যোগ হবে।',
+                            'Sound selection পরে যোগ হবে.',
                           );
                         },
                       ),
+
                       _bottomTool(
                         icon: Icons.auto_awesome,
                         label: 'Effects',
                         onTap: () {
                           _showMessage(
-                            'Effects editor পরে যোগ হবে।',
+                            'Effects editor পরে যোগ হবে.',
                           );
                         },
                       ),
+
                       _bottomTool(
                         icon: Icons.text_fields,
                         label: 'Text',
                         onTap: () {
                           _showMessage(
-                            'Text editor পরে যোগ হবে।',
+                            'Text editor পরে যোগ হবে.',
                           );
                         },
                       ),
                     ],
                   ),
+
                   const SizedBox(height: 18),
+
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisAlignment:
+                        MainAxisAlignment.center,
                     children: [
                       // Gallery shortcut.
                       _circleButton(
                         icon: Icons.photo_library_outlined,
                         onTap: () {
                           _showMessage(
-                            'Gallery থেকে নিতে হলে Create screen-এর Gallery ব্যবহার করুন।',
+                            'Gallery থেকে নিতে হলে Create screen-এর Gallery ব্যবহার করুন.',
                           );
                         },
                       ),
@@ -682,7 +738,8 @@ class _CameraScreenState extends State<CameraScreen>
                             ? _stopRecording
                             : _startRecording,
                         child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
+                          duration:
+                              const Duration(milliseconds: 180),
                           width: _isRecording ? 76 : 82,
                           height: _isRecording ? 76 : 82,
                           decoration: BoxDecoration(
@@ -694,12 +751,17 @@ class _CameraScreenState extends State<CameraScreen>
                           ),
                           child: Center(
                             child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 180),
-                              width: _isRecording ? 30 : 64,
-                              height: _isRecording ? 30 : 64,
+                              duration: const Duration(
+                                milliseconds: 180,
+                              ),
+                              width:
+                                  _isRecording ? 30 : 64,
+                              height:
+                                  _isRecording ? 30 : 64,
                               decoration: BoxDecoration(
                                 color: _pink,
-                                borderRadius: BorderRadius.circular(
+                                borderRadius:
+                                    BorderRadius.circular(
                                   _isRecording ? 7 : 40,
                                 ),
                               ),
@@ -718,7 +780,7 @@ class _CameraScreenState extends State<CameraScreen>
                             _stopRecording();
                           } else {
                             _showMessage(
-                              'আগে একটি video record করুন।',
+                              'আগে একটি video record করুন.',
                             );
                           }
                         },
