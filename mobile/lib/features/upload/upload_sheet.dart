@@ -23,29 +23,39 @@ class UploadSheet extends StatefulWidget {
   });
 
   @override
-  State<UploadSheet> createState() => _UploadSheetState();
+  State<UploadSheet> createState() =>
+      _UploadSheetState();
 }
 
-class _UploadSheetState extends State<UploadSheet> {
-  static const String _cloudName = 'u0jufmrl';
-  static const String _uploadPreset = 'palok_video_upload';
+class _UploadSheetState
+    extends State<UploadSheet> {
+  static const String _cloudName =
+      'u0jufmrl';
 
-  final TextEditingController _captionController =
+  static const String _uploadPreset =
+      'palok_video_upload';
+
+  final TextEditingController
+      _captionController =
       TextEditingController();
 
-  VideoPlayerController? _previewController;
+  VideoPlayerController?
+      _previewController;
 
   bool _uploading = false;
 
   @override
   void initState() {
     super.initState();
+
     _initializePreview();
   }
 
   Future<void> _initializePreview() async {
     final controller =
-        VideoPlayerController.file(File(widget.filePath));
+        VideoPlayerController.file(
+      File(widget.filePath),
+    );
 
     _previewController = controller;
 
@@ -64,80 +74,118 @@ class _UploadSheetState extends State<UploadSheet> {
   void dispose() {
     _captionController.dispose();
     _previewController?.dispose();
+
     super.dispose();
   }
 
+  // =========================================================
+  // POST VIDEO
+  // =========================================================
+
   Future<void> _postVideo() async {
-    if (_uploading) return;
-
-    final file = File(widget.filePath);
-
-    if (!await file.exists()) {
-      _showError('ভিডিও file পাওয়া যায়নি');
+    if (_uploading) {
       return;
     }
 
-    // Capture the ScaffoldMessenger while this context is still valid.
-    final messenger = ScaffoldMessenger.of(context);
+    final file =
+        File(widget.filePath);
 
-    setState(() {
-      _uploading = true;
-    });
+    if (!await file.exists()) {
+      _showError(
+        'ভিডিও file পাওয়া যায়নি',
+      );
+      return;
+    }
+
+    // -------------------------------------------------------
+    // এই context এখনো valid থাকা অবস্থায়
+    // parent Scaffold-এর messenger নিয়ে রাখছি।
+    // -------------------------------------------------------
+
+    final messenger =
+        ScaffoldMessenger.of(context);
+
+    // -------------------------------------------------------
+    // Caption আগে নিয়ে রাখছি।
+    // Sheet বন্ধ হয়ে যাওয়ার পরও
+    // background upload এগুলো ব্যবহার করবে।
+    // -------------------------------------------------------
+
+    final caption =
+        _captionController.text.trim();
+
+    final filePath =
+        widget.filePath;
+
+    final username =
+        widget.username;
+
+    final userId =
+        widget.userId;
+
+    final firestore =
+        widget.firestore;
+
+    final onPosted =
+        widget.onPosted;
+
+    // -------------------------------------------------------
+    // UI-তে uploading state দেখাও
+    // -------------------------------------------------------
+
+    if (mounted) {
+      setState(() {
+        _uploading = true;
+      });
+    }
+
+    // -------------------------------------------------------
+    // TikTok-style behavior:
+    //
+    // Post চাপার সঙ্গে সঙ্গে Create Video sheet বন্ধ।
+    // Upload এরপর background-এ চলবে।
+    // -------------------------------------------------------
+
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+
+    // -------------------------------------------------------
+    // এখন আসল upload শুরু।
+    //
+    // Sheet বন্ধ হয়ে গেলেও এই async operation চলতে থাকবে।
+    // -------------------------------------------------------
 
     try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse(
-          'https://api.cloudinary.com/v1_1/$_cloudName/video/upload',
-        ),
-      );
-
-      request.fields['upload_preset'] = _uploadPreset;
-
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'file',
-          widget.filePath,
-        ),
-      );
-
-      final streamedResponse = await request.send();
-
-      final responseBody =
-          await streamedResponse.stream.bytesToString();
-
-      if (streamedResponse.statusCode < 200 ||
-          streamedResponse.statusCode >= 300) {
-        String message = 'Cloudinary upload failed';
-
-        try {
-          final errorJson = jsonDecode(responseBody);
-
-          message =
-              errorJson['error']?['message']?.toString() ??
-                  message;
-        } catch (_) {}
-
-        throw Exception(message);
-      }
-
-      final json = jsonDecode(responseBody);
-
       final secureUrl =
-          (json['secure_url'] ?? '').toString();
+          await _uploadToCloudinary(
+        filePath,
+      );
 
-      if (secureUrl.isEmpty) {
-        throw Exception('Video URL পাওয়া যায়নি');
+      if (secureUrl == null ||
+          secureUrl.isEmpty) {
+        throw Exception(
+          'Video URL পাওয়া যায়নি',
+        );
       }
 
-      final caption = _captionController.text.trim();
+      // -----------------------------------------------------
+      // Caption + hashtags
+      // -----------------------------------------------------
 
-      final hashtags = _extractHashtags(caption);
+      final hashtags =
+          _extractHashtags(caption);
 
-      await widget.firestore.collection('videos').add({
+      // -----------------------------------------------------
+      // Firestore-এ video post তৈরি
+      // -----------------------------------------------------
+
+      await firestore
+          .collection('videos')
+          .add({
         'videoUrl': secureUrl,
-        'userId': widget.userId,
-        'username': widget.username,
+        'userId': userId,
+        'username': username,
         'caption': caption,
         'hashtags': hashtags,
         'likeCount': 0,
@@ -145,55 +193,172 @@ class _UploadSheetState extends State<UploadSheet> {
         'saveCount': 0,
         'shareCount': 0,
         'thumbnailUrl': '',
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt':
+            FieldValue.serverTimestamp(),
       });
 
-      await widget.onPosted();
+      // -----------------------------------------------------
+      // Home screen feed reload
+      // -----------------------------------------------------
 
-      if (!mounted) return;
+      await onPosted();
 
-      // Show the SnackBar BEFORE closing this sheet.
+      // -----------------------------------------------------
+      // Upload successful message
+      // -----------------------------------------------------
+
       messenger.showSnackBar(
         const SnackBar(
           content: Text(
             'ভিডিও সফলভাবে PALOK-এ পোস্ট হয়েছে 🎉',
           ),
-          behavior: SnackBarBehavior.floating,
+          behavior:
+              SnackBarBehavior.floating,
         ),
       );
-
-      // Now close the UploadSheet.
-      Navigator.of(context).pop();
     } catch (e) {
-      if (mounted) {
-        _showError(
-          'Upload failed: ${_cleanUploadError(e)}',
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _uploading = false;
-        });
-      }
+      // -----------------------------------------------------
+      // Sheet ইতিমধ্যে বন্ধ।
+      // তাই এখানে context ব্যবহার না করে
+      // একই parent messenger ব্যবহার করছি।
+      // -----------------------------------------------------
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Upload failed: ${_cleanUploadError(e)}',
+          ),
+          behavior:
+              SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
-  List<String> _extractHashtags(String text) {
+  // =========================================================
+  // CLOUDINARY UPLOAD
+  // =========================================================
+
+  Future<String?> _uploadToCloudinary(
+    String filePath,
+  ) async {
+    final file =
+        File(filePath);
+
+    if (!await file.exists()) {
+      throw Exception(
+        'ভিডিও file পাওয়া যায়নি',
+      );
+    }
+
+    final request =
+        http.MultipartRequest(
+      'POST',
+      Uri.parse(
+        'https://api.cloudinary.com/v1_1/'
+        '$_cloudName/video/upload',
+      ),
+    );
+
+    request.fields[
+      'upload_preset'
+    ] = _uploadPreset;
+
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        'file',
+        filePath,
+      ),
+    );
+
+    final streamedResponse =
+        await request.send();
+
+    final responseBody =
+        await streamedResponse.stream
+            .bytesToString();
+
+    // -------------------------------------------------------
+    // HTTP error
+    // -------------------------------------------------------
+
+    if (streamedResponse.statusCode <
+            200 ||
+        streamedResponse.statusCode >=
+            300) {
+      String message =
+          'Cloudinary upload failed';
+
+      try {
+        final errorJson =
+            jsonDecode(
+          responseBody,
+        );
+
+        message =
+            errorJson['error']?['message']
+                    ?.toString() ??
+                message;
+      } catch (_) {}
+
+      throw Exception(message);
+    }
+
+    // -------------------------------------------------------
+    // JSON
+    // -------------------------------------------------------
+
+    final json =
+        jsonDecode(responseBody);
+
+    final secureUrl =
+        (json['secure_url'] ?? '')
+            .toString();
+
+    if (secureUrl.isEmpty) {
+      throw Exception(
+        'Video URL পাওয়া যায়নি',
+      );
+    }
+
+    return secureUrl;
+  }
+
+  // =========================================================
+  // HASHTAGS
+  // =========================================================
+
+  List<String> _extractHashtags(
+    String text,
+  ) {
     final matches = RegExp(
       r'#[A-Za-z0-9_\u0980-\u09FF]+',
     ).allMatches(text);
 
     return matches
-        .map((match) => match.group(0) ?? '')
-        .where((tag) => tag.isNotEmpty)
+        .map(
+          (match) =>
+              match.group(0) ?? '',
+        )
+        .where(
+          (tag) => tag.isNotEmpty,
+        )
         .toList();
   }
 
-  String _cleanUploadError(Object error) {
-    final text = error.toString();
+  // =========================================================
+  // ERROR CLEANER
+  // =========================================================
 
-    if (text.contains('Upload preset')) {
+  String _cleanUploadError(
+    Object error,
+  ) {
+    final text =
+        error.toString();
+
+    if (text.contains(
+      'Upload preset',
+    )) {
       return 'Cloudinary upload preset check করো';
     }
 
@@ -206,69 +371,113 @@ class _UploadSheetState extends State<UploadSheet> {
     }
 
     return text
-        .replaceFirst('Exception: ', '')
-        .replaceFirst('Error: ', '');
+        .replaceFirst(
+          'Exception: ',
+          '',
+        )
+        .replaceFirst(
+          'Error: ',
+          '',
+        );
   }
 
-  void _showError(String message) {
+  // =========================================================
+  // ERROR MESSAGE
+  // =========================================================
+
+  void _showError(
+    String message,
+  ) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
       SnackBar(
         content: Text(message),
-        behavior: SnackBarBehavior.floating,
+        behavior:
+            SnackBarBehavior.floating,
       ),
     );
   }
 
+  // =========================================================
+  // BUILD
+  // =========================================================
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     final bottomInset =
-        MediaQuery.of(context).viewInsets.bottom;
+        MediaQuery.of(context)
+            .viewInsets
+            .bottom;
 
     return AnimatedPadding(
-      duration: const Duration(milliseconds: 180),
+      duration:
+          const Duration(
+        milliseconds: 180,
+      ),
       padding: EdgeInsets.only(
         bottom: bottomInset,
       ),
       child: Container(
         height:
-            MediaQuery.of(context).size.height * 0.82,
-        decoration: const BoxDecoration(
+            MediaQuery.of(context)
+                    .size
+                    .height *
+                0.82,
+        decoration:
+            const BoxDecoration(
           color: Color(0xFF101010),
-          borderRadius: BorderRadius.vertical(
+          borderRadius:
+              BorderRadius.vertical(
             top: Radius.circular(24),
           ),
         ),
         child: Column(
           children: [
-            const SizedBox(height: 12),
+            const SizedBox(
+              height: 12,
+            ),
 
             Container(
               width: 42,
               height: 4,
-              decoration: BoxDecoration(
+              decoration:
+                  BoxDecoration(
                 color: Colors.white24,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius:
+                    BorderRadius.circular(
+                  20,
+                ),
               ),
             ),
 
-            const SizedBox(height: 10),
+            const SizedBox(
+              height: 10,
+            ),
 
             const Text(
               'Create Video',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 19,
-                fontWeight: FontWeight.w800,
+                fontWeight:
+                    FontWeight.w800,
               ),
             ),
 
-            const SizedBox(height: 14),
+            const SizedBox(
+              height: 14,
+            ),
 
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(
+              child:
+                  SingleChildScrollView(
+                padding:
+                    const EdgeInsets
+                        .fromLTRB(
                   18,
                   0,
                   18,
@@ -276,79 +485,118 @@ class _UploadSheetState extends State<UploadSheet> {
                 ),
                 child: Column(
                   crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                      CrossAxisAlignment
+                          .start,
                   children: [
+                    // =================================================
+                    // VIDEO PREVIEW
+                    // =================================================
+
                     ClipRRect(
                       borderRadius:
-                          BorderRadius.circular(18),
+                          BorderRadius
+                              .circular(
+                        18,
+                      ),
                       child: Container(
-                        width: double.infinity,
+                        width:
+                            double.infinity,
                         height: 360,
-                        color: Colors.black,
-                        child:
-                            _previewController != null &&
-                                    _previewController!
-                                        .value
-                                        .isInitialized
-                                ? FittedBox(
-                                    fit: BoxFit.cover,
-                                    child: SizedBox(
-                                      width:
-                                          _previewController!
-                                              .value
-                                              .size
-                                              .width,
-                                      height:
-                                          _previewController!
-                                              .value
-                                              .size
-                                              .height,
-                                      child: VideoPlayer(
-                                        _previewController!,
-                                      ),
-                                    ),
-                                  )
-                                : const Center(
-                                    child:
-                                        CircularProgressIndicator(
-                                      color: Colors.white,
-                                    ),
+                        color:
+                            Colors.black,
+                        child: _previewController !=
+                                    null &&
+                                _previewController!
+                                    .value
+                                    .isInitialized
+                            ? FittedBox(
+                                fit:
+                                    BoxFit.cover,
+                                child:
+                                    SizedBox(
+                                  width:
+                                      _previewController!
+                                          .value
+                                          .size
+                                          .width,
+                                  height:
+                                      _previewController!
+                                          .value
+                                          .size
+                                          .height,
+                                  child:
+                                      VideoPlayer(
+                                    _previewController!,
                                   ),
+                                ),
+                              )
+                            : const Center(
+                                child:
+                                    CircularProgressIndicator(
+                                  color:
+                                      Colors.white,
+                                ),
+                              ),
                       ),
                     ),
 
-                    const SizedBox(height: 16),
+                    const SizedBox(
+                      height: 16,
+                    ),
+
+                    // =================================================
+                    // CAPTION
+                    // =================================================
 
                     TextField(
-                      controller: _captionController,
+                      controller:
+                          _captionController,
                       maxLines: 4,
-                      enabled: !_uploading,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      enabled:
+                          !_uploading,
+                      style:
+                          const TextStyle(
+                        color:
+                            Colors.white,
                       ),
-                      decoration: InputDecoration(
+                      decoration:
+                          InputDecoration(
                         hintText:
                             'Write a caption... #PALOK',
-                        hintStyle: const TextStyle(
-                          color: Colors.white38,
+                        hintStyle:
+                            const TextStyle(
+                          color:
+                              Colors.white38,
                         ),
                         filled: true,
                         fillColor:
-                            Colors.white.withOpacity(0.07),
-                        border: OutlineInputBorder(
+                            Colors.white
+                                .withOpacity(
+                          0.07,
+                        ),
+                        border:
+                            OutlineInputBorder(
                           borderRadius:
-                              BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
+                              BorderRadius
+                                  .circular(
+                            16,
+                          ),
+                          borderSide:
+                              BorderSide.none,
                         ),
                       ),
                     ),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(
+                      height: 12,
+                    ),
 
                     const Text(
                       'ভিডিও সর্বোচ্চ ৩ মিনিট পর্যন্ত',
-                      style: TextStyle(
-                        color: Colors.white38,
+                      style:
+                          TextStyle(
+                        color:
+                            Colors.white38,
                         fontSize: 12,
                       ),
                     ),
@@ -357,61 +605,88 @@ class _UploadSheetState extends State<UploadSheet> {
               ),
             ),
 
+            // =================================================
+            // POST BUTTON
+            // =================================================
+
             Padding(
-              padding: const EdgeInsets.fromLTRB(
+              padding:
+                  const EdgeInsets
+                      .fromLTRB(
                 18,
                 8,
                 18,
                 18,
               ),
               child: SizedBox(
-                width: double.infinity,
+                width:
+                    double.infinity,
                 height: 52,
-                child: ElevatedButton(
+                child:
+                    ElevatedButton(
                   onPressed:
-                      _uploading ? null : _postVideo,
-                  style: ElevatedButton.styleFrom(
+                      _uploading
+                          ? null
+                          : _postVideo,
+                  style:
+                      ElevatedButton
+                          .styleFrom(
                     backgroundColor:
-                        const Color(0xFFFF2D55),
+                        const Color(
+                      0xFFFF2D55,
+                    ),
                     disabledBackgroundColor:
                         Colors.white12,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
+                    foregroundColor:
+                        Colors.white,
+                    shape:
+                        RoundedRectangleBorder(
                       borderRadius:
-                          BorderRadius.circular(16),
+                          BorderRadius
+                              .circular(
+                        16,
+                      ),
                     ),
                   ),
                   child: _uploading
                       ? const Row(
                           mainAxisAlignment:
-                              MainAxisAlignment.center,
+                              MainAxisAlignment
+                                  .center,
                           children: [
                             SizedBox(
                               width: 21,
                               height: 21,
                               child:
                                   CircularProgressIndicator(
-                                strokeWidth: 2.2,
-                                color: Colors.white,
+                                strokeWidth:
+                                    2.2,
+                                color:
+                                    Colors.white,
                               ),
                             ),
-
-                            SizedBox(width: 10),
-
+                            SizedBox(
+                              width: 10,
+                            ),
                             Text(
-                              'Uploading...',
-                              style: TextStyle(
+                              'Posting...',
+                              style:
+                                  TextStyle(
                                 fontWeight:
-                                    FontWeight.w800,
+                                    FontWeight
+                                        .w800,
                               ),
                             ),
                           ],
                         )
                       : const Text(
                           'Post to PALOK',
-                          style: TextStyle(
+                          style:
+                              TextStyle(
                             fontSize: 16,
-                            fontWeight: FontWeight.w800,
+                            fontWeight:
+                                FontWeight
+                                    .w800,
                           ),
                         ),
                 ),
