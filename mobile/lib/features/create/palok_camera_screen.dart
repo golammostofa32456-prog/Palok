@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:camera/camera.dart';
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -17,7 +20,6 @@ class _CameraScreenState extends State<CameraScreen>
 
   CameraController? _controller;
   List<CameraDescription> _cameras = [];
-
   int _cameraIndex = 0;
 
   bool _isLoading = true;
@@ -26,6 +28,8 @@ class _CameraScreenState extends State<CameraScreen>
 
   int _timerSeconds = 0;
   int _countdown = 0;
+
+  double _playbackSpeed = 1.0;
 
   Timer? _countdownTimer;
 
@@ -408,6 +412,148 @@ class _CameraScreenState extends State<CameraScreen>
   }
 
   // =========================================================
+  // SPEED
+  // =========================================================
+
+  Future<void> _showSpeedDialog() async {
+    if (_isRecording || _isLoading) {
+      return;
+    }
+
+    final selected =
+        await showModalBottomSheet<double>(
+      context: context,
+      backgroundColor:
+          const Color(0xFF151515),
+      shape:
+          const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(
+          top: Radius.circular(24),
+        ),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding:
+                const EdgeInsets.fromLTRB(
+              20,
+              20,
+              20,
+              30,
+            ),
+            child: Column(
+              mainAxisSize:
+                  MainAxisSize.min,
+              children: [
+                const Text(
+                  'Speed',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight:
+                        FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(
+                  height: 20,
+                ),
+
+                _speedOption(
+                  0.5,
+                  '0.5x',
+                  'Slow',
+                ),
+
+                _speedOption(
+                  1.0,
+                  '1x',
+                  'Normal',
+                ),
+
+                _speedOption(
+                  2.0,
+                  '2x',
+                  'Fast',
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selected == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _playbackSpeed = selected;
+    });
+
+    _showMessage(
+      'Speed: ${_speedLabel(selected)}',
+    );
+  }
+
+  Widget _speedOption(
+    double speed,
+    String title,
+    String subtitle,
+  ) {
+    final selected =
+        _playbackSpeed == speed;
+
+    return ListTile(
+      onTap: () {
+        Navigator.pop(
+          context,
+          speed,
+        );
+      },
+      leading: Icon(
+        selected
+            ? Icons.radio_button_checked
+            : Icons.radio_button_off,
+        color: selected
+            ? _pink
+            : Colors.white54,
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 17,
+          fontWeight:
+              FontWeight.w600,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(
+          color: Colors.white54,
+          fontSize: 13,
+        ),
+      ),
+    );
+  }
+
+  String _speedLabel(
+    double speed,
+  ) {
+    if (speed == 0.5) {
+      return '0.5x';
+    }
+
+    if (speed == 2.0) {
+      return '2x';
+    }
+
+    return '1x';
+  }
+
+  // =========================================================
   // START RECORDING
   // =========================================================
 
@@ -536,14 +682,71 @@ class _CameraScreenState extends State<CameraScreen>
         _isRecording = false;
       });
 
-      Navigator.of(context).pop(
+      // -------------------------------------------------------
+      // 1x হলে সরাসরি video ফেরত যাবে
+      // -------------------------------------------------------
+
+      if (_playbackSpeed == 1.0) {
+        Navigator.of(context).pop(
+          video.path,
+        );
+
+        return;
+      }
+
+      // -------------------------------------------------------
+      // Speed processing শুরু
+      // -------------------------------------------------------
+
+      setState(() {
+        _isLoading = true;
+      });
+
+      _showMessage(
+        'Video ${_speedLabel(_playbackSpeed)} করা হচ্ছে...',
+      );
+
+      final processedPath =
+          await _processVideoSpeed(
         video.path,
+        _playbackSpeed,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      // -------------------------------------------------------
+      // Processing fail হলে original video ফেরত যাবে
+      // -------------------------------------------------------
+
+      if (processedPath == null) {
+        _showMessage(
+          'Speed পরিবর্তন করা যায়নি। Original video ব্যবহার করা হচ্ছে.',
+        );
+
+        Navigator.of(context).pop(
+          video.path,
+        );
+
+        return;
+      }
+
+      // -------------------------------------------------------
+      // Processing success
+      // -------------------------------------------------------
+
+      Navigator.of(context).pop(
+        processedPath,
       );
     } on CameraException catch (e) {
       if (!mounted) return;
 
       setState(() {
         _isRecording = false;
+        _isLoading = false;
       });
 
       _showMessage(
@@ -555,12 +758,122 @@ class _CameraScreenState extends State<CameraScreen>
 
       setState(() {
         _isRecording = false;
+        _isLoading = false;
       });
 
       _showMessage(
         'Video save করা যায়নি.',
       );
     }
+  }
+
+  // =========================================================
+  // PROCESS VIDEO SPEED
+  // =========================================================
+
+  Future<String?> _processVideoSpeed(
+    String inputPath,
+    double speed,
+  ) async {
+    try {
+      final inputFile =
+          File(inputPath);
+
+      if (!await inputFile.exists()) {
+        return null;
+      }
+
+      final directory =
+          inputFile.parent.path;
+
+      final timestamp =
+          DateTime.now()
+              .millisecondsSinceEpoch;
+
+      final outputPath =
+          '$directory/palok_speed_$timestamp.mp4';
+
+      // -------------------------------------------------------
+      // Video:
+      //
+      // 0.5x => 2.0 * PTS
+      // 1x   => 1.0 * PTS
+      // 2x   => 0.5 * PTS
+      // -------------------------------------------------------
+
+      final videoFactor =
+          1.0 / speed;
+
+      // -------------------------------------------------------
+      // Audio:
+      //
+      // 0.5x => atempo=0.5
+      // 1x   => atempo=1.0
+      // 2x   => atempo=2.0
+      // -------------------------------------------------------
+
+      final audioTempo =
+          speed;
+
+      final input =
+          _quotePath(inputPath);
+
+      final output =
+          _quotePath(outputPath);
+
+      final command =
+          '-y '
+          '-i $input '
+          '-filter_complex '
+          '"[0:v]setpts=${videoFactor}*PTS[v];'
+          '[0:a]atempo=$audioTempo[a]" '
+          '-map "[v]" '
+          '-map "[a]" '
+          '-c:v libx264 '
+          '-preset ultrafast '
+          '-c:a aac '
+          '-movflags +faststart '
+          '$output';
+
+      final session =
+          await FFmpegKit.execute(
+        command,
+      );
+
+      final returnCode =
+          await session.getReturnCode();
+
+      if (ReturnCode.isSuccess(
+        returnCode,
+      )) {
+        final outputFile =
+            File(outputPath);
+
+        if (await outputFile.exists()) {
+          return outputPath;
+        }
+      }
+
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // =========================================================
+  // QUOTE FILE PATH
+  // =========================================================
+
+  String _quotePath(
+    String path,
+  ) {
+    final escaped =
+        path.replaceAll(
+      '"',
+      '\\"',
+    );
+
+    return '"$escaped"';
   }
 
   // =========================================================
@@ -709,7 +1022,10 @@ class _CameraScreenState extends State<CameraScreen>
           children: [
             _buildCameraPreview(),
 
-            // Dark gradient
+            // =================================================
+            // DARK GRADIENT
+            // =================================================
+
             IgnorePointer(
               child: Container(
                 decoration:
@@ -798,6 +1114,7 @@ class _CameraScreenState extends State<CameraScreen>
               child: Column(
                 children: [
                   // FLIP
+
                   _toolButton(
                     icon:
                         Icons.flip_camera_ios_outlined,
@@ -811,14 +1128,16 @@ class _CameraScreenState extends State<CameraScreen>
                   ),
 
                   // SPEED
+
                   _toolButton(
                     icon: Icons.speed,
-                    label: 'Speed',
-                    onTap: () {
-                      _showMessage(
-                        'Speed পরের ধাপে যোগ হবে.',
-                      );
-                    },
+                    label: _speedLabel(
+                      _playbackSpeed,
+                    ),
+                    onTap:
+                        _showSpeedDialog,
+                    active:
+                        _playbackSpeed != 1.0,
                   ),
 
                   const SizedBox(
@@ -826,6 +1145,7 @@ class _CameraScreenState extends State<CameraScreen>
                   ),
 
                   // TIMER
+
                   _toolButton(
                     icon:
                         Icons.timer_outlined,
@@ -844,6 +1164,7 @@ class _CameraScreenState extends State<CameraScreen>
                   ),
 
                   // FLASH
+
                   _toolButton(
                     icon: _flashEnabled
                         ? Icons.flash_on
@@ -937,9 +1258,11 @@ class _CameraScreenState extends State<CameraScreen>
                               Colors.white,
                           size: 12,
                         ),
+
                         SizedBox(
                           width: 6,
                         ),
+
                         Text(
                           'REC',
                           style:
@@ -1017,7 +1340,10 @@ class _CameraScreenState extends State<CameraScreen>
                         MainAxisAlignment
                             .center,
                     children: [
-                      // Gallery
+                      // =================================================
+                      // GALLERY
+                      // =================================================
+
                       _circleButton(
                         icon: Icons
                             .photo_library_outlined,
@@ -1032,7 +1358,10 @@ class _CameraScreenState extends State<CameraScreen>
                         width: 34,
                       ),
 
+                      // =================================================
                       // RECORD BUTTON
+                      // =================================================
+
                       GestureDetector(
                         onTap: _isRecording
                             ? _stopRecording
@@ -1101,7 +1430,10 @@ class _CameraScreenState extends State<CameraScreen>
                         width: 34,
                       ),
 
+                      // =================================================
                       // CHECK
+                      // =================================================
+
                       _circleButton(
                         icon:
                             Icons.check,
