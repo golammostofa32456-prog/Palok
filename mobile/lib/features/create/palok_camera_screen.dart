@@ -87,14 +87,13 @@ class _CameraScreenState extends State<CameraScreen>
         throw Exception('No camera found');
       }
 
-      // -------------------------------------------------------
-      // If a specific lens direction is requested,
-      // find that exact camera.
-      // -------------------------------------------------------
+      // যদি নির্দিষ্ট lens চাওয়া হয়,
+      // তাহলে সেই lens-এর camera খুঁজে নাও।
       if (targetDirection != null) {
         final targetIndex = _cameras.indexWhere(
           (camera) =>
-              camera.lensDirection == targetDirection,
+              camera.lensDirection ==
+              targetDirection,
         );
 
         if (targetIndex != -1) {
@@ -157,7 +156,7 @@ class _CameraScreenState extends State<CameraScreen>
   }
 
   // =========================================================
-  // CAMERA ERROR MESSAGE
+  // CAMERA ERROR
   // =========================================================
 
   String _cameraErrorMessage(
@@ -194,31 +193,17 @@ class _CameraScreenState extends State<CameraScreen>
       return;
     }
 
-    // -------------------------------------------------------
-    // Current camera lens direction
-    // -------------------------------------------------------
-
     final currentCamera =
         _cameras[_cameraIndex];
 
     final currentDirection =
         currentCamera.lensDirection;
 
-    // -------------------------------------------------------
-    // Target lens direction
-    // Front -> Back
-    // Back -> Front
-    // -------------------------------------------------------
-
     final targetDirection =
         currentDirection ==
                 CameraLensDirection.front
             ? CameraLensDirection.back
             : CameraLensDirection.front;
-
-    // -------------------------------------------------------
-    // Find exact target camera
-    // -------------------------------------------------------
 
     final targetIndex =
         _cameras.indexWhere(
@@ -247,15 +232,7 @@ class _CameraScreenState extends State<CameraScreen>
       });
     }
 
-    // -------------------------------------------------------
-    // Store target index
-    // -------------------------------------------------------
-
     _cameraIndex = targetIndex;
-
-    // -------------------------------------------------------
-    // Reinitialize using exact lens direction
-    // -------------------------------------------------------
 
     await _initializeCamera(
       targetDirection: targetDirection,
@@ -296,6 +273,8 @@ class _CameraScreenState extends State<CameraScreen>
         _flashEnabled = newValue;
       });
     } catch (e) {
+      if (!mounted) return;
+
       _showMessage(
         'এই camera-তে Flash control করা যায়নি.',
       );
@@ -456,6 +435,8 @@ class _CameraScreenState extends State<CameraScreen>
 
   Future<void> _startCountdown() async {
     _countdownTimer?.cancel();
+
+    if (!mounted) return;
 
     setState(() {
       _countdown = _timerSeconds;
@@ -692,6 +673,8 @@ class _CameraScreenState extends State<CameraScreen>
       );
     }
 
+    // তোমার ফোনে বর্তমানে যে preview
+    // সঠিকভাবে দেখা যাচ্ছে সেটিই রাখা হয়েছে।
     return ClipRect(
       child: SizedBox.expand(
         child: FittedBox(
@@ -726,7 +709,7 @@ class _CameraScreenState extends State<CameraScreen>
           children: [
             _buildCameraPreview(),
 
-            // Dark gradient for controls.
+            // Dark gradient
             IgnorePointer(
               child: Container(
                 decoration:
@@ -753,7 +736,7 @@ class _CameraScreenState extends State<CameraScreen>
             ),
 
             // =================================================
-            // TOP CONTROLS
+            // TOP
             // =================================================
 
             Positioned(
@@ -806,7 +789,7 @@ class _CameraScreenState extends State<CameraScreen>
             ),
 
             // =================================================
-            // RIGHT SIDE TOOLS
+            // RIGHT SIDE
             // =================================================
 
             Positioned(
@@ -814,9 +797,10 @@ class _CameraScreenState extends State<CameraScreen>
               top: 145,
               child: Column(
                 children: [
+                  // FLIP
                   _toolButton(
-                    icon: Icons
-                        .flip_camera_ios_outlined,
+                    icon:
+                        Icons.flip_camera_ios_outlined,
                     label: 'Flip',
                     onTap:
                         _flipCamera,
@@ -826,12 +810,13 @@ class _CameraScreenState extends State<CameraScreen>
                     height: 20,
                   ),
 
+                  // SPEED
                   _toolButton(
                     icon: Icons.speed,
                     label: 'Speed',
                     onTap: () {
                       _showMessage(
-                        'Real recording Speed পরের ধাপে যোগ হবে.',
+                        'Speed পরের ধাপে যোগ হবে.',
                       );
                     },
                   ),
@@ -840,6 +825,7 @@ class _CameraScreenState extends State<CameraScreen>
                     height: 20,
                   ),
 
+                  // TIMER
                   _toolButton(
                     icon:
                         Icons.timer_outlined,
@@ -857,6 +843,7 @@ class _CameraScreenState extends State<CameraScreen>
                     height: 20,
                   ),
 
+                  // FLASH
                   _toolButton(
                     icon: _flashEnabled
                         ? Icons.flash_on
@@ -950,11 +937,9 @@ class _CameraScreenState extends State<CameraScreen>
                               Colors.white,
                           size: 12,
                         ),
-
                         SizedBox(
                           width: 6,
                         ),
-
                         Text(
                           'REC',
                           style:
@@ -974,7 +959,7 @@ class _CameraScreenState extends State<CameraScreen>
               ),
 
             // =================================================
-            // BOTTOM CONTROLS
+            // BOTTOM
             // =================================================
 
             Positioned(
@@ -1032,7 +1017,7 @@ class _CameraScreenState extends State<CameraScreen>
                         MainAxisAlignment
                             .center,
                     children: [
-                      // Gallery shortcut.
+                      // Gallery
                       _circleButton(
                         icon: Icons
                             .photo_library_outlined,
@@ -1047,7 +1032,7 @@ class _CameraScreenState extends State<CameraScreen>
                         width: 34,
                       ),
 
-                      // Record button.
+                      // RECORD BUTTON
                       GestureDetector(
                         onTap: _isRecording
                             ? _stopRecording
@@ -1116,7 +1101,7 @@ class _CameraScreenState extends State<CameraScreen>
                         width: 34,
                       ),
 
-                      // Confirm button.
+                      // CHECK
                       _circleButton(
                         icon:
                             Icons.check,
