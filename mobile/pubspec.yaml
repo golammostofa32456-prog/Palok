@@ -20,6 +20,7 @@ dependencies:
   video_player: ^2.9.5
   # Camera
   camera: ^0.12.1
+  ffmpeg_kit_flutter_new: ^4.6.4
   # Image / Video picking
   image_picker: ^1.1.2
 
