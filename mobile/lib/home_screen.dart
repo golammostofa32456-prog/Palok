@@ -306,15 +306,18 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _prepareVideo(int index) async {
-    if (!mounted || index < 0 || index >= _videos.length) return;
+    if (!mounted || index < 0 || index >= _videos.length) {
+      return;
+    }
 
     if (_controllers.containsKey(index)) {
       final existing = _controllers[index]!;
 
       if (existing.value.isInitialized) {
         if (index == _currentIndex && _bottomIndex == 0) {
-          await existing.play();
+          unawaited(existing.play());
         }
+
         return;
       }
     }
@@ -328,7 +331,9 @@ class _HomeScreenState extends State<HomeScreen>
         Uri.parse(video.videoUrl),
       );
     } else {
-      controller = VideoPlayerController.asset(video.videoUrl);
+      controller = VideoPlayerController.asset(
+        video.videoUrl,
+      );
     }
 
     _controllers[index] = controller;
@@ -337,18 +342,24 @@ class _HomeScreenState extends State<HomeScreen>
       await controller.initialize();
       await controller.setLooping(true);
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       if (index == _currentIndex && _bottomIndex == 0) {
-        await controller.play();
+        unawaited(controller.play());
       }
 
       if (index + 1 < _videos.length) {
-        unawaited(_prepareVideo(index + 1));
+        unawaited(
+          _prepareVideo(index + 1),
+        );
       }
 
       if (index - 1 >= 0) {
-        unawaited(_prepareVideo(index - 1));
+        unawaited(
+          _prepareVideo(index - 1),
+        );
       }
 
       _disposeFarControllers(index);
@@ -378,11 +389,17 @@ class _HomeScreenState extends State<HomeScreen>
         value.startsWith('https://');
   }
 
+  // ============================================================
+  // FAST VIDEO CHANGE
+  // ============================================================
+
   Future<void> _onVideoChanged(
     int pageIndex,
     List<VideoPost> feed,
   ) async {
-    if (pageIndex < 0 || pageIndex >= feed.length) return;
+    if (pageIndex < 0 || pageIndex >= feed.length) {
+      return;
+    }
 
     final selectedVideo = feed[pageIndex];
 
@@ -390,21 +407,34 @@ class _HomeScreenState extends State<HomeScreen>
       (video) => video.id == selectedVideo.id,
     );
 
-    if (actualIndex < 0) return;
+    if (actualIndex < 0) {
+      return;
+    }
 
+    // IMPORTANT:
+    // অন্য controller pause হওয়ার জন্য আর অপেক্ষা করছি না।
+    // এটাই swipe transition-কে অনেক বেশি responsive করবে।
     for (final entry in _controllers.entries) {
       if (entry.key != actualIndex) {
-        await entry.value.pause();
+        unawaited(
+          entry.value.pause(),
+        );
       }
     }
 
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
+    // নতুন video index সঙ্গে সঙ্গে set হবে।
     setState(() {
       _currentIndex = actualIndex;
     });
 
-    await _prepareVideo(actualIndex);
+    // Video preparation/play-এর জন্য অপেক্ষা না করে শুরু করি।
+    unawaited(
+      _prepareVideo(actualIndex),
+    );
   }
 
   Future<void> _togglePlay(int actualIndex) async {
@@ -868,9 +898,6 @@ class _HomeScreenState extends State<HomeScreen>
       return;
     }
 
-    // IMPORTANT:
-    // UploadSheet এখন full-screen page হিসেবে খুলবে।
-    // আর bottom sheet হিসেবে খুলবে না।
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) {
@@ -1110,9 +1137,6 @@ class _HomeScreenState extends State<HomeScreen>
         return;
       }
 
-      // IMPORTANT:
-      // Gallery/Camera video selection-এর পরে
-      // UploadSheet full-screen page হিসেবে খুলবে।
       await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) {
@@ -1233,7 +1257,9 @@ class _HomeScreenState extends State<HomeScreen>
     if (_bottomIndex == 0) {
       for (final controller
           in _controllers.values) {
-        await controller.pause();
+        unawaited(
+          controller.pause(),
+        );
       }
     }
 
@@ -1271,7 +1297,9 @@ class _HomeScreenState extends State<HomeScreen>
 
     for (final controller
         in _controllers.values) {
-      await controller.pause();
+      unawaited(
+        controller.pause(),
+      );
     }
 
     if (!mounted) return;
@@ -1327,6 +1355,10 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  // ============================================================
+  // HOME FEED
+  // ============================================================
+
   Widget _buildHomeScreen() {
     if (_loading) {
       return const Center(
@@ -1353,8 +1385,21 @@ class _HomeScreenState extends State<HomeScreen>
 
     return PageView.builder(
       controller: _pageController,
+
+      // TikTok-style vertical feed.
       scrollDirection: Axis.vertical,
+
+      // Swipe শেষ হলে page-এ snap করবে।
+      physics: const PageScrollPhysics(),
+
+      // একটি swipe = একটি video/page।
+      pageSnapping: true,
+
+      // পাশের page আগে থেকে build রাখতে সাহায্য করে।
+      allowImplicitScrolling: true,
+
       itemCount: feed.length,
+
       onPageChanged: (index) {
         unawaited(
           _onVideoChanged(
@@ -1363,6 +1408,7 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         );
       },
+
       itemBuilder: (
         context,
         index,
