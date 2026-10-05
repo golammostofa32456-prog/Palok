@@ -2,10 +2,13 @@ import 'features/comments/comments_sheet.dart';
 import 'features/upload/upload_sheet.dart';
 import 'features/create/create_video_screen.dart';
 import 'features/search/search_screen.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'upload_video_screen.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -39,6 +42,9 @@ class _HomeScreenState extends State<HomeScreen>
   ];
 
   final Map<int, VideoPlayerController> _controllers = {};
+
+  // Prevent duplicate initialization of the same video.
+  final Map<int, Future<void>> _preparingVideos = {};
 
   final Set<String> _likedIds = {};
   final Set<String> _savedIds = {};
@@ -112,6 +118,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     _controllers.clear();
+    _preparingVideos.clear();
 
     super.dispose();
   }
@@ -142,42 +149,53 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _loadUserProfile() async {
     final user = _auth.currentUser;
+
     if (user == null) return;
 
     try {
-      final doc = await _firestore.collection('users').doc(user.uid).get();
+      final doc = await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .get();
 
       final data = doc.data();
 
       if (data != null) {
-        _username =
-            (data['username'] ??
-                    data['displayName'] ??
-                    user.displayName ??
-                    'PALOK User')
-                .toString();
+        _username = (data['username'] ??
+                data['displayName'] ??
+                user.displayName ??
+                'PALOK User')
+            .toString();
 
         _bio = (data['bio'] ?? '').toString();
 
         _email = (data['email'] ?? user.email ?? '').toString();
 
-        _profileImage = (data['profileImage'] ?? '').toString();
+        _profileImage =
+            (data['profileImage'] ?? '').toString();
 
-        _followersCount = _toInt(data['followersCount']);
+        _followersCount =
+            _toInt(data['followersCount']);
 
-        _followingCount = _toInt(data['followingCount']);
+        _followingCount =
+            _toInt(data['followingCount']);
       } else {
-        _username = user.displayName ?? 'PALOK User';
+        _username =
+            user.displayName ?? 'PALOK User';
+
         _email = user.email ?? '';
       }
     } catch (_) {
-      _username = user.displayName ?? 'PALOK User';
+      _username =
+          user.displayName ?? 'PALOK User';
+
       _email = user.email ?? '';
     }
   }
 
   Future<void> _loadUserData() async {
     final user = _auth.currentUser;
+
     if (user == null) return;
 
     try {
@@ -201,19 +219,33 @@ class _HomeScreenState extends State<HomeScreen>
 
       _likedIds
         ..clear()
-        ..addAll(likedSnapshot.docs.map((e) => e.id));
+        ..addAll(
+          likedSnapshot.docs.map(
+            (e) => e.id,
+          ),
+        );
 
       _savedIds
         ..clear()
-        ..addAll(savedSnapshot.docs.map((e) => e.id));
+        ..addAll(
+          savedSnapshot.docs.map(
+            (e) => e.id,
+          ),
+        );
 
       _followingIds
         ..clear()
-        ..addAll(followingSnapshot.docs.map((e) => e.id));
+        ..addAll(
+          followingSnapshot.docs.map(
+            (e) => e.id,
+          ),
+        );
     } catch (_) {}
   }
 
   Future<void> _loadVideos() async {
+    _preparingVideos.clear();
+
     for (final controller in _controllers.values) {
       await controller.dispose();
     }
@@ -223,32 +255,52 @@ class _HomeScreenState extends State<HomeScreen>
     try {
       final snapshot = await _firestore
           .collection('videos')
-          .orderBy('createdAt', descending: true)
+          .orderBy(
+            'createdAt',
+            descending: true,
+          )
           .limit(50)
           .get();
 
       if (snapshot.docs.isNotEmpty) {
         _videos = snapshot.docs
-            .map((doc) {
-              final data = doc.data();
+            .map(
+              (doc) {
+                final data = doc.data();
 
-              return VideoPost(
-                id: doc.id,
-                videoUrl: (data['videoUrl'] ?? '').toString(),
-                userId: (data['userId'] ?? '').toString(),
-                username:
-                    (data['username'] ?? 'PALOK User').toString(),
-                caption: (data['caption'] ?? '').toString(),
-                hashtags: _hashtagsToString(data['hashtags']),
-                likeCount: _toInt(data['likeCount']),
-                commentCount: _toInt(data['commentCount']),
-                saveCount: _toInt(data['saveCount']),
-                shareCount: _toInt(data['shareCount']),
-                thumbnailUrl:
-                    (data['thumbnailUrl'] ?? '').toString(),
-              );
-            })
-            .where((video) => video.videoUrl.isNotEmpty)
+                return VideoPost(
+                  id: doc.id,
+                  videoUrl:
+                      (data['videoUrl'] ?? '').toString(),
+                  userId:
+                      (data['userId'] ?? '').toString(),
+                  username:
+                      (data['username'] ?? 'PALOK User')
+                          .toString(),
+                  caption:
+                      (data['caption'] ?? '').toString(),
+                  hashtags:
+                      _hashtagsToString(
+                    data['hashtags'],
+                  ),
+                  likeCount:
+                      _toInt(data['likeCount']),
+                  commentCount:
+                      _toInt(data['commentCount']),
+                  saveCount:
+                      _toInt(data['saveCount']),
+                  shareCount:
+                      _toInt(data['shareCount']),
+                  thumbnailUrl:
+                      (data['thumbnailUrl'] ?? '')
+                          .toString(),
+                );
+              },
+            )
+            .where(
+              (video) =>
+                  video.videoUrl.isNotEmpty,
+            )
             .toList();
 
         if (_videos.isNotEmpty) {
@@ -256,8 +308,8 @@ class _HomeScreenState extends State<HomeScreen>
         }
       }
     } catch (_) {
-      // Firebase query may fail if the createdAt index/rules are not ready.
-      // Demo videos will be used below.
+      // Firebase query failed.
+      // Demo feed will be used below.
     }
 
     _videos = List.generate(
@@ -322,17 +374,45 @@ class _HomeScreenState extends State<HomeScreen>
     if (existing != null) {
       if (existing.value.isInitialized) {
         if (index == _currentIndex &&
-            _bottomIndex == 0) {
+            _bottomIndex == 0 &&
+            !existing.value.isPlaying) {
           unawaited(
             existing.play(),
           );
         }
-
-        return;
       }
 
-      // Controller already initializing.
-      // একই index-এর জন্য আরেকটি controller বানাবো না।
+      return;
+    }
+
+    // একই video ইতিমধ্যে initialize হচ্ছে কিনা।
+    final preparing = _preparingVideos[index];
+
+    if (preparing != null) {
+      await preparing;
+      return;
+    }
+
+    final future = _initializeVideo(index);
+
+    _preparingVideos[index] = future;
+
+    try {
+      await future;
+    } finally {
+      if (identical(
+        _preparingVideos[index],
+        future,
+      )) {
+        _preparingVideos.remove(index);
+      }
+    }
+  }
+
+  Future<void> _initializeVideo(int index) async {
+    if (!mounted ||
+        index < 0 ||
+        index >= _videos.length) {
       return;
     }
 
@@ -340,34 +420,34 @@ class _HomeScreenState extends State<HomeScreen>
 
     late final VideoPlayerController controller;
 
-    if (_isNetworkUrl(video.videoUrl)) {
-      controller = VideoPlayerController.networkUrl(
-        Uri.parse(video.videoUrl),
-      );
-    } else {
-      controller = VideoPlayerController.asset(
-        video.videoUrl,
-      );
-    }
-
-    _controllers[index] = controller;
-
     try {
-      // Video initialize.
+      if (_isNetworkUrl(video.videoUrl)) {
+        controller =
+            VideoPlayerController.networkUrl(
+          Uri.parse(video.videoUrl),
+        );
+      } else {
+        controller =
+            VideoPlayerController.asset(
+          video.videoUrl,
+        );
+      }
+
+      _controllers[index] = controller;
+
       await controller.initialize();
 
       if (!mounted) {
         return;
       }
 
-      // Looping ON.
       await controller.setLooping(true);
 
       if (!mounted) {
         return;
       }
 
-      // Current video হলে সঙ্গে সঙ্গে play।
+      // শুধু current video automatically play হবে।
       if (index == _currentIndex &&
           _bottomIndex == 0) {
         unawaited(
@@ -375,35 +455,49 @@ class _HomeScreenState extends State<HomeScreen>
         );
       }
 
-      // Current page render হওয়ার জন্য UI refresh।
       if (mounted) {
         setState(() {});
       }
 
-      // পরের video preload।
+      // Next video preload.
       if (index + 1 < _videos.length) {
         unawaited(
           _prepareVideo(index + 1),
         );
       }
 
-      // আগের video preload।
+      // Next +2 video preload.
+      if (index + 2 < _videos.length) {
+        unawaited(
+          _prepareVideo(index + 2),
+        );
+      }
+
+      // Previous video preload.
       if (index - 1 >= 0) {
         unawaited(
           _prepareVideo(index - 1),
         );
       }
 
-      // শুধুমাত্র current index-এর আশেপাশের controller রাখি।
-      _disposeFarControllers(_currentIndex);
-    } catch (_) {
-      try {
-        await controller.dispose();
-      } catch (_) {}
+      // Previous -2 video preload.
+      if (index - 2 >= 0) {
+        unawaited(
+          _prepareVideo(index - 2),
+        );
+      }
 
+      _disposeFarControllers(
+        _currentIndex,
+      );
+    } catch (_) {
       if (_controllers[index] == controller) {
         _controllers.remove(index);
       }
+
+      try {
+        await controller.dispose();
+      } catch (_) {}
 
       if (mounted) {
         setState(() {});
@@ -411,14 +505,17 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  // Current video-এর আগে/পরে ১টি করে রাখবে।
-  // এতে memory usage কম থাকবে এবং swipe দ্রুত থাকবে।
-  void _disposeFarControllers(int centerIndex) {
-    final keys = _controllers.keys.toList();
+  void _disposeFarControllers(
+    int centerIndex,
+  ) {
+    final keys =
+        _controllers.keys.toList();
 
     for (final key in keys) {
-      if ((key - centerIndex).abs() > 1) {
-        final controller = _controllers.remove(key);
+      // Current-এর আগে/পরে ২টি পর্যন্ত রাখবো।
+      if ((key - centerIndex).abs() > 2) {
+        final controller =
+            _controllers.remove(key);
 
         if (controller != null) {
           unawaited(
@@ -435,7 +532,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // ============================================================
-  // FAST VIDEO CHANGE
+  // VIDEO CHANGE
   // ============================================================
 
   Future<void> _onVideoChanged(
@@ -447,19 +544,23 @@ class _HomeScreenState extends State<HomeScreen>
       return;
     }
 
-    final selectedVideo = feed[pageIndex];
+    final selectedVideo =
+        feed[pageIndex];
 
-    final actualIndex = _videos.indexWhere(
-      (video) => video.id == selectedVideo.id,
+    final actualIndex =
+        _videos.indexWhere(
+      (video) =>
+          video.id == selectedVideo.id,
     );
 
     if (actualIndex < 0) {
       return;
     }
 
-    // পুরোনো videos pause করার জন্য অপেক্ষা করবো না।
-    // Swipe transition responsive থাকবে।
-    for (final entry in _controllers.entries) {
+    // পুরোনো controller pause করবো,
+    // কিন্তু pause শেষ হওয়ার জন্য wait করবো না।
+    for (final entry
+        in _controllers.entries) {
       if (entry.key != actualIndex) {
         unawaited(
           entry.value.pause(),
@@ -471,40 +572,68 @@ class _HomeScreenState extends State<HomeScreen>
       return;
     }
 
-    // Current index সঙ্গে সঙ্গে update।
     setState(() {
-      _currentIndex = actualIndex;
+      _currentIndex =
+          actualIndex;
     });
 
-    // Current video immediately prepare/play।
+    // Current video prepare.
     unawaited(
       _prepareVideo(actualIndex),
     );
 
-    // Next video preload।
-    if (actualIndex + 1 < _videos.length) {
+    // Next 2 preload.
+    if (actualIndex + 1 <
+        _videos.length) {
       unawaited(
-        _prepareVideo(actualIndex + 1),
+        _prepareVideo(
+          actualIndex + 1,
+        ),
       );
     }
 
-    // Previous video preload।
+    if (actualIndex + 2 <
+        _videos.length) {
+      unawaited(
+        _prepareVideo(
+          actualIndex + 2,
+        ),
+      );
+    }
+
+    // Previous 2 preload.
     if (actualIndex - 1 >= 0) {
       unawaited(
-        _prepareVideo(actualIndex - 1),
+        _prepareVideo(
+          actualIndex - 1,
+        ),
       );
     }
 
-    // দূরের controller remove।
-    _disposeFarControllers(actualIndex);
+    if (actualIndex - 2 >= 0) {
+      unawaited(
+        _prepareVideo(
+          actualIndex - 2,
+        ),
+      );
+    }
+
+    _disposeFarControllers(
+      actualIndex,
+    );
   }
 
-  Future<void> _togglePlay(int actualIndex) async {
-    final controller = _controllers[actualIndex];
+  Future<void> _togglePlay(
+    int actualIndex,
+  ) async {
+    final controller =
+        _controllers[actualIndex];
 
     if (controller == null ||
         !controller.value.isInitialized) {
-      await _prepareVideo(actualIndex);
+      await _prepareVideo(
+        actualIndex,
+      );
       return;
     }
 
@@ -519,53 +648,90 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  Future<void> _toggleLike(VideoPost video) async {
-    final user = _auth.currentUser;
+  // ============================================================
+  // LIKE
+  // ============================================================
+
+  Future<void> _toggleLike(
+    VideoPost video,
+  ) async {
+    final user =
+        _auth.currentUser;
 
     if (user == null) {
-      _showMessage('Like করতে Login করতে হবে');
+      _showMessage(
+        'Like করতে Login করতে হবে',
+      );
       return;
     }
 
-    final wasLiked = _likedIds.contains(video.id);
+    final wasLiked =
+        _likedIds.contains(
+      video.id,
+    );
 
     if (mounted) {
       setState(() {
         if (wasLiked) {
-          _likedIds.remove(video.id);
+          _likedIds.remove(
+            video.id,
+          );
+
           _likeDeltas[video.id] =
-              (_likeDeltas[video.id] ?? 0) - 1;
+              (_likeDeltas[
+                          video.id] ??
+                      0) -
+                  1;
         } else {
-          _likedIds.add(video.id);
+          _likedIds.add(
+            video.id,
+          );
+
           _likeDeltas[video.id] =
-              (_likeDeltas[video.id] ?? 0) + 1;
+              (_likeDeltas[
+                          video.id] ??
+                      0) +
+                  1;
         }
       });
     }
 
     try {
-      final likeRef = _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('likedVideos')
-          .doc(video.id);
+      final likeRef =
+          _firestore
+              .collection('users')
+              .doc(user.uid)
+              .collection(
+                'likedVideos',
+              )
+              .doc(video.id);
 
       if (wasLiked) {
         await likeRef.delete();
       } else {
         await likeRef.set({
           'videoId': video.id,
-          'createdAt': FieldValue.serverTimestamp(),
+          'createdAt':
+              FieldValue.serverTimestamp(),
         });
       }
 
-      if (!video.id.startsWith('demo_')) {
-        await _firestore.collection('videos').doc(video.id).set(
+      if (!video.id.startsWith(
+        'demo_',
+      )) {
+        await _firestore
+            .collection('videos')
+            .doc(video.id)
+            .set(
           {
             'likeCount':
-                FieldValue.increment(wasLiked ? -1 : 1),
+                FieldValue.increment(
+              wasLiked ? -1 : 1,
+            ),
           },
-          SetOptions(merge: true),
+          SetOptions(
+            merge: true,
+          ),
         );
       }
 
@@ -573,78 +739,131 @@ class _HomeScreenState extends State<HomeScreen>
           video.userId.isNotEmpty &&
           video.userId != user.uid) {
         await _createNotification(
-          targetUserId: video.userId,
+          targetUserId:
+              video.userId,
           type: 'like',
-          text: 'তোমার ভিডিওটি Like করেছে',
+          text:
+              'তোমার ভিডিওটি Like করেছে',
           videoId: video.id,
         );
       }
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
 
       setState(() {
         if (wasLiked) {
-          _likedIds.add(video.id);
+          _likedIds.add(
+            video.id,
+          );
+
           _likeDeltas[video.id] =
-              (_likeDeltas[video.id] ?? 0) + 1;
+              (_likeDeltas[
+                          video.id] ??
+                      0) +
+                  1;
         } else {
-          _likedIds.remove(video.id);
+          _likedIds.remove(
+            video.id,
+          );
+
           _likeDeltas[video.id] =
-              (_likeDeltas[video.id] ?? 0) - 1;
+              (_likeDeltas[
+                          video.id] ??
+                      0) -
+                  1;
         }
       });
 
-      _showMessage('Like পরিবর্তন করা যায়নি');
+      _showMessage(
+        'Like পরিবর্তন করা যায়নি',
+      );
     }
   }
 
-  Future<void> _toggleSave(VideoPost video) async {
-    final user = _auth.currentUser;
+  // ============================================================
+  // SAVE
+  // ============================================================
+
+  Future<void> _toggleSave(
+    VideoPost video,
+  ) async {
+    final user =
+        _auth.currentUser;
 
     if (user == null) {
-      _showMessage('Save করতে Login করতে হবে');
+      _showMessage(
+        'Save করতে Login করতে হবে',
+      );
       return;
     }
 
-    final wasSaved = _savedIds.contains(video.id);
+    final wasSaved =
+        _savedIds.contains(
+      video.id,
+    );
 
     if (mounted) {
       setState(() {
         if (wasSaved) {
-          _savedIds.remove(video.id);
+          _savedIds.remove(
+            video.id,
+          );
+
           _saveDeltas[video.id] =
-              (_saveDeltas[video.id] ?? 0) - 1;
+              (_saveDeltas[
+                          video.id] ??
+                      0) -
+                  1;
         } else {
-          _savedIds.add(video.id);
+          _savedIds.add(
+            video.id,
+          );
+
           _saveDeltas[video.id] =
-              (_saveDeltas[video.id] ?? 0) + 1;
+              (_saveDeltas[
+                          video.id] ??
+                      0) +
+                  1;
         }
       });
     }
 
     try {
-      final saveRef = _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('savedVideos')
-          .doc(video.id);
+      final saveRef =
+          _firestore
+              .collection('users')
+              .doc(user.uid)
+              .collection(
+                'savedVideos',
+              )
+              .doc(video.id);
 
       if (wasSaved) {
         await saveRef.delete();
       } else {
         await saveRef.set({
           'videoId': video.id,
-          'createdAt': FieldValue.serverTimestamp(),
+          'createdAt':
+              FieldValue.serverTimestamp(),
         });
       }
 
-      if (!video.id.startsWith('demo_')) {
-        await _firestore.collection('videos').doc(video.id).set(
+      if (!video.id.startsWith(
+        'demo_',
+      )) {
+        await _firestore
+            .collection('videos')
+            .doc(video.id)
+            .set(
           {
             'saveCount':
-                FieldValue.increment(wasSaved ? -1 : 1),
+                FieldValue.increment(
+              wasSaved ? -1 : 1,
+            ),
           },
-          SetOptions(merge: true),
+          SetOptions(
+            merge: true,
+          ),
         );
       }
 
@@ -660,53 +879,87 @@ class _HomeScreenState extends State<HomeScreen>
 
       setState(() {
         if (wasSaved) {
-          _savedIds.add(video.id);
+          _savedIds.add(
+            video.id,
+          );
+
           _saveDeltas[video.id] =
-              (_saveDeltas[video.id] ?? 0) + 1;
+              (_saveDeltas[
+                          video.id] ??
+                      0) +
+                  1;
         } else {
-          _savedIds.remove(video.id);
+          _savedIds.remove(
+            video.id,
+          );
+
           _saveDeltas[video.id] =
-              (_saveDeltas[video.id] ?? 0) - 1;
+              (_saveDeltas[
+                          video.id] ??
+                      0) -
+                  1;
         }
       });
 
-      _showMessage('Save করা যায়নি');
+      _showMessage(
+        'Save করা যায়নি',
+      );
     }
   }
 
-  Future<void> _toggleFollow(VideoPost video) async {
-    final user = _auth.currentUser;
+  // ============================================================
+  // FOLLOW
+  // ============================================================
+
+  Future<void> _toggleFollow(
+    VideoPost video,
+  ) async {
+    final user =
+        _auth.currentUser;
 
     if (user == null) {
-      _showMessage('Follow করতে Login করতে হবে');
+      _showMessage(
+        'Follow করতে Login করতে হবে',
+      );
       return;
     }
 
     if (video.userId.isEmpty ||
         video.userId == user.uid) {
-      _showMessage('নিজের Profile Follow করা যাবে না');
+      _showMessage(
+        'নিজের Profile Follow করা যাবে না',
+      );
       return;
     }
 
     final wasFollowing =
-        _followingIds.contains(video.userId);
+        _followingIds.contains(
+      video.userId,
+    );
 
     if (mounted) {
       setState(() {
         if (wasFollowing) {
-          _followingIds.remove(video.userId);
+          _followingIds.remove(
+            video.userId,
+          );
         } else {
-          _followingIds.add(video.userId);
+          _followingIds.add(
+            video.userId,
+          );
         }
       });
     }
 
     try {
-      final followingRef = _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('following')
-          .doc(video.userId);
+      final followingRef =
+          _firestore
+              .collection('users')
+              .doc(user.uid)
+              .collection(
+                'following',
+              )
+              .doc(video.userId);
 
       if (wasFollowing) {
         await followingRef.delete();
@@ -714,7 +967,8 @@ class _HomeScreenState extends State<HomeScreen>
         await followingRef.set({
           'userId': video.userId,
           'username': video.username,
-          'createdAt': FieldValue.serverTimestamp(),
+          'createdAt':
+              FieldValue.serverTimestamp(),
         });
       }
 
@@ -729,7 +983,9 @@ class _HomeScreenState extends State<HomeScreen>
               wasFollowing ? -1 : 1,
             ),
           },
-          SetOptions(merge: true),
+          SetOptions(
+            merge: true,
+          ),
         );
       } catch (_) {}
 
@@ -744,15 +1000,19 @@ class _HomeScreenState extends State<HomeScreen>
               wasFollowing ? -1 : 1,
             ),
           },
-          SetOptions(merge: true),
+          SetOptions(
+            merge: true,
+          ),
         );
       } catch (_) {}
 
       if (!wasFollowing) {
         await _createNotification(
-          targetUserId: video.userId,
+          targetUserId:
+              video.userId,
           type: 'follow',
-          text: 'তোমাকে Follow করেছে',
+          text:
+              'তোমাকে Follow করেছে',
         );
       }
 
@@ -767,18 +1027,31 @@ class _HomeScreenState extends State<HomeScreen>
 
       setState(() {
         if (wasFollowing) {
-          _followingIds.add(video.userId);
+          _followingIds.add(
+            video.userId,
+          );
         } else {
-          _followingIds.remove(video.userId);
+          _followingIds.remove(
+            video.userId,
+          );
         }
       });
 
-      _showMessage('Follow পরিবর্তন করা যায়নি');
+      _showMessage(
+        'Follow পরিবর্তন করা যায়নি',
+      );
     }
   }
 
-  Future<void> _shareVideo(VideoPost video) async {
-    final user = _auth.currentUser;
+  // ============================================================
+  // SHARE
+  // ============================================================
+
+  Future<void> _shareVideo(
+    VideoPost video,
+  ) async {
+    final user =
+        _auth.currentUser;
 
     final link =
         'https://palok.app/video/${video.id}';
@@ -791,11 +1064,16 @@ class _HomeScreenState extends State<HomeScreen>
       if (mounted) {
         setState(() {
           _shareDeltas[video.id] =
-              (_shareDeltas[video.id] ?? 0) + 1;
+              (_shareDeltas[
+                          video.id] ??
+                      0) +
+                  1;
         });
       }
 
-      if (!video.id.startsWith('demo_')) {
+      if (!video.id.startsWith(
+        'demo_',
+      )) {
         try {
           await _firestore
               .collection('videos')
@@ -805,18 +1083,24 @@ class _HomeScreenState extends State<HomeScreen>
               'shareCount':
                   FieldValue.increment(1),
             },
-            SetOptions(merge: true),
+            SetOptions(
+              merge: true,
+            ),
           );
         } catch (_) {}
       }
 
       if (user != null &&
-          !video.id.startsWith('demo_')) {
+          !video.id.startsWith(
+            'demo_',
+          )) {
         try {
           await _firestore
               .collection('videos')
               .doc(video.id)
-              .collection('shares')
+              .collection(
+                'shares',
+              )
               .add({
             'userId': user.uid,
             'createdAt':
@@ -827,13 +1111,18 @@ class _HomeScreenState extends State<HomeScreen>
     } catch (_) {}
   }
 
+  // ============================================================
+  // NOTIFICATION
+  // ============================================================
+
   Future<void> _createNotification({
     required String targetUserId,
     required String type,
     required String text,
     String? videoId,
   }) async {
-    final user = _auth.currentUser;
+    final user =
+        _auth.currentUser;
 
     if (user == null ||
         targetUserId.isEmpty ||
@@ -845,7 +1134,9 @@ class _HomeScreenState extends State<HomeScreen>
       await _firestore
           .collection('users')
           .doc(targetUserId)
-          .collection('notifications')
+          .collection(
+            'notifications',
+          )
           .add({
         'type': type,
         'fromUserId': user.uid,
@@ -859,21 +1150,33 @@ class _HomeScreenState extends State<HomeScreen>
     } catch (_) {}
   }
 
-  Future<void> _openComments(VideoPost video) async {
+  // ============================================================
+  // COMMENTS
+  // ============================================================
+
+  Future<void> _openComments(
+    VideoPost video,
+  ) async {
     final added =
         await showModalBottomSheet<int>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor:
+          Colors.transparent,
       builder: (_) {
         return CommentsSheet(
           videoId: video.id,
-          videoOwnerId: video.userId,
-          videoOwnerUsername: video.username,
-          currentUsername: _username,
+          videoOwnerId:
+              video.userId,
+          videoOwnerUsername:
+              video.username,
+          currentUsername:
+              _username,
           currentUserId:
-              _auth.currentUser?.uid ?? '',
-          firestore: _firestore,
+              _auth.currentUser?.uid ??
+                  '',
+          firestore:
+              _firestore,
         );
       },
     );
@@ -883,21 +1186,29 @@ class _HomeScreenState extends State<HomeScreen>
         mounted) {
       setState(() {
         _commentDeltas[video.id] =
-            (_commentDeltas[video.id] ?? 0) +
+            (_commentDeltas[
+                        video.id] ??
+                    0) +
                 added;
       });
     }
   }
 
+  // ============================================================
+  // SEARCH
+  // ============================================================
+
   Future<void> _openSearch() async {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor:
+          Colors.transparent,
       builder: (_) {
         return SearchScreen(
           videos: _videos,
-          onVideoSelected: _goToVideo,
+          onVideoSelected:
+              _goToVideo,
         );
       },
     );
@@ -920,24 +1231,30 @@ class _HomeScreenState extends State<HomeScreen>
       await _pageController.animateToPage(
         actualIndex,
         duration:
-            const Duration(milliseconds: 350),
+            const Duration(
+          milliseconds: 350,
+        ),
         curve: Curves.easeOut,
       );
     } else {
       setState(() {
-        _currentIndex = actualIndex;
+        _currentIndex =
+            actualIndex;
       });
 
-      await _prepareVideo(actualIndex);
+      await _prepareVideo(
+        actualIndex,
+      );
     }
   }
 
-  // ------------------------------------------------------------
-  // CREATE / UPLOAD FLOW
-  // ------------------------------------------------------------
+  // ============================================================
+  // CREATE / UPLOAD
+  // ============================================================
 
   Future<void> _openCreateScreen() async {
-    final user = _auth.currentUser;
+    final user =
+        _auth.currentUser;
 
     if (user == null) {
       _showMessage(
@@ -947,7 +1264,8 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     final videoPath =
-        await Navigator.of(context).push<String>(
+        await Navigator.of(context)
+            .push<String>(
       MaterialPageRoute(
         builder: (_) =>
             const CreateVideoScreen(),
@@ -982,14 +1300,17 @@ class _HomeScreenState extends State<HomeScreen>
 
     if (_bottomIndex == 0 &&
         _videos.isNotEmpty) {
-      await _prepareVideo(_currentIndex);
+      await _prepareVideo(
+        _currentIndex,
+      );
     }
   }
 
   Future<void> _openCreateSheet() async {
     await showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
+      backgroundColor:
+          Colors.transparent,
       builder: (_) {
         return SafeArea(
           child: Container(
@@ -1017,14 +1338,17 @@ class _HomeScreenState extends State<HomeScreen>
                   height: 4,
                   decoration:
                       BoxDecoration(
-                    color: Colors.white24,
+                    color:
+                        Colors.white24,
                     borderRadius:
                         BorderRadius.circular(
                       20,
                     ),
                   ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(
+                  height: 18,
+                ),
                 const Text(
                   'Create on PALOK',
                   style: TextStyle(
@@ -1034,45 +1358,61 @@ class _HomeScreenState extends State<HomeScreen>
                         FontWeight.w800,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(
+                  height: 16,
+                ),
                 _createOption(
-                  icon:
-                      Icons.videocam_rounded,
+                  icon: Icons
+                      .videocam_rounded,
                   title:
                       'Record Video',
                   subtitle:
                       'Camera দিয়ে নতুন ভিডিও তৈরি করুন',
                   onTap: () async {
-                    Navigator.pop(context);
+                    Navigator.pop(
+                      context,
+                    );
+
                     await _pickVideo(
                       ImageSource.camera,
                     );
                   },
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(
+                  height: 10,
+                ),
                 _createOption(
-                  icon:
-                      Icons.video_library_rounded,
+                  icon: Icons
+                      .video_library_rounded,
                   title:
                       'Upload Video',
                   subtitle:
                       'Gallery থেকে ভিডিও নির্বাচন করুন',
                   onTap: () async {
-                    Navigator.pop(context);
+                    Navigator.pop(
+                      context,
+                    );
+
                     await _pickVideo(
                       ImageSource.gallery,
                     );
                   },
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(
+                  height: 10,
+                ),
                 _createOption(
-                  icon:
-                      Icons.music_note_rounded,
-                  title: 'Add Sound',
+                  icon: Icons
+                      .music_note_rounded,
+                  title:
+                      'Add Sound',
                   subtitle:
                       'Sound feature পরে যোগ করা যাবে',
                   onTap: () {
-                    Navigator.pop(context);
+                    Navigator.pop(
+                      context,
+                    );
+
                     _showMessage(
                       'Sound feature coming soon',
                     );
@@ -1100,8 +1440,8 @@ class _HomeScreenState extends State<HomeScreen>
         padding:
             const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color:
-              Colors.white.withOpacity(0.06),
+          color: Colors.white
+              .withOpacity(0.06),
           borderRadius:
               BorderRadius.circular(18),
         ),
@@ -1110,7 +1450,8 @@ class _HomeScreenState extends State<HomeScreen>
             Container(
               width: 48,
               height: 48,
-              decoration: BoxDecoration(
+              decoration:
+                  BoxDecoration(
                 gradient:
                     const LinearGradient(
                   colors: [
@@ -1129,23 +1470,29 @@ class _HomeScreenState extends State<HomeScreen>
                 size: 25,
               ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(
+              width: 14,
+            ),
             Expanded(
               child: Column(
                 crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                    CrossAxisAlignment
+                        .start,
                 children: [
                   Text(
                     title,
                     style:
                         const TextStyle(
-                      color: Colors.white,
+                      color:
+                          Colors.white,
                       fontWeight:
                           FontWeight.w700,
                       fontSize: 16,
                     ),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(
+                    height: 3,
+                  ),
                   Text(
                     subtitle,
                     style:
@@ -1160,7 +1507,8 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             const Icon(
               Icons.chevron_right,
-              color: Colors.white54,
+              color:
+                  Colors.white54,
             ),
           ],
         ),
@@ -1199,7 +1547,8 @@ class _HomeScreenState extends State<HomeScreen>
         return;
       }
 
-      await Navigator.of(context).push(
+      await Navigator.of(context)
+          .push(
         MaterialPageRoute(
           builder: (_) {
             return UploadSheet(
@@ -1225,7 +1574,7 @@ class _HomeScreenState extends State<HomeScreen>
           _currentIndex,
         );
       }
-    } catch (e) {
+    } catch (_) {
       _showMessage(
         'ভিডিও নির্বাচন করা যায়নি',
       );
@@ -1252,8 +1601,13 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  // ============================================================
+  // PROFILE
+  // ============================================================
+
   Future<void> _openEditProfile() async {
-    final user = _auth.currentUser;
+    final user =
+        _auth.currentUser;
 
     if (user == null) {
       _showMessage(
@@ -1263,7 +1617,8 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     try {
-      final result = await Navigator.push(
+      final result =
+          await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) =>
@@ -1280,11 +1635,13 @@ class _HomeScreenState extends State<HomeScreen>
                     .toString();
 
             _bio =
-                (result['bio'] ?? _bio)
+                (result['bio'] ??
+                        _bio)
                     .toString();
 
             _profileImage =
-                (result['profileImage'] ??
+                (result[
+                            'profileImage'] ??
                         _profileImage)
                     .toString();
           });
@@ -1303,6 +1660,10 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  // ============================================================
+  // BOTTOM NAVIGATION
+  // ============================================================
+
   Future<void> _selectBottom(
     int index,
   ) async {
@@ -1313,6 +1674,7 @@ class _HomeScreenState extends State<HomeScreen>
           _currentIndex,
         );
       }
+
       return;
     }
 
@@ -1355,7 +1717,9 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _switchTopTab(
     int index,
   ) async {
-    if (_topIndex == index) return;
+    if (_topIndex == index) {
+      return;
+    }
 
     for (final controller
         in _controllers.values) {
@@ -1380,6 +1744,7 @@ class _HomeScreenState extends State<HomeScreen>
       });
 
       await _prepareVideo(0);
+
       return;
     }
 
@@ -1424,7 +1789,8 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildHomeScreen() {
     if (_loading) {
       return const Center(
-        child: CircularProgressIndicator(
+        child:
+            CircularProgressIndicator(
           color: _pink,
         ),
       );
@@ -1435,7 +1801,8 @@ class _HomeScreenState extends State<HomeScreen>
         : _videos
             .where(
               (video) =>
-                  _followingIds.contains(
+                  _followingIds
+                      .contains(
                 video.userId,
               ),
             )
@@ -1447,21 +1814,12 @@ class _HomeScreenState extends State<HomeScreen>
 
     return PageView.builder(
       controller: _pageController,
-
-      // TikTok-style vertical feed.
       scrollDirection: Axis.vertical,
-
-      // Page snap থাকবে।
-      physics: const PageScrollPhysics(),
-
-      // এক swipe = এক video।
+      physics:
+          const PageScrollPhysics(),
       pageSnapping: true,
-
-      // Nearby page build/preload করতে সাহায্য করবে।
       allowImplicitScrolling: true,
-
       itemCount: feed.length,
-
       onPageChanged: (index) {
         unawaited(
           _onVideoChanged(
@@ -1470,7 +1828,6 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         );
       },
-
       itemBuilder: (
         context,
         index,
@@ -1488,8 +1845,10 @@ class _HomeScreenState extends State<HomeScreen>
 
         return _buildVideoPage(
           video: video,
-          actualIndex: actualIndex,
-          controller: controller,
+          actualIndex:
+              actualIndex,
+          controller:
+              controller,
         );
       },
     );
@@ -1506,44 +1865,57 @@ class _HomeScreenState extends State<HomeScreen>
                 MainAxisSize.min,
             children: [
               const Icon(
-                Icons.people_outline_rounded,
-                color: Colors.white54,
+                Icons
+                    .people_outline_rounded,
+                color:
+                    Colors.white54,
                 size: 62,
               ),
-              const SizedBox(height: 18),
+              const SizedBox(
+                height: 18,
+              ),
               const Text(
                 'Following feed এখনো খালি',
                 style: TextStyle(
-                  color: Colors.white,
+                  color:
+                      Colors.white,
                   fontSize: 19,
                   fontWeight:
                       FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(
+                height: 8,
+              ),
               const Text(
                 'Creators-কে Follow করলে তাদের ভিডিও এখানে দেখা যাবে।',
                 textAlign:
                     TextAlign.center,
                 style: TextStyle(
-                  color: Colors.white54,
+                  color:
+                      Colors.white54,
                   fontSize: 14,
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(
+                height: 20,
+              ),
               ElevatedButton(
                 onPressed: () {
                   _switchTopTab(0);
                 },
                 style:
-                    ElevatedButton.styleFrom(
-                  backgroundColor: _pink,
+                    ElevatedButton
+                        .styleFrom(
+                  backgroundColor:
+                      _pink,
                   foregroundColor:
                       Colors.white,
                   shape:
                       RoundedRectangleBorder(
                     borderRadius:
-                        BorderRadius.circular(
+                        BorderRadius
+                            .circular(
                       14,
                     ),
                   ),
@@ -1565,27 +1937,36 @@ class _HomeScreenState extends State<HomeScreen>
             MainAxisSize.min,
         children: [
           const Icon(
-            Icons.video_collection_outlined,
-            color: Colors.white54,
+            Icons
+                .video_collection_outlined,
+            color:
+                Colors.white54,
             size: 58,
           ),
-          const SizedBox(height: 14),
+          const SizedBox(
+            height: 14,
+          ),
           const Text(
             'No videos yet',
             style: TextStyle(
-              color: Colors.white,
+              color:
+                  Colors.white,
               fontSize: 18,
               fontWeight:
                   FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(
+            height: 12,
+          ),
           ElevatedButton(
             onPressed:
                 _openCreateSheet,
             style:
-                ElevatedButton.styleFrom(
-              backgroundColor: _pink,
+                ElevatedButton
+                    .styleFrom(
+              backgroundColor:
+                  _pink,
               foregroundColor:
                   Colors.white,
             ),
@@ -1610,7 +1991,9 @@ class _HomeScreenState extends State<HomeScreen>
           HitTestBehavior.opaque,
       onTap: () {
         unawaited(
-          _togglePlay(actualIndex),
+          _togglePlay(
+            actualIndex,
+          ),
         );
       },
       onDoubleTap: () {
@@ -1640,14 +2023,17 @@ class _HomeScreenState extends State<HomeScreen>
                 height:
                     controller.value.size.height,
                 child:
-                    VideoPlayer(controller),
+                    VideoPlayer(
+                  controller,
+                ),
               ),
             )
           else
             const Center(
               child:
                   CircularProgressIndicator(
-                color: Colors.white,
+                color:
+                    Colors.white,
               ),
             ),
 
@@ -1701,6 +2087,10 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  // ============================================================
+  // TOP BAR
+  // ============================================================
+
   Widget _buildTopBar() {
     return Positioned(
       top: 0,
@@ -1744,12 +2134,15 @@ class _HomeScreenState extends State<HomeScreen>
                               _cyan,
                             ],
                             begin:
-                                Alignment.topLeft,
+                                Alignment
+                                    .topLeft,
                             end:
-                                Alignment.bottomRight,
+                                Alignment
+                                    .bottomRight,
                           ),
                           borderRadius:
-                              BorderRadius.circular(
+                              BorderRadius
+                                  .circular(
                             13,
                           ),
                           boxShadow: [
@@ -1758,8 +2151,10 @@ class _HomeScreenState extends State<HomeScreen>
                                   .withOpacity(
                                 0.35,
                               ),
-                              blurRadius: 15,
-                              spreadRadius: 1,
+                              blurRadius:
+                                  15,
+                              spreadRadius:
+                                  1,
                             ),
                           ],
                         ),
@@ -1772,7 +2167,8 @@ class _HomeScreenState extends State<HomeScreen>
                               TextStyle(
                             color:
                                 Colors.white,
-                            fontSize: 24,
+                            fontSize:
+                                24,
                             fontWeight:
                                 FontWeight.w900,
                           ),
@@ -1806,13 +2202,16 @@ class _HomeScreenState extends State<HomeScreen>
                   );
                 },
               ),
-              const SizedBox(width: 8),
+              const SizedBox(
+                width: 8,
+              ),
               IconButton(
                 onPressed:
                     _openSearch,
                 icon:
                     const Icon(
-                  Icons.search_rounded,
+                  Icons
+                      .search_rounded,
                   color:
                       Colors.white,
                   size: 27,
@@ -1853,7 +2252,9 @@ class _HomeScreenState extends State<HomeScreen>
                     : FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 5),
+            const SizedBox(
+              height: 5,
+            ),
             AnimatedContainer(
               duration:
                   const Duration(
@@ -1864,9 +2265,11 @@ class _HomeScreenState extends State<HomeScreen>
               height: 2.5,
               decoration:
                   BoxDecoration(
-                color: Colors.white,
+                color:
+                    Colors.white,
                 borderRadius:
-                    BorderRadius.circular(
+                    BorderRadius
+                        .circular(
                   10,
                 ),
               ),
@@ -1876,6 +2279,10 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
   }
+
+  // ============================================================
+  // RIGHT ACTIONS
+  // ============================================================
 
   Widget _buildRightActions(
     VideoPost video,
@@ -1936,14 +2343,19 @@ class _HomeScreenState extends State<HomeScreen>
               label: following
                   ? 'Following'
                   : 'Follow',
-              active: following,
+              active:
+                  following,
               onTap: () {
                 unawaited(
-                  _toggleFollow(video),
+                  _toggleFollow(
+                    video,
+                  ),
                 );
               },
             ),
-          const SizedBox(height: 13),
+          const SizedBox(
+            height: 13,
+          ),
           _actionButton(
             icon: liked
                 ? Icons
@@ -1957,11 +2369,15 @@ class _HomeScreenState extends State<HomeScreen>
             active: liked,
             onTap: () {
               unawaited(
-                _toggleLike(video),
+                _toggleLike(
+                  video,
+                ),
               );
             },
           ),
-          const SizedBox(height: 13),
+          const SizedBox(
+            height: 13,
+          ),
           _actionButton(
             icon: Icons
                 .mode_comment_outlined,
@@ -1971,11 +2387,15 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             onTap: () {
               unawaited(
-                _openComments(video),
+                _openComments(
+                  video,
+                ),
               );
             },
           ),
-          const SizedBox(height: 13),
+          const SizedBox(
+            height: 13,
+          ),
           _actionButton(
             icon: saved
                 ? Icons
@@ -1989,11 +2409,15 @@ class _HomeScreenState extends State<HomeScreen>
             active: saved,
             onTap: () {
               unawaited(
-                _toggleSave(video),
+                _toggleSave(
+                  video,
+                ),
               );
             },
           ),
-          const SizedBox(height: 13),
+          const SizedBox(
+            height: 13,
+          ),
           _actionButton(
             icon:
                 Icons.share_rounded,
@@ -2003,7 +2427,9 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             onTap: () {
               unawaited(
-                _shareVideo(video),
+                _shareVideo(
+                  video,
+                ),
               );
             },
           ),
@@ -2032,10 +2458,13 @@ class _HomeScreenState extends State<HomeScreen>
               decoration:
                   BoxDecoration(
                 color: Colors.black
-                    .withOpacity(0.35),
+                    .withOpacity(
+                  0.35,
+                ),
                 shape:
                     BoxShape.circle,
-                border: Border.all(
+                border:
+                    Border.all(
                   color: Colors.white
                       .withOpacity(
                     0.12,
@@ -2050,7 +2479,9 @@ class _HomeScreenState extends State<HomeScreen>
                 size: 23,
               ),
             ),
-            const SizedBox(height: 3),
+            const SizedBox(
+              height: 3,
+            ),
             Text(
               label,
               maxLines: 1,
@@ -2058,7 +2489,8 @@ class _HomeScreenState extends State<HomeScreen>
                   TextOverflow.ellipsis,
               style:
                   const TextStyle(
-                color: Colors.white,
+                color:
+                    Colors.white,
                 fontSize: 10.5,
                 fontWeight:
                     FontWeight.w600,
@@ -2066,7 +2498,8 @@ class _HomeScreenState extends State<HomeScreen>
                   Shadow(
                     color:
                         Colors.black,
-                    blurRadius: 5,
+                    blurRadius:
+                        5,
                   ),
                 ],
               ),
@@ -2105,7 +2538,8 @@ class _HomeScreenState extends State<HomeScreen>
                       : '@${video.username}',
                   style:
                       const TextStyle(
-                    color: Colors.white,
+                    color:
+                        Colors.white,
                     fontSize: 16,
                     fontWeight:
                         FontWeight.w800,
@@ -2113,7 +2547,8 @@ class _HomeScreenState extends State<HomeScreen>
                       Shadow(
                         color:
                             Colors.black,
-                        blurRadius: 5,
+                        blurRadius:
+                            5,
                       ),
                     ],
                   ),
@@ -2121,7 +2556,9 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ],
           ),
-          const SizedBox(height: 9),
+          const SizedBox(
+            height: 9,
+          ),
           if (video.caption
               .isNotEmpty)
             Text(
@@ -2131,7 +2568,8 @@ class _HomeScreenState extends State<HomeScreen>
                   TextOverflow.ellipsis,
               style:
                   const TextStyle(
-                color: Colors.white,
+                color:
+                    Colors.white,
                 fontSize: 14,
                 height: 1.25,
                 fontWeight:
@@ -2140,14 +2578,17 @@ class _HomeScreenState extends State<HomeScreen>
                   Shadow(
                     color:
                         Colors.black,
-                    blurRadius: 5,
+                    blurRadius:
+                        5,
                   ),
                 ],
               ),
             ),
           if (video.hashtags
               .isNotEmpty) ...[
-            const SizedBox(height: 5),
+            const SizedBox(
+              height: 5,
+            ),
             Text(
               video.hashtags,
               maxLines: 2,
@@ -2155,7 +2596,8 @@ class _HomeScreenState extends State<HomeScreen>
                   TextOverflow.ellipsis,
               style:
                   const TextStyle(
-                color: Colors.white,
+                color:
+                    Colors.white,
                 fontSize: 13,
                 fontWeight:
                     FontWeight.w700,
@@ -2163,7 +2605,8 @@ class _HomeScreenState extends State<HomeScreen>
                   Shadow(
                     color:
                         Colors.black,
-                    blurRadius: 5,
+                    blurRadius:
+                        5,
                   ),
                 ],
               ),
@@ -2173,6 +2616,10 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
   }
+
+  // ============================================================
+  // FRIENDS
+  // ============================================================
 
   Widget _buildFriendsScreen() {
     final user =
@@ -2236,9 +2683,9 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             child: Text(
               'Friends',
-              style:
-                  TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color:
+                    Colors.white,
                 fontSize: 26,
                 fontWeight:
                     FontWeight.w900,
@@ -2255,8 +2702,7 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             child: Text(
               'Connect with creators on PALOK',
-              style:
-                  TextStyle(
+              style: TextStyle(
                 color:
                     Colors.white54,
                 fontSize: 13,
@@ -2365,7 +2811,9 @@ class _HomeScreenState extends State<HomeScreen>
       decoration:
           BoxDecoration(
         color: Colors.white
-            .withOpacity(0.06),
+            .withOpacity(
+          0.06,
+        ),
         borderRadius:
             BorderRadius.circular(
           18,
@@ -2435,7 +2883,8 @@ class _HomeScreenState extends State<HomeScreen>
               shape:
                   RoundedRectangleBorder(
                 borderRadius:
-                    BorderRadius.circular(
+                    BorderRadius
+                        .circular(
                   12,
                 ),
               ),
@@ -2457,6 +2906,10 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  // ============================================================
+  // INBOX
+  // ============================================================
+
   Widget _buildInboxScreen() {
     final user =
         _auth.currentUser;
@@ -2465,8 +2918,7 @@ class _HomeScreenState extends State<HomeScreen>
       return const Center(
         child: Text(
           'Login করুন Inbox ব্যবহার করতে',
-          style:
-              TextStyle(
+          style: TextStyle(
             color:
                 Colors.white54,
           ),
@@ -2506,10 +2958,12 @@ class _HomeScreenState extends State<HomeScreen>
                         dynamic>>>(
               stream: _firestore
                   .collection(
-                      'users')
+                    'users',
+                  )
                   .doc(user.uid)
                   .collection(
-                      'notifications')
+                    'notifications',
+                  )
                   .limit(100)
                   .snapshots(),
               builder:
@@ -2522,7 +2976,8 @@ class _HomeScreenState extends State<HomeScreen>
                   return const Center(
                     child:
                         CircularProgressIndicator(
-                      color: _pink,
+                      color:
+                          _pink,
                     ),
                   );
                 }
@@ -2599,8 +3054,7 @@ class _HomeScreenState extends State<HomeScreen>
                 final notifications =
                     [...docs];
 
-                notifications
-                    .sort(
+                notifications.sort(
                   (a, b) {
                     final aTime =
                         a.data()[
@@ -2675,8 +3129,8 @@ class _HomeScreenState extends State<HomeScreen>
                             height: 44,
                             decoration:
                                 BoxDecoration(
-                              color: _pink
-                                  .withOpacity(
+                              color:
+                                  _pink.withOpacity(
                                 0.15,
                               ),
                               shape:
@@ -2685,9 +3139,8 @@ class _HomeScreenState extends State<HomeScreen>
                             ),
                             child: Icon(
                               _notificationIcon(
-                                data[
-                                        'type']
-                                    ?.toString() ??
+                                data['type']
+                                        ?.toString() ??
                                     '',
                               ),
                               color:
@@ -2762,6 +3215,10 @@ class _HomeScreenState extends State<HomeScreen>
             .notifications_rounded;
     }
   }
+
+  // ============================================================
+  // PROFILE SCREEN
+  // ============================================================
 
   Widget _buildProfileScreen() {
     final user =
@@ -3085,7 +3542,8 @@ class _HomeScreenState extends State<HomeScreen>
           value,
           style:
               const TextStyle(
-            color: Colors.white,
+            color:
+                Colors.white,
             fontSize: 15,
             fontWeight:
                 FontWeight.w800,
@@ -3098,7 +3556,8 @@ class _HomeScreenState extends State<HomeScreen>
           label,
           style:
               const TextStyle(
-            color: Colors.white54,
+            color:
+                Colors.white54,
             fontSize: 10,
           ),
         ),
@@ -3129,7 +3588,8 @@ class _HomeScreenState extends State<HomeScreen>
             end:
                 Alignment.bottomRight,
           ),
-          border: Border.all(
+          border:
+              Border.all(
             color:
                 Colors.white24,
             width: 2,
@@ -3154,7 +3614,8 @@ class _HomeScreenState extends State<HomeScreen>
           BoxDecoration(
         shape:
             BoxShape.circle,
-        border: Border.all(
+        border:
+            Border.all(
           color:
               Colors.white24,
           width: 2,
@@ -3171,6 +3632,10 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
   }
+
+  // ============================================================
+  // BOTTOM NAVIGATION
+  // ============================================================
 
   Widget _buildBottomNavigation() {
     return Positioned(
@@ -3200,7 +3665,8 @@ class _HomeScreenState extends State<HomeScreen>
                     _bottomItem(
                   icon:
                       Icons.home_rounded,
-                  label: 'Home',
+                  label:
+                      'Home',
                   index: 0,
                 ),
               ),
@@ -3278,7 +3744,8 @@ class _HomeScreenState extends State<HomeScreen>
                     _bottomItem(
                   icon: Icons
                       .chat_bubble_outline_rounded,
-                  label: 'Inbox',
+                  label:
+                      'Inbox',
                   index: 3,
                 ),
               ),
@@ -3347,6 +3814,10 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  // ============================================================
+  // HELPERS
+  // ============================================================
+
   void _showMessage(
     String message,
   ) {
@@ -3373,11 +3844,15 @@ class _HomeScreenState extends State<HomeScreen>
     int value,
   ) {
     if (value >= 1000000) {
-      return '${(value / 1000000).toStringAsFixed(value % 1000000 == 0 ? 0 : 1)}M';
+      return '${(value / 1000000).toStringAsFixed(
+        value % 1000000 == 0 ? 0 : 1,
+      )}M';
     }
 
     if (value >= 1000) {
-      return '${(value / 1000).toStringAsFixed(value % 1000 == 0 ? 0 : 1)}K';
+      return '${(value / 1000).toStringAsFixed(
+        value % 1000 == 0 ? 0 : 1,
+      )}K';
     }
 
     return value.toString();
@@ -3462,6 +3937,10 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 }
+
+// ============================================================
+// VIDEO POST MODEL
+// ============================================================
 
 class VideoPost {
   final String id;
