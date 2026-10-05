@@ -1796,13 +1796,47 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  final feed = _topIndex == 0
-      ? _videos
-      : _videos
-          .where(
-            (video) => _followingIds.contains(video.userId),
-          )
-          .toList();
+  // ==============================
+  // FOLLOWING FEED
+  // ==============================
+  if (_topIndex == 1) {
+    return FollowingFeed(
+      videos: _videos,
+      followingIds: _followingIds,
+      pageController: _pageController,
+      onPageChanged: (index, feed) {
+        final typedFeed = feed.cast<VideoPost>();
+
+        unawaited(
+          _onVideoChanged(
+            index,
+            typedFeed,
+          ),
+        );
+      },
+      itemBuilder: (context, index, feed) {
+        final video = feed[index] as VideoPost;
+
+        final actualIndex = _videos.indexWhere(
+          (item) => item.id == video.id,
+        );
+
+        final controller = _controllers[actualIndex];
+
+        return _buildVideoPage(
+          video: video,
+          actualIndex: actualIndex,
+          controller: controller,
+        );
+      },
+      emptyBuilder: _buildEmptyFeed,
+    );
+  }
+
+  // ==============================
+  // FOR YOU FEED
+  // ==============================
+  final feed = _videos;
 
   if (feed.isEmpty) {
     return _buildEmptyFeed();
