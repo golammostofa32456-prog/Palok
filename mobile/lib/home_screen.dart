@@ -305,26 +305,40 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  // ============================================================
+  // FAST VIDEO PRELOAD
+  // ============================================================
+
   Future<void> _prepareVideo(int index) async {
-    if (!mounted || index < 0 || index >= _videos.length) {
+    if (!mounted ||
+        index < 0 ||
+        index >= _videos.length) {
       return;
     }
 
-    if (_controllers.containsKey(index)) {
-      final existing = _controllers[index]!;
+    final existing = _controllers[index];
 
+    // Already initialized হলে আবার initialize করবে না।
+    if (existing != null) {
       if (existing.value.isInitialized) {
-        if (index == _currentIndex && _bottomIndex == 0) {
-          unawaited(existing.play());
+        if (index == _currentIndex &&
+            _bottomIndex == 0) {
+          unawaited(
+            existing.play(),
+          );
         }
 
         return;
       }
+
+      // Controller already initializing.
+      // একই index-এর জন্য আরেকটি controller বানাবো না।
+      return;
     }
 
     final video = _videos[index];
 
-    VideoPlayerController controller;
+    late final VideoPlayerController controller;
 
     if (_isNetworkUrl(video.videoUrl)) {
       controller = VideoPlayerController.networkUrl(
@@ -339,47 +353,78 @@ class _HomeScreenState extends State<HomeScreen>
     _controllers[index] = controller;
 
     try {
+      // Video initialize.
       await controller.initialize();
+
+      if (!mounted) {
+        return;
+      }
+
+      // Looping ON.
       await controller.setLooping(true);
 
       if (!mounted) {
         return;
       }
 
-      if (index == _currentIndex && _bottomIndex == 0) {
-        unawaited(controller.play());
+      // Current video হলে সঙ্গে সঙ্গে play।
+      if (index == _currentIndex &&
+          _bottomIndex == 0) {
+        unawaited(
+          controller.play(),
+        );
       }
 
+      // Current page render হওয়ার জন্য UI refresh।
+      if (mounted) {
+        setState(() {});
+      }
+
+      // পরের video preload।
       if (index + 1 < _videos.length) {
         unawaited(
           _prepareVideo(index + 1),
         );
       }
 
+      // আগের video preload।
       if (index - 1 >= 0) {
         unawaited(
           _prepareVideo(index - 1),
         );
       }
 
-      _disposeFarControllers(index);
+      // শুধুমাত্র current index-এর আশেপাশের controller রাখি।
+      _disposeFarControllers(_currentIndex);
     } catch (_) {
-      await controller.dispose();
-      _controllers.remove(index);
-    }
+      try {
+        await controller.dispose();
+      } catch (_) {}
 
-    if (mounted) {
-      setState(() {});
+      if (_controllers[index] == controller) {
+        _controllers.remove(index);
+      }
+
+      if (mounted) {
+        setState(() {});
+      }
     }
   }
 
+  // Current video-এর আগে/পরে ১টি করে রাখবে।
+  // এতে memory usage কম থাকবে এবং swipe দ্রুত থাকবে।
   void _disposeFarControllers(int centerIndex) {
     final keys = _controllers.keys.toList();
 
     for (final key in keys) {
       if ((key - centerIndex).abs() > 1) {
         final controller = _controllers.remove(key);
-        controller?.dispose();
+
+        if (controller != null) {
+          unawaited(
+            controller.dispose(),
+          );
+        }
       }
     }
   }
@@ -397,7 +442,8 @@ class _HomeScreenState extends State<HomeScreen>
     int pageIndex,
     List<VideoPost> feed,
   ) async {
-    if (pageIndex < 0 || pageIndex >= feed.length) {
+    if (pageIndex < 0 ||
+        pageIndex >= feed.length) {
       return;
     }
 
@@ -411,9 +457,8 @@ class _HomeScreenState extends State<HomeScreen>
       return;
     }
 
-    // IMPORTANT:
-    // অন্য controller pause হওয়ার জন্য আর অপেক্ষা করছি না।
-    // এটাই swipe transition-কে অনেক বেশি responsive করবে।
+    // পুরোনো videos pause করার জন্য অপেক্ষা করবো না।
+    // Swipe transition responsive থাকবে।
     for (final entry in _controllers.entries) {
       if (entry.key != actualIndex) {
         unawaited(
@@ -426,15 +471,32 @@ class _HomeScreenState extends State<HomeScreen>
       return;
     }
 
-    // নতুন video index সঙ্গে সঙ্গে set হবে।
+    // Current index সঙ্গে সঙ্গে update।
     setState(() {
       _currentIndex = actualIndex;
     });
 
-    // Video preparation/play-এর জন্য অপেক্ষা না করে শুরু করি।
+    // Current video immediately prepare/play।
     unawaited(
       _prepareVideo(actualIndex),
     );
+
+    // Next video preload।
+    if (actualIndex + 1 < _videos.length) {
+      unawaited(
+        _prepareVideo(actualIndex + 1),
+      );
+    }
+
+    // Previous video preload।
+    if (actualIndex - 1 >= 0) {
+      unawaited(
+        _prepareVideo(actualIndex - 1),
+      );
+    }
+
+    // দূরের controller remove।
+    _disposeFarControllers(actualIndex);
   }
 
   Future<void> _togglePlay(int actualIndex) async {
@@ -1389,13 +1451,13 @@ class _HomeScreenState extends State<HomeScreen>
       // TikTok-style vertical feed.
       scrollDirection: Axis.vertical,
 
-      // Swipe শেষ হলে page-এ snap করবে।
+      // Page snap থাকবে।
       physics: const PageScrollPhysics(),
 
-      // একটি swipe = একটি video/page।
+      // এক swipe = এক video।
       pageSnapping: true,
 
-      // পাশের page আগে থেকে build রাখতে সাহায্য করে।
+      // Nearby page build/preload করতে সাহায্য করবে।
       allowImplicitScrolling: true,
 
       itemCount: feed.length,
