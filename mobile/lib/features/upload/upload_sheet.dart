@@ -29,6 +29,12 @@ class UploadSheet extends StatefulWidget {
 
 class _UploadSheetState
     extends State<UploadSheet> {
+  static const Color _pink =
+      Color(0xFFFF2D55);
+
+  static const Color _cyan =
+      Color(0xFF00E5FF);
+
   static const String _cloudName =
       'u0jufmrl';
 
@@ -47,9 +53,12 @@ class _UploadSheetState
   @override
   void initState() {
     super.initState();
-
     _initializePreview();
   }
+
+  // =========================================================
+  // VIDEO PREVIEW
+  // =========================================================
 
   Future<void> _initializePreview() async {
     final controller =
@@ -67,15 +76,42 @@ class _UploadSheetState
       if (mounted) {
         setState(() {});
       }
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    }
   }
 
   @override
   void dispose() {
     _captionController.dispose();
     _previewController?.dispose();
-
     super.dispose();
+  }
+
+  // =========================================================
+  // PLAY / PAUSE
+  // =========================================================
+
+  Future<void> _togglePreview() async {
+    final controller =
+        _previewController;
+
+    if (controller == null ||
+        !controller.value.isInitialized) {
+      return;
+    }
+
+    if (controller.value.isPlaying) {
+      await controller.pause();
+    } else {
+      await controller.play();
+    }
+
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   // =========================================================
@@ -97,19 +133,9 @@ class _UploadSheetState
       return;
     }
 
-    // -------------------------------------------------------
-    // এই context এখনো valid থাকা অবস্থায়
-    // parent Scaffold-এর messenger নিয়ে রাখছি।
-    // -------------------------------------------------------
-
+    // Parent Scaffold-এর messenger আগে ধরে রাখছি।
     final messenger =
         ScaffoldMessenger.of(context);
-
-    // -------------------------------------------------------
-    // Caption আগে নিয়ে রাখছি।
-    // Sheet বন্ধ হয়ে যাওয়ার পরও
-    // background upload এগুলো ব্যবহার করবে।
-    // -------------------------------------------------------
 
     final caption =
         _captionController.text.trim();
@@ -129,32 +155,25 @@ class _UploadSheetState
     final onPosted =
         widget.onPosted;
 
-    // -------------------------------------------------------
-    // UI-তে uploading state দেখাও
-    // -------------------------------------------------------
-
     if (mounted) {
       setState(() {
         _uploading = true;
       });
     }
 
-    // -------------------------------------------------------
-    // TikTok-style behavior:
-    //
-    // Post চাপার সঙ্গে সঙ্গে Create Video sheet বন্ধ।
-    // Upload এরপর background-এ চলবে।
-    // -------------------------------------------------------
+    // =========================================================
+    // TikTok-style:
+    // Post চাপার সঙ্গে সঙ্গে Post screen বন্ধ হবে।
+    // Upload background-এ চলবে।
+    // =========================================================
 
     if (mounted) {
       Navigator.of(context).pop();
     }
 
-    // -------------------------------------------------------
-    // এখন আসল upload শুরু।
-    //
-    // Sheet বন্ধ হয়ে গেলেও এই async operation চলতে থাকবে।
-    // -------------------------------------------------------
+    // =========================================================
+    // BACKGROUND UPLOAD
+    // =========================================================
 
     try {
       final secureUrl =
@@ -169,16 +188,14 @@ class _UploadSheetState
         );
       }
 
-      // -----------------------------------------------------
-      // Caption + hashtags
-      // -----------------------------------------------------
-
       final hashtags =
-          _extractHashtags(caption);
+          _extractHashtags(
+        caption,
+      );
 
-      // -----------------------------------------------------
-      // Firestore-এ video post তৈরি
-      // -----------------------------------------------------
+      // =======================================================
+      // FIRESTORE POST
+      // =======================================================
 
       await firestore
           .collection('videos')
@@ -197,15 +214,15 @@ class _UploadSheetState
             FieldValue.serverTimestamp(),
       });
 
-      // -----------------------------------------------------
-      // Home screen feed reload
-      // -----------------------------------------------------
+      // =======================================================
+      // HOME FEED RELOAD
+      // =======================================================
 
       await onPosted();
 
-      // -----------------------------------------------------
-      // Upload successful message
-      // -----------------------------------------------------
+      // =======================================================
+      // SUCCESS
+      // =======================================================
 
       messenger.showSnackBar(
         const SnackBar(
@@ -217,12 +234,6 @@ class _UploadSheetState
         ),
       );
     } catch (e) {
-      // -----------------------------------------------------
-      // Sheet ইতিমধ্যে বন্ধ।
-      // তাই এখানে context ব্যবহার না করে
-      // একই parent messenger ব্যবহার করছি।
-      // -----------------------------------------------------
-
       messenger.showSnackBar(
         SnackBar(
           content: Text(
@@ -278,10 +289,6 @@ class _UploadSheetState
         await streamedResponse.stream
             .bytesToString();
 
-    // -------------------------------------------------------
-    // HTTP error
-    // -------------------------------------------------------
-
     if (streamedResponse.statusCode <
             200 ||
         streamedResponse.statusCode >=
@@ -303,10 +310,6 @@ class _UploadSheetState
 
       throw Exception(message);
     }
-
-    // -------------------------------------------------------
-    // JSON
-    // -------------------------------------------------------
 
     final json =
         jsonDecode(responseBody);
@@ -382,7 +385,7 @@ class _UploadSheetState
   }
 
   // =========================================================
-  // ERROR MESSAGE
+  // ERROR
   // =========================================================
 
   void _showError(
@@ -401,6 +404,18 @@ class _UploadSheetState
   }
 
   // =========================================================
+  // CLOSE
+  // =========================================================
+
+  void _closeScreen() {
+    if (_uploading) {
+      return;
+    }
+
+    Navigator.of(context).pop();
+  }
+
+  // =========================================================
   // BUILD
   // =========================================================
 
@@ -408,81 +423,87 @@ class _UploadSheetState
   Widget build(
     BuildContext context,
   ) {
-    final bottomInset =
+    final controller =
+        _previewController;
+
+    final keyboard =
         MediaQuery.of(context)
             .viewInsets
             .bottom;
 
-    return AnimatedPadding(
-      duration:
-          const Duration(
-        milliseconds: 180,
-      ),
-      padding: EdgeInsets.only(
-        bottom: bottomInset,
-      ),
-      child: Container(
-        height:
-            MediaQuery.of(context)
-                    .size
-                    .height *
-                0.82,
-        decoration:
-            const BoxDecoration(
-          color: Color(0xFF101010),
-          borderRadius:
-              BorderRadius.vertical(
-            top: Radius.circular(24),
-          ),
-        ),
+    return Scaffold(
+      backgroundColor:
+          Colors.black,
+      resizeToAvoidBottomInset:
+          true,
+
+      body: SafeArea(
         child: Column(
           children: [
-            const SizedBox(
-              height: 12,
-            ),
+            // =================================================
+            // TOP BAR
+            // =================================================
 
-            Container(
-              width: 42,
-              height: 4,
-              decoration:
-                  BoxDecoration(
-                color: Colors.white24,
-                borderRadius:
-                    BorderRadius.circular(
-                  20,
-                ),
+            Padding(
+              padding:
+                  const EdgeInsets.fromLTRB(
+                14,
+                10,
+                14,
+                8,
+              ),
+              child: Row(
+                children: [
+                  _topButton(
+                    icon:
+                        Icons.close,
+                    onTap:
+                        _closeScreen,
+                  ),
+
+                  const Expanded(
+                    child: Center(
+                      child: Text(
+                        'Post',
+                        style:
+                            TextStyle(
+                          color:
+                              Colors.white,
+                          fontSize: 20,
+                          fontWeight:
+                              FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(
+                    width: 44,
+                    height: 44,
+                  ),
+                ],
               ),
             ),
 
-            const SizedBox(
-              height: 10,
-            ),
-
-            const Text(
-              'Create Video',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 19,
-                fontWeight:
-                    FontWeight.w800,
-              ),
-            ),
-
-            const SizedBox(
-              height: 14,
-            ),
+            // =================================================
+            // CONTENT
+            // =================================================
 
             Expanded(
               child:
                   SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior
+                        .onDrag,
+
                 padding:
-                    const EdgeInsets
-                        .fromLTRB(
-                  18,
-                  0,
-                  18,
-                  20,
+                    EdgeInsets.fromLTRB(
+                  14,
+                  6,
+                  14,
+                  keyboard + 24,
                 ),
+
                 child: Column(
                   crossAxisAlignment:
                       CrossAxisAlignment
@@ -492,113 +513,415 @@ class _UploadSheetState
                     // VIDEO PREVIEW
                     // =================================================
 
-                    ClipRRect(
-                      borderRadius:
-                          BorderRadius
-                              .circular(
-                        18,
-                      ),
-                      child: Container(
+                    GestureDetector(
+                      onTap:
+                          _togglePreview,
+
+                      child:
+                          Container(
                         width:
                             double.infinity,
-                        height: 360,
-                        color:
-                            Colors.black,
-                        child: _previewController !=
+
+                        height:
+                            MediaQuery.of(
+                                  context,
+                                ).size.height *
+                                0.57,
+
+                        decoration:
+                            BoxDecoration(
+                          color:
+                              const Color(
+                            0xFF151515,
+                          ),
+                          borderRadius:
+                              BorderRadius
+                                  .circular(
+                            20,
+                          ),
+                          border:
+                              Border.all(
+                            color:
+                                Colors.white12,
+                          ),
+                        ),
+
+                        clipBehavior:
+                            Clip.antiAlias,
+
+                        child:
+                            Stack(
+                          fit:
+                              StackFit.expand,
+
+                          children: [
+                            if (controller !=
                                     null &&
-                                _previewController!
+                                controller
                                     .value
-                                    .isInitialized
-                            ? FittedBox(
+                                    .isInitialized)
+                              FittedBox(
                                 fit:
-                                    BoxFit.cover,
+                                    BoxFit.contain,
                                 child:
                                     SizedBox(
                                   width:
-                                      _previewController!
+                                      controller
                                           .value
                                           .size
                                           .width,
                                   height:
-                                      _previewController!
+                                      controller
                                           .value
                                           .size
                                           .height,
                                   child:
                                       VideoPlayer(
-                                    _previewController!,
+                                    controller,
                                   ),
                                 ),
                               )
-                            : const Center(
+                            else
+                              const Center(
                                 child:
                                     CircularProgressIndicator(
                                   color:
-                                      Colors.white,
+                                      _pink,
                                 ),
                               ),
+
+                            IgnorePointer(
+                              child:
+                                  Container(
+                                decoration:
+                                    const BoxDecoration(
+                                  gradient:
+                                      LinearGradient(
+                                    begin:
+                                        Alignment.topCenter,
+                                    end:
+                                        Alignment.bottomCenter,
+                                    colors: [
+                                      Color(
+                                        0x55000000,
+                                      ),
+                                      Colors
+                                          .transparent,
+                                      Color(
+                                        0x66000000,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            if (controller !=
+                                    null &&
+                                controller
+                                    .value
+                                    .isInitialized &&
+                                !controller
+                                    .value
+                                    .isPlaying)
+                              Center(
+                                child:
+                                    Container(
+                                  width:
+                                      64,
+                                  height:
+                                      64,
+                                  decoration:
+                                      BoxDecoration(
+                                    color:
+                                        Colors.black
+                                            .withOpacity(
+                                      0.55,
+                                    ),
+                                    shape:
+                                        BoxShape
+                                            .circle,
+                                  ),
+                                  child:
+                                      const Icon(
+                                    Icons
+                                        .play_arrow_rounded,
+                                    color:
+                                        Colors.white,
+                                    size:
+                                        40,
+                                  ),
+                                ),
+                              ),
+
+                            Positioned(
+                              left:
+                                  14,
+                              bottom:
+                                  14,
+                              child:
+                                  Container(
+                                padding:
+                                    const EdgeInsets
+                                        .symmetric(
+                                  horizontal:
+                                      10,
+                                  vertical:
+                                      6,
+                                ),
+                                decoration:
+                                    BoxDecoration(
+                                  color:
+                                      Colors.black
+                                          .withOpacity(
+                                    0.45,
+                                  ),
+                                  borderRadius:
+                                      BorderRadius
+                                          .circular(
+                                    20,
+                                  ),
+                                ),
+                                child:
+                                    const Text(
+                                  'PALOK',
+                                  style:
+                                      TextStyle(
+                                    color:
+                                        Colors.white,
+                                    fontSize:
+                                        11,
+                                    fontWeight:
+                                        FontWeight
+                                            .w800,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
 
                     const SizedBox(
-                      height: 16,
+                      height: 18,
+                    ),
+
+                    // =================================================
+                    // USER
+                    // =================================================
+
+                    Row(
+                      crossAxisAlignment:
+                          CrossAxisAlignment
+                              .start,
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration:
+                              const BoxDecoration(
+                            shape:
+                                BoxShape
+                                    .circle,
+                            gradient:
+                                LinearGradient(
+                              colors: [
+                                _pink,
+                                _cyan,
+                              ],
+                            ),
+                          ),
+                          alignment:
+                              Alignment.center,
+                          child:
+                              const Icon(
+                            Icons.person,
+                            color:
+                                Colors.white,
+                            size: 24,
+                          ),
+                        ),
+
+                        const SizedBox(
+                          width: 12,
+                        ),
+
+                        Expanded(
+                          child:
+                              Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment
+                                    .start,
+                            children: [
+                              Text(
+                                widget
+                                        .username
+                                        .startsWith(
+                                      '@',
+                                    )
+                                    ? widget
+                                        .username
+                                    : '@${widget.username}',
+                                maxLines:
+                                    1,
+                                overflow:
+                                    TextOverflow
+                                        .ellipsis,
+                                style:
+                                    const TextStyle(
+                                  color:
+                                      Colors.white,
+                                  fontSize:
+                                      16,
+                                  fontWeight:
+                                      FontWeight
+                                          .w800,
+                                ),
+                              ),
+
+                              const SizedBox(
+                                height: 3,
+                              ),
+
+                              const Text(
+                                'Add a caption',
+                                style:
+                                    TextStyle(
+                                  color:
+                                      Colors.white54,
+                                  fontSize:
+                                      12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(
+                      height: 14,
                     ),
 
                     // =================================================
                     // CAPTION
                     // =================================================
 
-                    TextField(
-                      controller:
-                          _captionController,
-                      maxLines: 4,
-                      enabled:
-                          !_uploading,
-                      style:
-                          const TextStyle(
-                        color:
-                            Colors.white,
-                      ),
+                    Container(
                       decoration:
-                          InputDecoration(
-                        hintText:
-                            'Write a caption... #PALOK',
-                        hintStyle:
-                            const TextStyle(
-                          color:
-                              Colors.white38,
+                          BoxDecoration(
+                        color:
+                            const Color(
+                          0xFF171717,
                         ),
-                        filled: true,
-                        fillColor:
-                            Colors.white
-                                .withOpacity(
-                          0.07,
+                        borderRadius:
+                            BorderRadius
+                                .circular(
+                          16,
                         ),
                         border:
-                            OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius
-                                  .circular(
-                            16,
+                            Border.all(
+                          color:
+                              Colors.white12,
+                        ),
+                      ),
+                      child:
+                          TextField(
+                        controller:
+                            _captionController,
+                        enabled:
+                            !_uploading,
+                        maxLines:
+                            5,
+                        minLines:
+                            3,
+                        maxLength:
+                            2200,
+                        textCapitalization:
+                            TextCapitalization
+                                .sentences,
+                        style:
+                            const TextStyle(
+                          color:
+                              Colors.white,
+                          fontSize:
+                              15,
+                          height:
+                              1.35,
+                        ),
+                        decoration:
+                            const InputDecoration(
+                          hintText:
+                              'Write a caption... #PALOK',
+                          hintStyle:
+                              TextStyle(
+                            color:
+                                Colors.white38,
+                            fontSize:
+                                15,
                           ),
-                          borderSide:
-                              BorderSide.none,
+                          border:
+                              InputBorder
+                                  .none,
+                          contentPadding:
+                              EdgeInsets
+                                  .fromLTRB(
+                            16,
+                            15,
+                            16,
+                            12,
+                          ),
+                          counterStyle:
+                              TextStyle(
+                            color:
+                                Colors.white30,
+                          ),
                         ),
                       ),
                     ),
 
                     const SizedBox(
-                      height: 12,
+                      height: 14,
                     ),
 
-                    const Text(
-                      'ভিডিও সর্বোচ্চ ৩ মিনিট পর্যন্ত',
-                      style:
-                          TextStyle(
-                        color:
-                            Colors.white38,
-                        fontSize: 12,
-                      ),
+                    _optionRow(
+                      icon:
+                          Icons.tag_rounded,
+                      title:
+                          'Add hashtags',
+                      subtitle:
+                          'Caption-এর মধ্যে #hashtag ব্যবহার করুন',
+                    ),
+
+                    const SizedBox(
+                      height: 8,
+                    ),
+
+                    _optionRow(
+                      icon:
+                          Icons.visibility_outlined,
+                      title:
+                          'Who can watch this video',
+                      subtitle:
+                          'Everyone',
+                    ),
+
+                    const SizedBox(
+                      height: 8,
+                    ),
+
+                    _optionRow(
+                      icon:
+                          Icons.comment_outlined,
+                      title:
+                          'Allow comments',
+                      subtitle:
+                          'Comments are enabled',
+                    ),
+
+                    const SizedBox(
+                      height: 20,
                     ),
                   ],
                 ),
@@ -609,91 +932,263 @@ class _UploadSheetState
             // POST BUTTON
             // =================================================
 
-            Padding(
+            Container(
               padding:
-                  const EdgeInsets
-                      .fromLTRB(
-                18,
-                8,
-                18,
-                18,
+                  const EdgeInsets.fromLTRB(
+                14,
+                10,
+                14,
+                12,
               ),
-              child: SizedBox(
+              decoration:
+                  const BoxDecoration(
+                color:
+                    Colors.black,
+                border:
+                    Border(
+                  top:
+                      BorderSide(
+                    color:
+                        Colors.white12,
+                  ),
+                ),
+              ),
+              child:
+                  SizedBox(
                 width:
                     double.infinity,
-                height: 52,
+                height:
+                    54,
                 child:
                     ElevatedButton(
                   onPressed:
                       _uploading
                           ? null
                           : _postVideo,
+
                   style:
                       ElevatedButton
                           .styleFrom(
                     backgroundColor:
-                        const Color(
-                      0xFFFF2D55,
-                    ),
+                        _pink,
                     disabledBackgroundColor:
                         Colors.white12,
                     foregroundColor:
                         Colors.white,
+                    elevation:
+                        0,
                     shape:
                         RoundedRectangleBorder(
                       borderRadius:
                           BorderRadius
                               .circular(
-                        16,
+                        15,
                       ),
                     ),
                   ),
-                  child: _uploading
-                      ? const Row(
-                          mainAxisAlignment:
-                              MainAxisAlignment
-                                  .center,
-                          children: [
-                            SizedBox(
-                              width: 21,
-                              height: 21,
-                              child:
-                                  CircularProgressIndicator(
-                                strokeWidth:
-                                    2.2,
-                                color:
-                                    Colors.white,
-                              ),
-                            ),
-                            SizedBox(
-                              width: 10,
-                            ),
-                            Text(
-                              'Posting...',
+
+                  child:
+                      _uploading
+                          ? const Row(
+                              mainAxisAlignment:
+                                  MainAxisAlignment
+                                      .center,
+                              children: [
+                                SizedBox(
+                                  width:
+                                      21,
+                                  height:
+                                      21,
+                                  child:
+                                      CircularProgressIndicator(
+                                    strokeWidth:
+                                        2.2,
+                                    color:
+                                        Colors.white,
+                                  ),
+                                ),
+                                SizedBox(
+                                  width:
+                                      10,
+                                ),
+                                Text(
+                                  'Posting...',
+                                  style:
+                                      TextStyle(
+                                    fontSize:
+                                        16,
+                                    fontWeight:
+                                        FontWeight
+                                            .w800,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : const Text(
+                              'Post to PALOK',
                               style:
                                   TextStyle(
+                                fontSize:
+                                    16,
                                 fontWeight:
                                     FontWeight
                                         .w800,
                               ),
                             ),
-                          ],
-                        )
-                      : const Text(
-                          'Post to PALOK',
-                          style:
-                              TextStyle(
-                            fontSize: 16,
-                            fontWeight:
-                                FontWeight
-                                    .w800,
-                          ),
-                        ),
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // =========================================================
+  // TOP BUTTON
+  // =========================================================
+
+  Widget _topButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child:
+          Container(
+        width: 44,
+        height: 44,
+        decoration:
+            BoxDecoration(
+          color:
+              Colors.white10,
+          shape:
+              BoxShape.circle,
+          border:
+              Border.all(
+            color:
+                Colors.white12,
+          ),
+        ),
+        child:
+            Icon(
+          icon,
+          color:
+              Colors.white,
+          size: 22,
+        ),
+      ),
+    );
+  }
+
+  // =========================================================
+  // OPTION ROW
+  // =========================================================
+
+  Widget _optionRow({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      padding:
+          const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 13,
+      ),
+      decoration:
+          BoxDecoration(
+        color:
+            const Color(0xFF121212),
+        borderRadius:
+            BorderRadius.circular(
+          15,
+        ),
+        border:
+            Border.all(
+          color:
+              Colors.white10,
+        ),
+      ),
+      child:
+          Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration:
+                BoxDecoration(
+              color:
+                  _pink.withOpacity(
+                0.12,
+              ),
+              shape:
+                  BoxShape.circle,
+            ),
+            child:
+                Icon(
+              icon,
+              color:
+                  _pink,
+              size: 21,
+            ),
+          ),
+
+          const SizedBox(
+            width: 12,
+          ),
+
+          Expanded(
+            child:
+                Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment
+                      .start,
+              children: [
+                Text(
+                  title,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white,
+                    fontSize:
+                        14,
+                    fontWeight:
+                        FontWeight
+                            .w700,
+                  ),
+                ),
+
+                const SizedBox(
+                  height: 3,
+                ),
+
+                Text(
+                  subtitle,
+                  maxLines:
+                      1,
+                  overflow:
+                      TextOverflow
+                          .ellipsis,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white38,
+                    fontSize:
+                        11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const Icon(
+            Icons.chevron_right,
+            color:
+                Colors.white38,
+            size: 22,
+          ),
+        ],
       ),
     );
   }
