@@ -1787,72 +1787,54 @@ class _HomeScreenState extends State<HomeScreen>
   // ============================================================
 
   Widget _buildHomeScreen() {
-    if (_loading) {
-      return const Center(
-        child:
-            CircularProgressIndicator(
-          color: _pink,
-        ),
-      );
-    }
-
-    final feed = _topIndex == 0
-        ? _videos
-        : _videos
-            .where(
-              (video) =>
-                  _followingIds
-                      .contains(
-                video.userId,
-              ),
-            )
-            .toList();
-
-    if (feed.isEmpty) {
-      return _buildEmptyFeed();
-    }
-
-    return PageView.builder(
-      controller: _pageController,
-      scrollDirection: Axis.vertical,
-      physics:
-          const PageScrollPhysics(),
-      pageSnapping: true,
-      allowImplicitScrolling: true,
-      itemCount: feed.length,
-      onPageChanged: (index) {
-        unawaited(
-          _onVideoChanged(
-            index,
-            feed,
-          ),
-        );
-      },
-      itemBuilder: (
-        context,
-        index,
-      ) {
-        final video = feed[index];
-
-        final actualIndex =
-            _videos.indexWhere(
-          (item) =>
-              item.id == video.id,
-        );
-
-        final controller =
-            _controllers[actualIndex];
-
-        return _buildVideoPage(
-          video: video,
-          actualIndex:
-              actualIndex,
-          controller:
-              controller,
-        );
-      },
+  if (_loading) {
+    return const Center(
+      child: CircularProgressIndicator(
+        color: _pink,
+      ),
     );
   }
+
+  final feed = _topIndex == 0
+      ? _videos
+      : _videos
+          .where(
+            (video) => _followingIds.contains(video.userId),
+          )
+          .toList();
+
+  if (feed.isEmpty) {
+    return _buildEmptyFeed();
+  }
+
+  return ForYouFeed(
+    videos: feed,
+    pageController: _pageController,
+    onPageChanged: (index) {
+      unawaited(
+        _onVideoChanged(
+          index,
+          feed,
+        ),
+      );
+    },
+    itemBuilder: (context, index) {
+      final video = feed[index];
+
+      final actualIndex = _videos.indexWhere(
+        (item) => item.id == video.id,
+      );
+
+      final controller = _controllers[actualIndex];
+
+      return _buildVideoPage(
+        video: video,
+        actualIndex: actualIndex,
+        controller: controller,
+      );
+    },
+  );
+}
 
   Widget _buildEmptyFeed() {
     if (_topIndex == 1) {
