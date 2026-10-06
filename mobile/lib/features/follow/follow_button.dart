@@ -1,117 +1,191 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-
-import 'follow_service.dart';
 
 class FollowButton extends StatefulWidget {
   const FollowButton({
     super.key,
     required this.targetUserId,
-    this.initialFollowing = false,
-    this.onChanged,
   });
 
+  /// যাকে Follow করা হবে তার Firebase UID
   final String targetUserId;
-  final bool initialFollowing;
-  final ValueChanged<bool>? onChanged;
 
   @override
   State<FollowButton> createState() => _FollowButtonState();
 }
 
 class _FollowButtonState extends State<FollowButton> {
-  late bool _isFollowing;
-  bool _loading = false;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore =
+      FirebaseFirestore.instance;
+
+  bool _isFollowing = false;
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _isFollowing = widget.initialFollowing;
+    _checkFollowing();
+  }
+
+  Future<void> _checkFollowing() async {
+    final user = _auth.currentUser;
+
+    if (user == null ||
+        user.uid == widget.targetUserId) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+      return;
+    }
+
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('following')
+          .doc(widget.targetUserId)
+          .get();
+
+      if (mounted) {
+        setState(() {
+          _isFollowing = doc.exists;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
   }
 
   Future<void> _toggleFollow() async {
-    if (_loading) return;
+    final user = _auth.currentUser;
+
+    if (user == null ||
+        user.uid == widget.targetUserId ||
+        _loading) {
+      return;
+    }
 
     setState(() {
       _loading = true;
     });
 
+    final currentUserId = user.uid;
+    final targetUserId = widget.targetUserId;
+
+    final followingRef = _firestore
+        .collection('users')
+        .doc(currentUserId)
+        .collection('following')
+        .doc(targetUserId);
+
+    final followerRef = _firestore
+        .collection('users')
+        .doc(targetUserId)
+        .collection('followers')
+        .doc(currentUserId);
+
     try {
       if (_isFollowing) {
-        await FollowService.unfollowUser(
-          widget.targetUserId,
-        );
+        await followingRef.delete();
+        await followerRef.delete();
+
+        if (mounted) {
+          setState(() {
+            _isFollowing = false;
+            _loading = false;
+          });
+        }
       } else {
-        await FollowService.followUser(
-          widget.targetUserId,
-        );
+        await followingRef.set({
+          'userId': targetUserId,
+          'followedAt': FieldValue.serverTimestamp(),
+        });
+
+        await followerRef.set({
+          'userId': currentUserId,
+          'followedAt': FieldValue.serverTimestamp(),
+        });
+
+        if (mounted) {
+          setState(() {
+            _isFollowing = true;
+            _loading = false;
+          });
+        }
       }
-
-      if (!mounted) return;
-
-      setState(() {
-        _isFollowing = !_isFollowing;
-      });
-
-      widget.onChanged?.call(_isFollowing);
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Follow পরিবর্তন করা যায়নি। আবার চেষ্টা করুন।',
-          ),
-        ),
-      );
-    } finally {
-      if (!mounted) return;
-
-      setState(() {
-        _loading = false;
-      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 40,
-      child: ElevatedButton(
-        onPressed: _loading ? null : _toggleFollow,
-        style: ElevatedButton.styleFrom(
-          backgroundColor:
-              _isFollowing ? Colors.white : const Color(0xFFFF2055),
-          foregroundColor:
-              _isFollowing ? Colors.black : Colors.white,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(
-            horizontal: 22,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: _isFollowing
-                ? const BorderSide(
-                    color: Colors.grey,
-                  )
-                : BorderSide.none,
+    final user = _auth.currentUser;
+
+    // নিজের profile হলে Follow button দেখাবে না।
+    if (user != null &&
+        user.uid == widget.targetUserId) {
+      return const SizedBox.shrink();
+    }
+
+    if (_loading) {
+      return const SizedBox(
+        width: 80,
+        height: 34,
+        child: Center(
+          child: SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.white,
+            ),
           ),
         ),
-        child: _loading
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.black,
-                ),
-              )
-            : Text(
-                _isFollowing ? 'Following' : 'Follow',
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: _toggleFollow,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 7,
+        ),
+        decoration: BoxDecoration(
+          color: _isFollowing
+              ? Colors.transparent
+              : const Color(0xFFFF2055),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: _isFollowing
+                ? Colors.white
+                : const Color(0xFFFF2055),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          _isFollowing ? 'Following' : 'Follow',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ),
     );
   }
