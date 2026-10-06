@@ -14,25 +14,35 @@ class FriendsService {
   }) async {
     final snapshot = await _firestore
         .collection('users')
-        .limit(50)
+        .limit(100)
         .get();
 
     final creators = <FriendModel>[];
 
     for (final doc in snapshot.docs) {
-      if (doc.id == currentUserId) {
+      final data = doc.data();
+
+      final uid = (data['uid'] ?? doc.id).toString().trim();
+
+      // নিজের account বাদ
+      if (doc.id == currentUserId || uid == currentUserId) {
         continue;
       }
 
-      final data = doc.data();
+      final username =
+          (data['username'] ?? '').toString().trim();
 
-      // Empty / incomplete user document বাদ
-      final username = (data['username'] ?? '').toString().trim();
-      final displayName = (data['displayName'] ?? data['name'] ?? '')
-          .toString()
-          .trim();
-      final profileImage = (data['profileImage'] ?? '').toString().trim();
+      final displayName =
+          (data['displayName'] ?? data['name'] ?? '')
+              .toString()
+              .trim();
 
+      final profileImage =
+          (data['profileImage'] ?? data['photoUrl'] ?? '')
+              .toString()
+              .trim();
+
+      // Empty/demo document বাদ
       if (username.isEmpty &&
           displayName.isEmpty &&
           profileImage.isEmpty) {
@@ -54,7 +64,7 @@ class FriendsService {
   Future<List<FriendModel>> getFollowing({
     required String currentUserId,
   }) async {
-    final followingSnapshot = await _firestore
+    final snapshot = await _firestore
         .collection('users')
         .doc(currentUserId)
         .collection('following')
@@ -62,8 +72,8 @@ class FriendsService {
 
     final following = <FriendModel>[];
 
-    for (final followingDoc in followingSnapshot.docs) {
-      final userId = followingDoc.id;
+    for (final doc in snapshot.docs) {
+      final userId = doc.id;
 
       final userDoc = await _firestore
           .collection('users')
@@ -76,11 +86,18 @@ class FriendsService {
 
       final data = userDoc.data() ?? {};
 
-      final username = (data['username'] ?? '').toString().trim();
-      final displayName = (data['displayName'] ?? data['name'] ?? '')
-          .toString()
-          .trim();
-      final profileImage = (data['profileImage'] ?? '').toString().trim();
+      final username =
+          (data['username'] ?? '').toString().trim();
+
+      final displayName =
+          (data['displayName'] ?? data['name'] ?? '')
+              .toString()
+              .trim();
+
+      final profileImage =
+          (data['profileImage'] ?? data['photoUrl'] ?? '')
+              .toString()
+              .trim();
 
       if (username.isEmpty &&
           displayName.isEmpty &&
@@ -104,11 +121,9 @@ class FriendsService {
     required String currentUserId,
     required FriendModel friend,
   }) async {
-    if (currentUserId.isEmpty || friend.userId.isEmpty) {
-      return;
-    }
-
-    if (currentUserId == friend.userId) {
+    if (currentUserId.isEmpty ||
+        friend.userId.isEmpty ||
+        currentUserId == friend.userId) {
       return;
     }
 
