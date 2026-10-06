@@ -9,8 +9,6 @@ class FriendsService {
 
   final FirebaseFirestore _firestore;
 
-  /// PALOK-এর সব user থেকে current user বাদ দিয়ে
-  /// Suggested creators আনে।
   Future<List<FriendModel>> getSuggestedCreators({
     required String currentUserId,
   }) async {
@@ -28,6 +26,19 @@ class FriendsService {
 
       final data = doc.data();
 
+      // Empty / incomplete user document বাদ
+      final username = (data['username'] ?? '').toString().trim();
+      final displayName = (data['displayName'] ?? data['name'] ?? '')
+          .toString()
+          .trim();
+      final profileImage = (data['profileImage'] ?? '').toString().trim();
+
+      if (username.isEmpty &&
+          displayName.isEmpty &&
+          profileImage.isEmpty) {
+        continue;
+      }
+
       creators.add(
         FriendModel.fromMap(
           doc.id,
@@ -40,7 +51,6 @@ class FriendsService {
     return creators;
   }
 
-  /// Current user যাদের follow করে তাদের list আনে।
   Future<List<FriendModel>> getFollowing({
     required String currentUserId,
   }) async {
@@ -66,6 +76,18 @@ class FriendsService {
 
       final data = userDoc.data() ?? {};
 
+      final username = (data['username'] ?? '').toString().trim();
+      final displayName = (data['displayName'] ?? data['name'] ?? '')
+          .toString()
+          .trim();
+      final profileImage = (data['profileImage'] ?? '').toString().trim();
+
+      if (username.isEmpty &&
+          displayName.isEmpty &&
+          profileImage.isEmpty) {
+        continue;
+      }
+
       following.add(
         FriendModel.fromMap(
           userDoc.id,
@@ -78,7 +100,6 @@ class FriendsService {
     return following;
   }
 
-  /// Follow / Unfollow করে।
   Future<void> toggleFollow({
     required String currentUserId,
     required FriendModel friend,
