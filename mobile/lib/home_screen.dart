@@ -3,7 +3,7 @@ import 'features/upload/upload_sheet.dart';
 import 'features/create/create_video_screen.dart';
 import 'features/search/search_screen.dart';
 import 'features/feed/for_you_feed.dart';
-import 'following_feed.dart';
+import 'features/feed/following_feed.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
