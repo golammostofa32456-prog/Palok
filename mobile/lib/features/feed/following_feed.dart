@@ -75,6 +75,7 @@ class FollowingFeed extends StatelessWidget {
       onPageChanged: (index) {
         onPageChanged(
           index,
+          
           feed,
         );
       },
