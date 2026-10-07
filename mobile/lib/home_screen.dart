@@ -2007,194 +2007,27 @@ class _HomeScreenState extends State<HomeScreen>
   // TOP BAR
   // ============================================================
 
-  Widget _buildTopBar() {
-    return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding:
-              const EdgeInsets.fromLTRB(
-            12,
-            10,
-            10,
-            0,
-          ),
-          child: Row(
-            crossAxisAlignment:
-                CrossAxisAlignment.center,
-            children: [
-              AnimatedBuilder(
-                animation:
-                    _logoController,
-                builder: (_, __) {
-                  return Opacity(
-                    opacity:
-                        _logoOpacity.value,
-                    child:
-                        Transform.scale(
-                      scale:
-                          _logoScale.value,
-                      child:
-                          Container(
-                        width: 40,
-                        height: 40,
-                        decoration:
-                            BoxDecoration(
-                          gradient:
-                              const LinearGradient(
-                            colors: [
-                              _pink,
-                              _cyan,
-                            ],
-                            begin:
-                                Alignment
-                                    .topLeft,
-                            end:
-                                Alignment
-                                    .bottomRight,
-                          ),
-                          borderRadius:
-                              BorderRadius
-                                  .circular(
-                            13,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: _pink
-                                  .withOpacity(
-                                0.35,
-                              ),
-                              blurRadius:
-                                  15,
-                              spreadRadius:
-                                  1,
-                            ),
-                          ],
-                        ),
-                        alignment:
-                            Alignment.center,
-                        child:
-                            const Text(
-                          'P',
-                          style:
-                              TextStyle(
-                            color:
-                                Colors.white,
-                            fontSize:
-                                24,
-                            fontWeight:
-                                FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-              const Spacer(),
-              _topTab(
-                title: 'For You',
-                selected:
-                    _topIndex == 0,
-                onTap: () {
-                  unawaited(
-                    _switchTopTab(0),
-                  );
-                },
-              ),
-              const SizedBox(
-                width: 18,
-              ),
-              _topTab(
-                title: 'Following',
-                selected:
-                    _topIndex == 1,
-                onTap: () {
-                  unawaited(
-                    _switchTopTab(1),
-                  );
-                },
-              ),
-              const SizedBox(
-                width: 8,
-              ),
-              IconButton(
-                onPressed:
-                    _openSearch,
-                icon:
-                    const Icon(
-                  Icons
-                      .search_rounded,
-                  color:
-                      Colors.white,
-                  size: 27,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _topTab({
-    required String title,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Padding(
-        padding:
-            const EdgeInsets.symmetric(
-          vertical: 8,
-        ),
-        child: Column(
-          mainAxisSize:
-              MainAxisSize.min,
-          children: [
-            Text(
-              title,
-              style: TextStyle(
-                color: selected
-                    ? Colors.white
-                    : Colors.white60,
-                fontSize: 15,
-                fontWeight: selected
-                    ? FontWeight.w800
-                    : FontWeight.w500,
-              ),
-            ),
-            const SizedBox(
-              height: 5,
-            ),
-            AnimatedContainer(
-              duration:
-                  const Duration(
-                milliseconds: 180,
-              ),
-              width:
-                  selected ? 24 : 0,
-              height: 2.5,
-              decoration:
-                  BoxDecoration(
-                color:
-                    Colors.white,
-                borderRadius:
-                    BorderRadius
-                        .circular(
-                  10,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  
+            Widget _buildTopBar() {
+  return HomeTopBar(
+    logoOpacity: _logoOpacity,
+    logoScale: _logoScale,
+    topIndex: _topIndex,
+    onForYou: () {
+      unawaited(
+        _switchTopTab(0),
+      );
+    },
+    onFollowing: () {
+      unawaited(
+        _switchTopTab(1),
+      );
+    },
+    onSearch: _openSearch,
+    pink: _pink,
+    cyan: _cyan,
+  );
+}            
 
   // ============================================================
   // RIGHT ACTIONS
