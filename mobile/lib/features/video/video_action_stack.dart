@@ -38,8 +38,8 @@ class VideoActionStack extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      right: 12,
-      bottom: 210,
+  right: 10,
+  bottom: 116,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
