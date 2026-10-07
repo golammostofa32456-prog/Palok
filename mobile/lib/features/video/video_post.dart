@@ -1,4 +1,3 @@
-
 class VideoPost {
   final String id;
   final String ownerId;
@@ -32,6 +31,10 @@ class VideoPost {
     required this.createdAt,
   });
 
+  // HomeScreen compatibility.
+  // Existing HomeScreen code uses video.userId.
+  String get userId => ownerId;
+
   factory VideoPost.fromMap(
     String id,
     Map<String, dynamic> data,
@@ -45,12 +48,10 @@ class VideoPost {
       hashtags: _parseHashtags(data['hashtags']),
       thumbnailUrl: (data['thumbnailUrl'] ?? '').toString(),
       soundName: (data['soundName'] ?? '').toString(),
-
       likeCount: _toInt(data['likeCount']),
       commentCount: _toInt(data['commentCount']),
       saveCount: _toInt(data['saveCount']),
       shareCount: _toInt(data['shareCount']),
-
       createdAt: _parseDate(data['createdAt']),
     );
   }
