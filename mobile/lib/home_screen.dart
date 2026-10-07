@@ -6,6 +6,7 @@ import 'features/feed/for_you_feed.dart';
 import 'features/feed/following_feed.dart';
 import 'features/friends/friends_screen.dart';
 import 'features/video/video_post.dart';
+import 'features/video/video_page.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
