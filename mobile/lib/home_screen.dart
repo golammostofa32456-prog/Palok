@@ -1977,111 +1977,30 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildVideoPage({
-    required VideoPost video,
-    required int actualIndex,
-    required VideoPlayerController?
-        controller,
-  }) {
-    return GestureDetector(
-      behavior:
-          HitTestBehavior.opaque,
-      onTap: () {
+  required VideoPost video,
+  required int actualIndex,
+  required VideoPlayerController? controller,
+}) {
+  return VideoPage(
+    video: video,
+    controller: controller,
+    onTap: () {
+      unawaited(
+        _togglePlay(actualIndex),
+      );
+    },
+    onDoubleTap: () {
+      if (!_likedIds.contains(video.id)) {
         unawaited(
-          _togglePlay(
-            actualIndex,
-          ),
+          _toggleLike(video),
         );
-      },
-      onDoubleTap: () {
-        if (!_likedIds.contains(
-          video.id,
-        )) {
-          unawaited(
-            _toggleLike(video),
-          );
-        }
-      },
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Container(
-            color: Colors.black,
-          ),
-
-          if (controller != null &&
-              controller.value
-                  .isInitialized)
-            FittedBox(
-              fit: BoxFit.cover,
-              child: SizedBox(
-                width:
-                    controller.value.size.width,
-                height:
-                    controller.value.size.height,
-                child:
-                    VideoPlayer(
-                  controller,
-                ),
-              ),
-            )
-          else
-            const Center(
-              child:
-                  CircularProgressIndicator(
-                color:
-                    Colors.white,
-              ),
-            ),
-
-          const IgnorePointer(
-            child:
-                DecoratedBox(
-              decoration:
-                  BoxDecoration(
-                gradient:
-                    LinearGradient(
-                  begin:
-                      Alignment.topCenter,
-                  end:
-                      Alignment.center,
-                  colors: [
-                    Color(0x66000000),
-                    Color(0x00000000),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          const IgnorePointer(
-            child:
-                DecoratedBox(
-              decoration:
-                  BoxDecoration(
-                gradient:
-                    LinearGradient(
-                  begin:
-                      Alignment.bottomCenter,
-                  end:
-                      Alignment.center,
-                  colors: [
-                    Color(0xB8000000),
-                    Color(0x00000000),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          _buildTopBar(),
-
-          _buildRightActions(video),
-
-          _buildVideoInfo(video),
-        ],
-      ),
-    );
-  }
+      }
+    },
+    topBar: _buildTopBar(),
+    rightActions: _buildRightActions(video),
+    videoInfo: _buildVideoInfo(video),
+  );
+}
 
   // ============================================================
   // TOP BAR
