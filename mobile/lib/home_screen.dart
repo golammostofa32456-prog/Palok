@@ -248,118 +248,93 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _loadVideos() async {
-    _preparingVideos.clear();
+  _preparingVideos.clear();
 
-    for (final controller in _controllers.values) {
-      await controller.dispose();
-    }
-
-    _controllers.clear();
-
-    try {
-      final snapshot = await _firestore
-          .collection('videos')
-          .orderBy(
-            'createdAt',
-            descending: true,
-          )
-          .limit(50)
-          .get();
-
-      if (snapshot.docs.isNotEmpty) {
-        _videos = snapshot.docs
-            .map(
-              (doc) {
-                final data = doc.data();
-
-                return VideoPost(
-                  id: doc.id,
-                  videoUrl:
-                      (data['videoUrl'] ?? '').toString(),
-                  userId:
-                      (data['userId'] ?? '').toString(),
-                  username:
-                      (data['username'] ?? 'PALOK User')
-                          .toString(),
-                  caption:
-                      (data['caption'] ?? '').toString(),
-                  hashtags:
-                      _hashtagsToString(
-                    data['hashtags'],
-                  ),
-                  likeCount:
-                      _toInt(data['likeCount']),
-                  commentCount:
-                      _toInt(data['commentCount']),
-                  saveCount:
-                      _toInt(data['saveCount']),
-                  shareCount:
-                      _toInt(data['shareCount']),
-                  thumbnailUrl:
-                      (data['thumbnailUrl'] ?? '')
-                          .toString(),
-                );
-              },
-            )
-            .where(
-              (video) =>
-                  video.videoUrl.isNotEmpty,
-            )
-            .toList();
-
-        if (_videos.isNotEmpty) {
-          return;
-        }
-      }
-    } catch (_) {
-      // Firebase query failed.
-      // Demo feed will be used below.
-    }
-
-    _videos = List.generate(
-      _demoVideos.length,
-      (index) => VideoPost(
-        id: 'demo_$index',
-        videoUrl: _demoVideos[index],
-        userId: 'demo_user_$index',
-        username: index == 0
-            ? '@palok_creator'
-            : index == 1
-                ? '@nature_palok'
-                : '@palok_video',
-        caption: index == 0
-            ? 'Welcome to PALOK ✨'
-            : index == 1
-                ? 'Beautiful moments on PALOK 🌿'
-                : 'Create. Share. Connect. 🚀',
-        hashtags: index == 0
-            ? '#PALOK #ForYou'
-            : index == 1
-                ? '#Nature #PALOK'
-                : '#PALOK #ShortVideo',
-        likeCount: index == 0
-            ? 11700
-            : index == 1
-                ? 8500
-                : 4200,
-        commentCount: index == 0
-            ? 234
-            : index == 1
-                ? 128
-                : 75,
-        saveCount: index == 0
-            ? 811
-            : index == 1
-                ? 452
-                : 210,
-        shareCount: index == 0
-            ? 431
-            : index == 1
-                ? 201
-                : 98,
-      ),
-    );
+  for (final controller in _controllers.values) {
+    await controller.dispose();
   }
+
+  _controllers.clear();
+
+  try {
+    final snapshot = await _firestore
+        .collection('videos')
+        .orderBy(
+          'createdAt',
+          descending: true,
+        )
+        .limit(50)
+        .get();
+
+    if (snapshot.docs.isNotEmpty) {
+      _videos = snapshot.docs
+          .map(
+            (doc) => VideoPost.fromMap(
+              doc.id,
+              doc.data(),
+            ),
+          )
+          .where(
+            (video) => video.videoUrl.isNotEmpty,
+          )
+          .toList();
+
+      if (_videos.isNotEmpty) {
+        return;
+      }
+    }
+  } catch (_) {
+    // Firebase query failed.
+    // Demo feed will be used below.
+  }
+
+  _videos = List.generate(
+    _demoVideos.length,
+    (index) => VideoPost(
+      id: 'demo_$index',
+      ownerId: 'demo_user_$index',
+      username: index == 0
+          ? '@palok_creator'
+          : index == 1
+              ? '@nature_palok'
+              : '@palok_video',
+      videoUrl: _demoVideos[index],
+      caption: index == 0
+          ? 'Welcome to PALOK ✨'
+          : index == 1
+              ? 'Beautiful moments on PALOK 🌿'
+              : 'Create. Share. Connect. 🚀',
+      hashtags: index == 0
+          ? ['#PALOK', '#ForYou']
+          : index == 1
+              ? ['#Nature', '#PALOK']
+              : ['#PALOK', '#ShortVideo'],
+      thumbnailUrl: '',
+      soundName: '',
+      likeCount: index == 0
+          ? 11700
+          : index == 1
+              ? 8500
+              : 4200,
+      commentCount: index == 0
+          ? 234
+          : index == 1
+              ? 128
+              : 75,
+      saveCount: index == 0
+          ? 811
+          : index == 1
+              ? 452
+              : 210,
+      shareCount: index == 0
+          ? 431
+          : index == 1
+              ? 201
+              : 98,
+      createdAt: null,
+    ),
+  );
+}
 
   // ============================================================
   // FAST VIDEO PRELOAD
