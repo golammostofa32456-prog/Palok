@@ -2035,159 +2035,60 @@ class _HomeScreenState extends State<HomeScreen>
   // RIGHT ACTIONS
   // ============================================================
 
-  Widget _buildRightActions(
-    VideoPost video,
-  ) {
-    final liked =
-        _likedIds.contains(
-      video.id,
-    );
+  Widget _buildRightActions(VideoPost video) {
+  final liked = _likedIds.contains(video.id);
+  final saved = _savedIds.contains(video.id);
+  final following = _followingIds.contains(video.userId);
 
-    final saved =
-        _savedIds.contains(
-      video.id,
-    );
+  final likeCount =
+      video.likeCount + (_likeDeltas[video.id] ?? 0);
 
-    final following =
-        _followingIds.contains(
-      video.userId,
-    );
+  final commentCount =
+      video.commentCount + (_commentDeltas[video.id] ?? 0);
 
-    final likeCount =
-        video.likeCount +
-            (_likeDeltas[
-                    video.id] ??
-                0);
+  final saveCount =
+      video.saveCount + (_saveDeltas[video.id] ?? 0);
 
-    final commentCount =
-        video.commentCount +
-            (_commentDeltas[
-                    video.id] ??
-                0);
+  final shareCount =
+      video.shareCount + (_shareDeltas[video.id] ?? 0);
 
-    final saveCount =
-        video.saveCount +
-            (_saveDeltas[
-                    video.id] ??
-                0);
-
-    final shareCount =
-        video.shareCount +
-            (_shareDeltas[
-                    video.id] ??
-                0);
-
-    return Positioned(
-      right: 10,
-      bottom: 116,
-      child: Column(
-        mainAxisSize:
-            MainAxisSize.min,
-        children: [
-          if (video.userId !=
-              _auth.currentUser?.uid)
-            _actionButton(
-              icon: following
-                  ? Icons.person
-                  : Icons
-                      .person_add_alt_1_rounded,
-              label: following
-                  ? 'Following'
-                  : 'Follow',
-              active:
-                  following,
-              onTap: () {
-                unawaited(
-                  _toggleFollow(
-                    video,
-                  ),
-                );
-              },
-            ),
-          const SizedBox(
-            height: 13,
-          ),
-          _actionButton(
-            icon: liked
-                ? Icons
-                    .favorite_rounded
-                : Icons
-                    .favorite_border_rounded,
-            label:
-                _formatCount(
-              likeCount,
-            ),
-            active: liked,
-            onTap: () {
-              unawaited(
-                _toggleLike(
-                  video,
-                ),
-              );
-            },
-          ),
-          const SizedBox(
-            height: 13,
-          ),
-          _actionButton(
-            icon: Icons
-                .mode_comment_outlined,
-            label:
-                _formatCount(
-              commentCount,
-            ),
-            onTap: () {
-              unawaited(
-                _openComments(
-                  video,
-                ),
-              );
-            },
-          ),
-          const SizedBox(
-            height: 13,
-          ),
-          _actionButton(
-            icon: saved
-                ? Icons
-                    .bookmark_rounded
-                : Icons
-                    .bookmark_border_rounded,
-            label:
-                _formatCount(
-              saveCount,
-            ),
-            active: saved,
-            onTap: () {
-              unawaited(
-                _toggleSave(
-                  video,
-                ),
-              );
-            },
-          ),
-          const SizedBox(
-            height: 13,
-          ),
-          _actionButton(
-            icon:
-                Icons.share_rounded,
-            label:
-                _formatCount(
-              shareCount,
-            ),
-            onTap: () {
-              unawaited(
-                _shareVideo(
-                  video,
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
+  return VideoActionStack(
+    isFollowing: following,
+    isLiked: liked,
+    isSaved: saved,
+    likeCount: likeCount,
+    commentCount: commentCount,
+    saveCount: saveCount,
+    shareCount: shareCount,
+    showFollow:
+        video.userId != _auth.currentUser?.uid,
+    onFollow: () {
+      unawaited(
+        _toggleFollow(video),
+      );
+    },
+    onLike: () {
+      unawaited(
+        _toggleLike(video),
+      );
+    },
+    onComment: () {
+      unawaited(
+        _openComments(video),
+      );
+    },
+    onSave: () {
+      unawaited(
+        _toggleSave(video),
+      );
+    },
+    onShare: () {
+      unawaited(
+        _shareVideo(video),
+      );
+    },
+  );
+}
 
   Widget _actionButton({
     required IconData icon,
