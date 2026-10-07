@@ -2586,7 +2586,7 @@ class _HomeScreenState extends State<HomeScreen>
               height: 5,
             ),
             Text(
-              video.hashtags,
+              _hashtagsToString(video.hashtags),
               maxLines: 2,
               overflow:
                   TextOverflow.ellipsis,
