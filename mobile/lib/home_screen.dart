@@ -153,6 +153,7 @@ class _HomeScreenState extends State<HomeScreen>
       await _prepareVideo(0);
     }
   }
+  
 
   Future<void> _loadUserProfile() async {
     final user = _auth.currentUser;
