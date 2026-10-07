@@ -3682,30 +3682,3 @@ class _HomeScreenState extends State<HomeScreen>
 // VIDEO POST MODEL
 // ============================================================
 
-class VideoPost {
-  final String id;
-  final String videoUrl;
-  final String userId;
-  final String username;
-  final String caption;
-  final String hashtags;
-  final int likeCount;
-  final int commentCount;
-  final int saveCount;
-  final int shareCount;
-  final String thumbnailUrl;
-
-  const VideoPost({
-    required this.id,
-    required this.videoUrl,
-    required this.userId,
-    required this.username,
-    required this.caption,
-    required this.hashtags,
-    required this.likeCount,
-    required this.commentCount,
-    required this.saveCount,
-    required this.shareCount,
-    this.thumbnailUrl = '',
-  });
-}
