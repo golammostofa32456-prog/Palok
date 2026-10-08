@@ -787,8 +787,9 @@ Future<void> _showCreateSettings() async {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop('');
-              },
+  FocusScope.of(context).unfocus();
+  Navigator.of(context).pop('');
+},
               child: const Text(
                 'Remove',
                 style: TextStyle(
