@@ -151,8 +151,12 @@ class _HomeScreenState extends State<HomeScreen>
     });
 
     if (_videos.isNotEmpty) {
-      await _prepareVideo(0);
-    }
+  unawaited(
+    _registerVideoView(_videos[0]),
+  );
+
+  await _prepareVideo(0);
+}
   }
   
 
