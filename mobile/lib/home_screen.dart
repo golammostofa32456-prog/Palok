@@ -2080,6 +2080,7 @@ unawaited(
     commentCount: commentCount,
     saveCount: saveCount,
     shareCount: shareCount,
+    viewCount: video.viewCount,
     showFollow:
         video.userId != _auth.currentUser?.uid,
     onFollow: () {
