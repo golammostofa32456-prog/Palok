@@ -352,6 +352,7 @@ final VideoViewService _videoViewService = VideoViewService();
           : index == 1
               ? 201
               : 98,
+      viewCount: 0,
       createdAt: null,
     ),
   );
