@@ -87,7 +87,14 @@ final int? viewCount;
           ),
 
           const SizedBox(height: 13),
-
+if (viewCount != null) ...[
+  _actionButton(
+    icon: Icons.visibility_outlined,
+    label: _formatCount(viewCount!),
+    onTap: () {},
+  ),
+  const SizedBox(height: 13),
+],
           _actionButton(
             icon: Icons.share_rounded,
             label: _formatCount(shareCount),
