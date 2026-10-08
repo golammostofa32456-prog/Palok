@@ -1038,10 +1038,7 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
                   ),
                   _circleButton(
                     icon: Icons.settings_outlined,
-                    onTap: () {
-                      _showMessage(
-                        'Create settings পরে যোগ করা যাবে',
-                      );
+                    onTap: _showCreateSettings,
                     },
                   ),
                 ],
