@@ -12,8 +12,8 @@ class VideoPost {
   final int commentCount;
   final int saveCount;
   final int shareCount;
-
-  final DateTime? createdAt;
+final int viewCount;
+final DateTime? createdAt;
 
   const VideoPost({
     required this.id,
