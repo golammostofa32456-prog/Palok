@@ -39,17 +39,20 @@ class FriendItem extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: 16,
-        vertical: 7,
+        vertical: 9,
       ),
       child: Row(
         children: [
+          // Profile avatar
           Container(
-            width: 50,
-            height: 50,
+            width: 54,
+            height: 54,
             padding: const EdgeInsets.all(2),
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
               gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
                 colors: [
                   Colors.cyan,
                   Colors.pinkAccent,
@@ -65,12 +68,15 @@ class FriendItem extends StatelessWidget {
                   ? const Icon(
                       Icons.person,
                       color: Colors.white,
-                      size: 28,
+                      size: 29,
                     )
                   : null,
             ),
           ),
-          const SizedBox(width: 14),
+
+          const SizedBox(width: 13),
+
+          // User information
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -81,49 +87,72 @@ class FriendItem extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontWeight: FontWeight.bold,
                     fontSize: 15,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 2),
+
+                const SizedBox(height: 3),
+
                 Text(
-                  '$username • ${_formatCount(friend.followersCount)} followers',
+                  username,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Colors.grey,
+                    color: Colors.white70,
                     fontSize: 12,
+                  ),
+                ),
+
+                const SizedBox(height: 2),
+
+                Text(
+                  '${_formatCount(friend.followersCount)} followers',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white38,
+                    fontSize: 11,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          OutlinedButton(
-            onPressed: onFollowTap,
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(
-                color: friend.isFollowing
-                    ? Colors.grey.shade800
+
+          const SizedBox(width: 10),
+
+          // Follow button
+          SizedBox(
+            height: 36,
+            child: OutlinedButton(
+              onPressed: onFollowTap,
+              style: OutlinedButton.styleFrom(
+                backgroundColor: friend.isFollowing
+                    ? const Color(0xFF242424)
                     : Colors.redAccent,
+                foregroundColor: Colors.white,
+                side: BorderSide(
+                  color: friend.isFollowing
+                      ? Colors.white24
+                      : Colors.redAccent,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 15,
+                ),
               ),
-              backgroundColor: const Color(0xFF1E1E1E),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6),
-              ),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 8,
-              ),
-            ),
-            child: Text(
-              friend.isFollowing ? 'Following' : 'Follow',
-              style: TextStyle(
-                color: friend.isFollowing
-                    ? Colors.white
-                    : Colors.redAccent,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
+              child: Text(
+                friend.isFollowing
+                    ? 'অনুসরণ করা হচ্ছে'
+                    : 'অনুসরণ করুন',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
