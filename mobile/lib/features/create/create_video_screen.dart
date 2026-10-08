@@ -799,10 +799,11 @@ Future<void> _showCreateSettings() async {
             ),
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop(
-                  controller.text.trim(),
-                );
-              },
+  FocusScope.of(context).unfocus();
+  Navigator.of(context).pop(
+    controller.text.trim(),
+  );
+},
               child: const Text(
                 'Done',
                 style: TextStyle(
