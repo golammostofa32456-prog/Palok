@@ -9,6 +9,10 @@ class FriendsService {
 
   final FirebaseFirestore _firestore;
 
+  // ============================================================
+  // SUGGESTED CREATORS
+  // ============================================================
+
   Future<List<FriendModel>> getSuggestedCreators({
     required String currentUserId,
   }) async {
@@ -22,37 +26,91 @@ class FriendsService {
     for (final doc in snapshot.docs) {
       final data = doc.data();
 
-      final uid = (data['uid'] ?? doc.id).toString().trim();
+      // --------------------------------------------------------
+      // User ID
+      // --------------------------------------------------------
+      final userId = _firstNonEmpty([
+        data['uid'],
+        data['userId'],
+        doc.id,
+      ]);
 
       // নিজের account বাদ
-      if (doc.id == currentUserId || uid == currentUserId) {
+      if (userId == currentUserId ||
+          doc.id == currentUserId) {
         continue;
       }
 
-      final username =
-          (data['username'] ?? '').toString().trim();
+      // --------------------------------------------------------
+      // Username
+      // --------------------------------------------------------
+      final username = _firstNonEmpty([
+        data['username'],
+        data['userName'],
+        data['handle'],
+      ]);
 
-      final displayName =
-          (data['displayName'] ?? data['name'] ?? '')
-              .toString()
-              .trim();
+      // --------------------------------------------------------
+      // Display name
+      // --------------------------------------------------------
+      String displayName = _firstNonEmpty([
+        data['displayName'],
+        data['name'],
+        data['fullName'],
+        data['display_name'],
+      ]);
 
-      final profileImage =
-          (data['profileImage'] ?? data['photoUrl'] ?? '')
-              .toString()
-              .trim();
+      // --------------------------------------------------------
+      // Email fallback
+      // --------------------------------------------------------
+      final email = _firstNonEmpty([
+        data['email'],
+      ]);
 
-      // Empty/demo document বাদ
+      if (displayName.isEmpty && email.isNotEmpty) {
+        final emailName = email.split('@').first.trim();
+
+        if (emailName.isNotEmpty) {
+          displayName = emailName;
+        }
+      }
+
+      // --------------------------------------------------------
+      // Photo
+      // --------------------------------------------------------
+      final photoUrl = _firstNonEmpty([
+        data['photoUrl'],
+        data['profileImage'],
+        data['profileImageUrl'],
+        data['avatarUrl'],
+        data['imageUrl'],
+        data['photoURL'],
+      ]);
+
+      // --------------------------------------------------------
+      // Completely empty user document বাদ
+      // --------------------------------------------------------
       if (username.isEmpty &&
           displayName.isEmpty &&
-          profileImage.isEmpty) {
+          photoUrl.isEmpty &&
+          email.isEmpty) {
         continue;
       }
+
+      // FriendModel-এর expected fields normalize করছি।
+      final normalizedData = <String, dynamic>{
+        ...data,
+        'uid': userId,
+        'username': username,
+        'displayName': displayName,
+        'photoUrl': photoUrl,
+        'profileImage': photoUrl,
+      };
 
       creators.add(
         FriendModel.fromMap(
           doc.id,
-          data,
+          normalizedData,
           isFollowing: false,
         ),
       );
@@ -60,6 +118,10 @@ class FriendsService {
 
     return creators;
   }
+
+  // ============================================================
+  // FOLLOWING
+  // ============================================================
 
   Future<List<FriendModel>> getFollowing({
     required String currentUserId,
@@ -75,6 +137,10 @@ class FriendsService {
     for (final doc in snapshot.docs) {
       final userId = doc.id;
 
+      if (userId.isEmpty || userId == currentUserId) {
+        continue;
+      }
+
       final userDoc = await _firestore
           .collection('users')
           .doc(userId)
@@ -86,29 +152,56 @@ class FriendsService {
 
       final data = userDoc.data() ?? {};
 
-      final username =
-          (data['username'] ?? '').toString().trim();
+      final username = _firstNonEmpty([
+        data['username'],
+        data['userName'],
+        data['handle'],
+      ]);
 
-      final displayName =
-          (data['displayName'] ?? data['name'] ?? '')
-              .toString()
-              .trim();
+      String displayName = _firstNonEmpty([
+        data['displayName'],
+        data['name'],
+        data['fullName'],
+        data['display_name'],
+      ]);
 
-      final profileImage =
-          (data['profileImage'] ?? data['photoUrl'] ?? '')
-              .toString()
-              .trim();
+      final email = _firstNonEmpty([
+        data['email'],
+      ]);
+
+      if (displayName.isEmpty && email.isNotEmpty) {
+        displayName = email.split('@').first.trim();
+      }
+
+      final photoUrl = _firstNonEmpty([
+        data['photoUrl'],
+        data['profileImage'],
+        data['profileImageUrl'],
+        data['avatarUrl'],
+        data['imageUrl'],
+        data['photoURL'],
+      ]);
 
       if (username.isEmpty &&
           displayName.isEmpty &&
-          profileImage.isEmpty) {
+          photoUrl.isEmpty &&
+          email.isEmpty) {
         continue;
       }
+
+      final normalizedData = <String, dynamic>{
+        ...data,
+        'uid': userId,
+        'username': username,
+        'displayName': displayName,
+        'photoUrl': photoUrl,
+        'profileImage': photoUrl,
+      };
 
       following.add(
         FriendModel.fromMap(
           userDoc.id,
-          data,
+          normalizedData,
           isFollowing: true,
         ),
       );
@@ -116,6 +209,10 @@ class FriendsService {
 
     return following;
   }
+
+  // ============================================================
+  // FOLLOW / UNFOLLOW
+  // ============================================================
 
   Future<void> toggleFollow({
     required String currentUserId,
@@ -164,5 +261,25 @@ class FriendsService {
     }
 
     await batch.commit();
+  }
+
+  // ============================================================
+  // HELPER
+  // ============================================================
+
+  String _firstNonEmpty(List<dynamic> values) {
+    for (final value in values) {
+      if (value == null) {
+        continue;
+      }
+
+      final text = value.toString().trim();
+
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+
+    return '';
   }
 }
