@@ -9,7 +9,7 @@ class VideoActionStack extends StatelessWidget {
   final int commentCount;
   final int saveCount;
   final int shareCount;
-
+final int? viewCount;
   final bool showFollow;
 
   final VoidCallback onFollow;
@@ -33,6 +33,7 @@ class VideoActionStack extends StatelessWidget {
     required this.onComment,
     required this.onSave,
     required this.onShare,
+    this.viewCount
   });
 
   @override
