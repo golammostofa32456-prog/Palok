@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import '../search/search_screen.dart';
 import 'friend_item.dart';
 import 'friends_controller.dart';
 
@@ -21,7 +21,18 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
     _loadFriends();
   }
-
+Future<void> _openSearch() async {
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) {
+      return const SearchScreen(
+        videos: [],
+      );
+    },
+  );
+}
   Future<void> _loadFriends() async {
     await _controller.loadFriends();
 
@@ -61,7 +72,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             color: Colors.white,
             size: 24,
           ),
-          onPressed: () {},
+          onPressed: _openSearch,
         ),
         title: const Text(
           'বন্ধুরা',
@@ -78,7 +89,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
               color: Colors.white,
               size: 25,
             ),
-            onPressed: () {},
+            onPressed: _openSearch,
           ),
         ],
       ),
@@ -162,7 +173,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                         ),
                       ),
                       ElevatedButton(
-                        onPressed: () {},
+                        onPressed: _openSearch,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.redAccent,
                           foregroundColor: Colors.white,
