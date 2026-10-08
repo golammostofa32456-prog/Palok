@@ -576,7 +576,9 @@ final VideoViewService _videoViewService = VideoViewService();
       _currentIndex =
           actualIndex;
     });
-
+unawaited(
+  _registerVideoView(_videos[actualIndex]),
+);
     // Current video prepare.
     unawaited(
       _prepareVideo(actualIndex),
