@@ -660,7 +660,83 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
           : '$selected effect চালু হয়েছে',
     );
   }
+// ---------------------------------------------------------
+// CREATE SETTINGS
+// ---------------------------------------------------------
 
+Future<void> _showCreateSettings() async {
+  await showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: const Color(0xFF151515),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(
+        top: Radius.circular(24),
+      ),
+    ),
+    builder: (context) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Create Settings',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 18),
+              ListTile(
+                leading: const Icon(
+                  Icons.volume_up,
+                  color: Colors.white,
+                ),
+                title: const Text(
+                  'Sound',
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: Text(
+                  _isMuted ? 'Muted' : 'On',
+                  style: const TextStyle(color: Colors.white54),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.speed,
+                  color: Colors.white,
+                ),
+                title: const Text(
+                  'Playback Speed',
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: Text(
+                  '${_playbackSpeed}x',
+                  style: const TextStyle(color: Colors.white54),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+                child: const Text(
+                  'Done',
+                  style: TextStyle(
+                    color: _pink,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
   // ---------------------------------------------------------
   // TEXT
   // ---------------------------------------------------------
