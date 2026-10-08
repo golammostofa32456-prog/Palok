@@ -158,7 +158,19 @@ final VideoViewService _videoViewService = VideoViewService();
   await _prepareVideo(0);
 }
   }
-  
+  Future<void> _registerVideoView(VideoPost video) async {
+  if (video.id.startsWith('demo_')) {
+    return;
+  }
+
+  try {
+    await _videoViewService.registerView(
+      videoId: video.id,
+    );
+  } catch (_) {
+    // View tracking failure must never stop video playback.
+  }
+}
 
   Future<void> _loadUserProfile() async {
     final user = _auth.currentUser;
