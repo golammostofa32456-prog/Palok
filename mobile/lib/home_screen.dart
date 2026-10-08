@@ -9,6 +9,7 @@ import 'features/video/video_post.dart';
 import 'features/video/video_page.dart';
 import 'features/home/home_top_bar.dart';
 import 'features/video/video_action_stack.dart';
+import 'features/video/video_view_service.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
