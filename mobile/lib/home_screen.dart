@@ -64,7 +64,7 @@ class _HomeScreenState extends State<HomeScreen>
   final Map<String, int> _shareDeltas = {};
 
   final PageController _pageController = PageController();
-
+final VideoViewService _videoViewService = VideoViewService();
   List<VideoPost> _videos = [];
 
   int _currentIndex = 0;
