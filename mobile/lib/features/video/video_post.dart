@@ -89,6 +89,7 @@ required this.createdAt,
     int? commentCount,
     int? saveCount,
     int? shareCount,
+    int? viewCount,
     DateTime? createdAt,
   }) {
     return VideoPost(
@@ -104,7 +105,9 @@ required this.createdAt,
       commentCount: commentCount ?? this.commentCount,
       saveCount: saveCount ?? this.saveCount,
       shareCount: shareCount ?? this.shareCount,
-      createdAt: createdAt ?? this.createdAt,
+      
+      viewCount: viewCount ?? this.viewCount,
+ createdAt: createdAt ?? this.createdAt,
     );
   }
 
