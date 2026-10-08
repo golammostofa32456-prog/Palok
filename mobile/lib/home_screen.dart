@@ -158,20 +158,40 @@ final VideoViewService _videoViewService = VideoViewService();
   await _prepareVideo(0);
 }
   }
-  Future<void> _registerVideoView(VideoPost video) async {
+  
+Future<void> _registerVideoView(VideoPost video) async {
   if (video.id.startsWith('demo_')) {
     return;
   }
 
   try {
-    await _videoViewService.registerView(
+    final registered =
+        await _videoViewService.registerView(
       videoId: video.id,
     );
+
+    if (!registered || !mounted) {
+      return;
+    }
+
+    final index = _videos.indexWhere(
+      (item) => item.id == video.id,
+    );
+
+    if (index < 0) {
+      return;
+    }
+
+    setState(() {
+      _videos[index] = _videos[index].copyWith(
+        viewCount:
+            _videos[index].viewCount + 1,
+      );
+    });
   } catch (_) {
     // View tracking failure must never stop video playback.
   }
 }
-
   Future<void> _loadUserProfile() async {
     final user = _auth.currentUser;
 
