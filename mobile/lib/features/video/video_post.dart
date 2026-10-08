@@ -28,7 +28,8 @@ final DateTime? createdAt;
     required this.commentCount,
     required this.saveCount,
     required this.shareCount,
-    required this.createdAt,
+required this.viewCount,
+required this.createdAt,
   });
 
   // HomeScreen compatibility.
@@ -52,6 +53,7 @@ final DateTime? createdAt;
       commentCount: _toInt(data['commentCount']),
       saveCount: _toInt(data['saveCount']),
       shareCount: _toInt(data['shareCount']),
+      viewCount: _toInt(data['viewCount']),
       createdAt: _parseDate(data['createdAt']),
     );
   }
@@ -69,6 +71,7 @@ final DateTime? createdAt;
       'commentCount': commentCount,
       'saveCount': saveCount,
       'shareCount': shareCount,
+      'viewCount': viewCount,
       'createdAt': createdAt,
     };
   }
