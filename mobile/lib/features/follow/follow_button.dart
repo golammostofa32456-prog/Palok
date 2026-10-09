@@ -1,3 +1,4 @@
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -8,7 +9,7 @@ class FollowButton extends StatefulWidget {
     required this.targetUserId,
   });
 
-  /// যাকে Follow করা হবে তার Firebase UID
+  /// যে ব্যবহারকারীকে Follow করা হবে তার Firebase UID
   final String targetUserId;
 
   @override
@@ -29,13 +30,24 @@ class _FollowButtonState extends State<FollowButton> {
     _checkFollowing();
   }
 
+  @override
+  void didUpdateWidget(covariant FollowButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.targetUserId != widget.targetUserId) {
+      _isFollowing = false;
+      _loading = true;
+      _checkFollowing();
+    }
+  }
+
   Future<void> _checkFollowing() async {
     final user = _auth.currentUser;
 
-    if (user == null ||
-        user.uid == widget.targetUserId) {
+    if (user == null || user.uid == widget.targetUserId) {
       if (mounted) {
         setState(() {
+          _isFollowing = false;
           _loading = false;
         });
       }
@@ -50,18 +62,18 @@ class _FollowButtonState extends State<FollowButton> {
           .doc(widget.targetUserId)
           .get();
 
-      if (mounted) {
-        setState(() {
-          _isFollowing = doc.exists;
-          _loading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-        });
-      }
+      if (!mounted) return;
+
+      setState(() {
+        _isFollowing = doc.exists;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+      });
     }
   }
 
@@ -95,39 +107,51 @@ class _FollowButtonState extends State<FollowButton> {
 
     try {
       if (_isFollowing) {
-        await followingRef.delete();
-        await followerRef.delete();
+        final batch = _firestore.batch();
+        batch.delete(followingRef);
+        batch.delete(followerRef);
+        await batch.commit();
 
-        if (mounted) {
-          setState(() {
-            _isFollowing = false;
-            _loading = false;
-          });
-        }
+        if (!mounted) return;
+
+        setState(() {
+          _isFollowing = false;
+          _loading = false;
+        });
       } else {
-        await followingRef.set({
+        final batch = _firestore.batch();
+
+        batch.set(followingRef, {
           'userId': targetUserId,
           'followedAt': FieldValue.serverTimestamp(),
         });
 
-        await followerRef.set({
+        batch.set(followerRef, {
           'userId': currentUserId,
           'followedAt': FieldValue.serverTimestamp(),
         });
 
-        if (mounted) {
-          setState(() {
-            _isFollowing = true;
-            _loading = false;
-          });
-        }
-      }
-    } catch (_) {
-      if (mounted) {
+        await batch.commit();
+
+        if (!mounted) return;
+
         setState(() {
+          _isFollowing = true;
           _loading = false;
         });
       }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Follow পরিবর্তন করা যায়নি। আবার চেষ্টা করুন।'),
+        ),
+      );
     }
   }
 
@@ -135,56 +159,53 @@ class _FollowButtonState extends State<FollowButton> {
   Widget build(BuildContext context) {
     final user = _auth.currentUser;
 
-    // নিজের profile হলে Follow button দেখাবে না।
-    if (user != null &&
-        user.uid == widget.targetUserId) {
+    // নিজের প্রোফাইলে Follow বাটন দেখাবে না।
+    if (user != null && user.uid == widget.targetUserId) {
       return const SizedBox.shrink();
     }
 
+    // Follow অবস্থা লোড হওয়ার সময়।
     if (_loading) {
-      return const SizedBox(
-        width: 80,
-        height: 34,
-        child: Center(
-          child: SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: Colors.white,
-            ),
+      return Container(
+        width: 32,
+        height: 32,
+        decoration: const BoxDecoration(
+          color: Colors.black54,
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: const SizedBox(
+          width: 15,
+          height: 15,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: Colors.white,
           ),
         ),
       );
     }
 
+    // গোলাপি + অথবা Follow হলে চেক চিহ্ন।
     return GestureDetector(
       onTap: _toggleFollow,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 7,
-        ),
+      child: Container(
+        width: 32,
+        height: 32,
         decoration: BoxDecoration(
           color: _isFollowing
-              ? Colors.transparent
+              ? Colors.black54
               : const Color(0xFFFF2055),
-          borderRadius: BorderRadius.circular(6),
+          shape: BoxShape.circle,
           border: Border.all(
-            color: _isFollowing
-                ? Colors.white
-                : const Color(0xFFFF2055),
-            width: 1,
+            color: Colors.white,
+            width: 1.5,
           ),
         ),
-        child: Text(
-          _isFollowing ? 'Following' : 'Follow',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-          ),
+        alignment: Alignment.center,
+        child: Icon(
+          _isFollowing ? Icons.check : Icons.add,
+          color: Colors.white,
+          size: 23,
         ),
       ),
     );
