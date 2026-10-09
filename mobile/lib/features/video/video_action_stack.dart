@@ -1,253 +1,167 @@
-import 'package:flutter/material.dart';
-
-class VideoActionStack extends StatelessWidget {
-  final bool isFollowing;
-  final bool isLiked;
-  final bool isSaved;
+class VideoPost {
+  final String id;
+  final String ownerId;
+  final String username;
+  final String profileImageUrl;
+  final String videoUrl;
+  final String caption;
+  final List<String> hashtags;
+  final String thumbnailUrl;
+  final String soundName;
 
   final int likeCount;
   final int commentCount;
   final int saveCount;
   final int shareCount;
-  final int? viewCount;
+  final int viewCount;
+  final DateTime? createdAt;
 
-  final bool showFollow;
-
-  final VoidCallback onFollow;
-  final VoidCallback onLike;
-  final VoidCallback onComment;
-  final VoidCallback onSave;
-  final VoidCallback onShare;
-
-  final String? profileImageUrl;
-  final VoidCallback? onProfileTap;
-
-  const VideoActionStack({
-    super.key,
-    required this.isFollowing,
-    required this.isLiked,
-    required this.isSaved,
+  const VideoPost({
+    required this.id,
+    required this.ownerId,
+    required this.username,
+    this.profileImageUrl = '',
+    required this.videoUrl,
+    required this.caption,
+    required this.hashtags,
+    required this.thumbnailUrl,
+    required this.soundName,
     required this.likeCount,
     required this.commentCount,
     required this.saveCount,
     required this.shareCount,
-    required this.showFollow,
-    required this.onFollow,
-    required this.onLike,
-    required this.onComment,
-    required this.onSave,
-    required this.onShare,
-    this.viewCount,
-    this.profileImageUrl,
-    this.onProfileTap,
+    required this.viewCount,
+    required this.createdAt,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      right: 10,
-      bottom: 116,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (showFollow) ...[
-            _profileButton(),
-            const SizedBox(height: 7),
-          ],
-          _actionButton(
-            icon: isLiked
-                ? Icons.favorite_rounded
-                : Icons.favorite_border_rounded,
-            label: _formatCount(likeCount),
-            active: isLiked,
-            onTap: onLike,
-          ),
-          const SizedBox(height: 13),
-          _actionButton(
-            icon: Icons.mode_comment_outlined,
-            label: _formatCount(commentCount),
-            onTap: onComment,
-          ),
-          const SizedBox(height: 13),
-          _actionButton(
-            icon: isSaved
-                ? Icons.bookmark_rounded
-                : Icons.bookmark_border_rounded,
-            label: _formatCount(saveCount),
-            active: isSaved,
-            onTap: onSave,
-          ),
-          if (viewCount != null) ...[
-            const SizedBox(height: 13),
-            _actionButton(
-              icon: Icons.visibility_outlined,
-              label: _formatCount(viewCount!),
-              onTap: () {},
-            ),
-          ],
-          const SizedBox(height: 13),
-          _actionButton(
-            icon: Icons.share_rounded,
-            label: _formatCount(shareCount),
-            onTap: onShare,
-          ),
-        ],
-      ),
+  String get userId => ownerId;
+
+  factory VideoPost.fromMap(
+    String id,
+    Map<String, dynamic> data,
+  ) {
+    return VideoPost(
+      id: id,
+      ownerId: (data['ownerId'] ?? data['userId'] ?? '').toString(),
+      username: (data['username'] ?? 'PALOK User').toString(),
+      profileImageUrl: (
+        data['profileImageUrl'] ??
+        data['profileImage'] ??
+        data['photoURL'] ??
+        data['photoUrl'] ??
+        ''
+      ).toString(),
+      videoUrl: (data['videoUrl'] ?? '').toString(),
+      caption: (data['caption'] ?? '').toString(),
+      hashtags: _parseHashtags(data['hashtags']),
+      thumbnailUrl: (data['thumbnailUrl'] ?? '').toString(),
+      soundName: (data['soundName'] ?? '').toString(),
+      likeCount: _toInt(data['likeCount']),
+      commentCount: _toInt(data['commentCount']),
+      saveCount: _toInt(data['saveCount']),
+      shareCount: _toInt(data['shareCount']),
+      viewCount: _toInt(data['viewCount']),
+      createdAt: _parseDate(data['createdAt']),
     );
   }
 
-  Widget _profileButton() {
-    return SizedBox(
-      width: 54,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          GestureDetector(
-            onTap: onProfileTap ?? onFollow,
-            child: Container(
-              width: 48,
-              height: 48,
-              padding: const EdgeInsets.all(1.5),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-              ),
-              child: ClipOval(
-                child: _profileImage(),
-              ),
-            ),
-          ),
-          Transform.translate(
-            offset: const Offset(0, -10),
-            child: GestureDetector(
-              onTap: onFollow,
-              child: Container(
-                width: 25,
-                height: 25,
-                decoration: BoxDecoration(
-                  color: isFollowing
-                      ? Colors.grey.shade700
-                      : const Color(0xFFFF2D55),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white,
-                    width: 1.3,
-                  ),
-                ),
-                child: Icon(
-                  isFollowing
-                      ? Icons.check_rounded
-                      : Icons.add_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+  Map<String, dynamic> toMap() {
+    return {
+      'ownerId': ownerId,
+      'username': username,
+      'profileImageUrl': profileImageUrl,
+      'videoUrl': videoUrl,
+      'caption': caption,
+      'hashtags': hashtags,
+      'thumbnailUrl': thumbnailUrl,
+      'soundName': soundName,
+      'likeCount': likeCount,
+      'commentCount': commentCount,
+      'saveCount': saveCount,
+      'shareCount': shareCount,
+      'viewCount': viewCount,
+      'createdAt': createdAt,
+    };
   }
 
-  Widget _profileImage() {
-    final url = profileImageUrl?.trim() ?? '';
-
-    if (url.isEmpty) {
-      return Container(
-        color: Colors.grey.shade400,
-        child: const Icon(
-          Icons.person_rounded,
-          color: Colors.white,
-          size: 32,
-        ),
-      );
-    }
-
-    return Image.network(
-      url,
-      fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) {
-        return Container(
-          color: Colors.grey.shade400,
-          child: const Icon(
-            Icons.person_rounded,
-            color: Colors.white,
-            size: 32,
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _actionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    bool active = false,
+  VideoPost copyWith({
+    String? id,
+    String? ownerId,
+    String? username,
+    String? profileImageUrl,
+    String? videoUrl,
+    String? caption,
+    List<String>? hashtags,
+    String? thumbnailUrl,
+    String? soundName,
+    int? likeCount,
+    int? commentCount,
+    int? saveCount,
+    int? shareCount,
+    int? viewCount,
+    DateTime? createdAt,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: 58,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 43,
-              height: 43,
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.35),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.12),
-                ),
-              ),
-              child: Icon(
-                icon,
-                color: active
-                    ? const Color(0xFFFF2D55)
-                    : Colors.white,
-                size: 23,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-                shadows: [
-                  Shadow(
-                    color: Colors.black,
-                    blurRadius: 5,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+    return VideoPost(
+      id: id ?? this.id,
+      ownerId: ownerId ?? this.ownerId,
+      username: username ?? this.username,
+      profileImageUrl: profileImageUrl ?? this.profileImageUrl,
+      videoUrl: videoUrl ?? this.videoUrl,
+      caption: caption ?? this.caption,
+      hashtags: hashtags ?? this.hashtags,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      soundName: soundName ?? this.soundName,
+      likeCount: likeCount ?? this.likeCount,
+      commentCount: commentCount ?? this.commentCount,
+      saveCount: saveCount ?? this.saveCount,
+      shareCount: shareCount ?? this.shareCount,
+      viewCount: viewCount ?? this.viewCount,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 
-  String _formatCount(int value) {
-    if (value >= 1000000) {
-      final result = value / 1000000;
-      return '${result.toStringAsFixed(
-        result.truncateToDouble() == result ? 0 : 1,
-      )}M';
+  static int _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+
+    if (value is DateTime) return value;
+
+    try {
+      if (value.runtimeType.toString().contains('Timestamp')) {
+        return value.toDate() as DateTime;
+      }
+    } catch (_) {}
+
+    if (value is String) {
+      return DateTime.tryParse(value);
     }
 
-    if (value >= 1000) {
-      final result = value / 1000;
-      return '${result.toStringAsFixed(
-        result.truncateToDouble() == result ? 0 : 1,
-      )}K';
+    return null;
+  }
+
+  static List<String> _parseHashtags(dynamic value) {
+    if (value == null) return <String>[];
+
+    if (value is List) {
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList();
     }
 
-    return value.toString();
+    if (value is String) {
+      return value
+          .split(RegExp(r'[\s,]+'))
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .toList();
+    }
+
+    return <String>[];
   }
 }
