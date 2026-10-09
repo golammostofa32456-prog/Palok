@@ -2,6 +2,7 @@ class VideoPost {
   final String id;
   final String ownerId;
   final String username;
+  final String profileImageUrl;
   final String videoUrl;
   final String caption;
   final List<String> hashtags;
@@ -12,13 +13,14 @@ class VideoPost {
   final int commentCount;
   final int saveCount;
   final int shareCount;
-final int viewCount;
-final DateTime? createdAt;
+  final int viewCount;
+  final DateTime? createdAt;
 
   const VideoPost({
     required this.id,
     required this.ownerId,
     required this.username,
+    this.profileImageUrl = '',
     required this.videoUrl,
     required this.caption,
     required this.hashtags,
@@ -28,12 +30,10 @@ final DateTime? createdAt;
     required this.commentCount,
     required this.saveCount,
     required this.shareCount,
-required this.viewCount,
-required this.createdAt,
+    required this.viewCount,
+    required this.createdAt,
   });
 
-  // HomeScreen compatibility.
-  // Existing HomeScreen code uses video.userId.
   String get userId => ownerId;
 
   factory VideoPost.fromMap(
@@ -44,6 +44,13 @@ required this.createdAt,
       id: id,
       ownerId: (data['ownerId'] ?? data['userId'] ?? '').toString(),
       username: (data['username'] ?? 'PALOK User').toString(),
+      profileImageUrl: (
+        data['profileImageUrl'] ??
+        data['profileImage'] ??
+        data['photoURL'] ??
+        data['photoUrl'] ??
+        ''
+      ).toString(),
       videoUrl: (data['videoUrl'] ?? '').toString(),
       caption: (data['caption'] ?? '').toString(),
       hashtags: _parseHashtags(data['hashtags']),
@@ -62,6 +69,7 @@ required this.createdAt,
     return {
       'ownerId': ownerId,
       'username': username,
+      'profileImageUrl': profileImageUrl,
       'videoUrl': videoUrl,
       'caption': caption,
       'hashtags': hashtags,
@@ -80,6 +88,7 @@ required this.createdAt,
     String? id,
     String? ownerId,
     String? username,
+    String? profileImageUrl,
     String? videoUrl,
     String? caption,
     List<String>? hashtags,
@@ -96,6 +105,7 @@ required this.createdAt,
       id: id ?? this.id,
       ownerId: ownerId ?? this.ownerId,
       username: username ?? this.username,
+      profileImageUrl: profileImageUrl ?? this.profileImageUrl,
       videoUrl: videoUrl ?? this.videoUrl,
       caption: caption ?? this.caption,
       hashtags: hashtags ?? this.hashtags,
@@ -105,36 +115,24 @@ required this.createdAt,
       commentCount: commentCount ?? this.commentCount,
       saveCount: saveCount ?? this.saveCount,
       shareCount: shareCount ?? this.shareCount,
-      
       viewCount: viewCount ?? this.viewCount,
- createdAt: createdAt ?? this.createdAt,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 
   static int _toInt(dynamic value) {
-    if (value is int) {
-      return value;
-    }
-
-    if (value is num) {
-      return value.toInt();
-    }
-
+    if (value is int) return value;
+    if (value is num) return value.toInt();
     return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   static DateTime? _parseDate(dynamic value) {
-    if (value == null) {
-      return null;
-    }
+    if (value == null) return null;
 
-    if (value is DateTime) {
-      return value;
-    }
+    if (value is DateTime) return value;
 
     try {
-      if (value is dynamic &&
-          value.runtimeType.toString().contains('Timestamp')) {
+      if (value.runtimeType.toString().contains('Timestamp')) {
         return value.toDate() as DateTime;
       }
     } catch (_) {}
@@ -147,14 +145,12 @@ required this.createdAt,
   }
 
   static List<String> _parseHashtags(dynamic value) {
-    if (value == null) {
-      return <String>[];
-    }
+    if (value == null) return <String>[];
 
     if (value is List) {
       return value
-          .map((item) => item.toString())
-          .where((item) => item.trim().isNotEmpty)
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
           .toList();
     }
 
