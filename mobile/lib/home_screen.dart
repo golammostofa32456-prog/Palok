@@ -4,6 +4,7 @@ import 'features/create/create_video_screen.dart';
 import 'features/search/search_screen.dart';
 import 'features/feed/for_you_feed.dart';
 import 'features/feed/following_feed.dart';
+import 'features/follow/follow_button.dart';
 import 'features/friends/friends_screen.dart';
 import 'features/video/video_post.dart';
 import 'features/video/video_page.dart';
