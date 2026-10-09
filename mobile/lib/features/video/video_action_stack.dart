@@ -83,14 +83,6 @@ class VideoActionStack extends StatelessWidget {
             onTap: onSave,
           ),
 
-          if (viewCount != null) ...[
-            const SizedBox(height: 13),
-            _actionButton(
-              icon: Icons.visibility_outlined,
-              label: _formatCount(viewCount!),
-              onTap: () {},
-            ),
-          ],
 
           const SizedBox(height: 13),
 
