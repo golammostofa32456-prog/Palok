@@ -2220,9 +2220,9 @@ unawaited(
           Row(
             children: [
               _profileAvatar(
-                imageUrl: '',
-                size: 40,
-              ),
+  imageUrl: video.profileImageUrl,
+  size: 40,
+),
               const SizedBox(
                 width: 10,
               ),
