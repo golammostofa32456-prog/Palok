@@ -2101,7 +2101,8 @@ unawaited(
     commentCount: commentCount,
     saveCount: saveCount,
     shareCount: shareCount,
-    viewCount: video.viewCount,
+    profileImageUrl: video.profileImageUrl,
+onProfileTap: null,
     showFollow:
         video.userId != _auth.currentUser?.uid,
     onFollow: () {
