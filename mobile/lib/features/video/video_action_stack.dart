@@ -33,6 +33,7 @@ class VideoPost {
     required this.viewCount,
     required this.createdAt,
   });
+  
 
   String get userId => ownerId;
 
