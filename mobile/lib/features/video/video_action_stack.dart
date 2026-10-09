@@ -9,7 +9,8 @@ class VideoActionStack extends StatelessWidget {
   final int commentCount;
   final int saveCount;
   final int shareCount;
-final int? viewCount;
+  final int? viewCount;
+
   final bool showFollow;
 
   final VoidCallback onFollow;
@@ -17,6 +18,9 @@ final int? viewCount;
   final VoidCallback onComment;
   final VoidCallback onSave;
   final VoidCallback onShare;
+
+  final String? profileImageUrl;
+  final VoidCallback? onProfileTap;
 
   const VideoActionStack({
     super.key,
@@ -33,31 +37,23 @@ final int? viewCount;
     required this.onComment,
     required this.onSave,
     required this.onShare,
-    this.viewCount
+    this.viewCount,
+    this.profileImageUrl,
+    this.onProfileTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Positioned(
-  right: 10,
-  bottom: 116,
+      right: 10,
+      bottom: 116,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (showFollow) ...[
-            _actionButton(
-              icon: isFollowing
-                  ? Icons.person
-                  : Icons.person_add_alt_1_rounded,
-              label: isFollowing
-                  ? 'Following'
-                  : 'Follow',
-              active: isFollowing,
-              onTap: onFollow,
-            ),
-            const SizedBox(height: 13),
+            _profileButton(),
+            const SizedBox(height: 7),
           ],
-
           _actionButton(
             icon: isLiked
                 ? Icons.favorite_rounded
@@ -66,17 +62,13 @@ final int? viewCount;
             active: isLiked,
             onTap: onLike,
           ),
-
           const SizedBox(height: 13),
-
           _actionButton(
             icon: Icons.mode_comment_outlined,
             label: _formatCount(commentCount),
             onTap: onComment,
           ),
-
           const SizedBox(height: 13),
-
           _actionButton(
             icon: isSaved
                 ? Icons.bookmark_rounded
@@ -85,16 +77,15 @@ final int? viewCount;
             active: isSaved,
             onTap: onSave,
           ),
-
+          if (viewCount != null) ...[
+            const SizedBox(height: 13),
+            _actionButton(
+              icon: Icons.visibility_outlined,
+              label: _formatCount(viewCount!),
+              onTap: () {},
+            ),
+          ],
           const SizedBox(height: 13),
-if (viewCount != null) ...[
-  _actionButton(
-    icon: Icons.visibility_outlined,
-    label: _formatCount(viewCount!),
-    onTap: () {},
-  ),
-  const SizedBox(height: 13),
-],
           _actionButton(
             icon: Icons.share_rounded,
             label: _formatCount(shareCount),
@@ -102,6 +93,89 @@ if (viewCount != null) ...[
           ),
         ],
       ),
+    );
+  }
+
+  Widget _profileButton() {
+    return SizedBox(
+      width: 54,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            onTap: onProfileTap ?? onFollow,
+            child: Container(
+              width: 48,
+              height: 48,
+              padding: const EdgeInsets.all(1.5),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+              child: ClipOval(
+                child: _profileImage(),
+              ),
+            ),
+          ),
+          Transform.translate(
+            offset: const Offset(0, -10),
+            child: GestureDetector(
+              onTap: onFollow,
+              child: Container(
+                width: 25,
+                height: 25,
+                decoration: BoxDecoration(
+                  color: isFollowing
+                      ? Colors.grey.shade700
+                      : const Color(0xFFFF2D55),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white,
+                    width: 1.3,
+                  ),
+                ),
+                child: Icon(
+                  isFollowing
+                      ? Icons.check_rounded
+                      : Icons.add_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _profileImage() {
+    final url = profileImageUrl?.trim() ?? '';
+
+    if (url.isEmpty) {
+      return Container(
+        color: Colors.grey.shade400,
+        child: const Icon(
+          Icons.person_rounded,
+          color: Colors.white,
+          size: 32,
+        ),
+      );
+    }
+
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          color: Colors.grey.shade400,
+          child: const Icon(
+            Icons.person_rounded,
+            color: Colors.white,
+            size: 32,
+          ),
+        );
+      },
     );
   }
 
@@ -136,9 +210,7 @@ if (viewCount != null) ...[
                 size: 23,
               ),
             ),
-
             const SizedBox(height: 3),
-
             Text(
               label,
               maxLines: 1,
@@ -160,8 +232,6 @@ if (viewCount != null) ...[
       ),
     );
   }
-
-  
 
   String _formatCount(int value) {
     if (value >= 1000000) {
