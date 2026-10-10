@@ -131,9 +131,12 @@ class _UploadSheetState extends State<UploadSheet> {
 
     if (response.statusCode < 200 ||
         response.statusCode >= 300) {
-      final message = decoded is Map
-          ? decoded['error']?['message']?.toString()
-          : null;
+      
+
+    final dynamic errorData = decoded['error'];
+    final String? message = errorData is Map
+        ? errorData['message']?.toString()
+        : null;
 
       throw Exception(message ?? 'ভিডিও আপলোড ব্যর্থ হয়েছে');
     }
