@@ -193,27 +193,10 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   )
                 else
-                  OutlinedButton(
-                    onPressed: () {},
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Colors.pink),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 36,
-                        vertical: 12,
-                      ),
-                    ),
-                    child: const Text(
-                      'Follow',
-                      style: TextStyle(
-                        color: Colors.pink,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
+  _FollowButton(
+    targetUserId: targetUserId,
+    initialFollowersCount: profile.followersCount,
+  ),
                 const SizedBox(height: 14),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32),
