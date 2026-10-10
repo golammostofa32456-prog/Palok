@@ -15,38 +15,35 @@ class ProfileVideoService {
   }) async {
     final id = userId.trim();
 
-    if (id.isEmpty) {
-      return [];
-    }
+    if (id.isEmpty) return [];
 
     try {
-      final snapshot = await _firestore
-          .collection('videos')
-          .where('userId', isEqualTo: id)
-          .get();
+      final collection = _firestore.collection('videos');
 
-      final videos = snapshot.docs
-          .map(
-            (doc) => VideoPost.fromMap(
-              doc.id,
-              doc.data(),
-            ),
-          )
-          .where(
-            (video) => video.videoUrl.trim().isNotEmpty,
-          )
-          .toList();
+      final results = await Future.wait([
+        collection.where('userId', isEqualTo: id).get(),
+        collection.where('ownerId', isEqualTo: id).get(),
+      ]);
 
-      videos.sort((a, b) {
-        final aDate = a.createdAt;
-        final bDate = b.createdAt;
+      final byId = <String, VideoPost>{};
 
-        if (aDate == null && bDate == null) return 0;
-        if (aDate == null) return 1;
-        if (bDate == null) return -1;
+      for (final snapshot in results) {
+        for (final doc in snapshot.docs) {
+          final video = VideoPost.fromMap(doc.id, doc.data());
 
-        return bDate.compareTo(aDate);
-      });
+          if (video.videoUrl.trim().isNotEmpty) {
+            byId[doc.id] = video;
+          }
+        }
+      }
+
+      final videos = byId.values.toList()
+        ..sort((a, b) {
+          if (a.createdAt == null && b.createdAt == null) return 0;
+          if (a.createdAt == null) return 1;
+          if (b.createdAt == null) return -1;
+          return b.createdAt!.compareTo(a.createdAt!);
+        });
 
       return videos.take(limit).toList();
     } catch (e) {
@@ -62,10 +59,7 @@ class ProfileVideoServiceException implements Exception {
   final String message;
   final Object? originalError;
 
-  const ProfileVideoServiceException(
-    this.message, [
-    this.originalError,
-  ]);
+  const ProfileVideoServiceException(this.message, [this.originalError]);
 
   @override
   String toString() => message;
