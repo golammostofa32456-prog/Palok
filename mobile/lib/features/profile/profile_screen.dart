@@ -106,10 +106,77 @@ class ProfileScreen extends StatelessWidget {
       );
     },
   ),
-  IconButton(
-    icon: const Icon(Icons.more_vert, color: Colors.white),
-    onPressed: () {},
-  ),
+  
+IconButton(
+  tooltip: 'আরও অপশন',
+  icon: const Icon(Icons.more_vert, color: Colors.white),
+  onPressed: () {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.share, color: Colors.white),
+                title: const Text(
+                  'প্রোফাইল শেয়ার',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await Share.share(
+                    'PALOK-এ $displayName-এর প্রোফাইল\n'
+                    '$username\nUser ID: ${profile.id}',
+                  );
+                },
+              ),
+              if (isOwnProfile)
+                ListTile(
+                  leading: const Icon(Icons.refresh, color: Colors.white),
+                  title: const Text(
+                    'প্রোফাইল রিফ্রেশ',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            ProfileScreen(userId: targetUserId),
+                      ),
+                    );
+                  },
+                )
+              else
+                ListTile(
+                  leading: const Icon(
+                    Icons.flag_outlined,
+                    color: Colors.white,
+                  ),
+                  title: const Text(
+                    'প্রোফাইল রিপোর্ট',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('রিপোর্ট ফিচার এখনো যুক্ত করা হয়নি'),
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  },
+),
+
 ],
           ),
           body: SingleChildScrollView(
