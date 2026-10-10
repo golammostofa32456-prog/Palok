@@ -13,43 +13,52 @@ class ProfileVideoService {
     String userId, {
     int limit = 100,
   }) async {
-    final id = userId.trim();
+    final cleanUserId = userId.trim();
 
-    if (id.isEmpty) return [];
+    if (cleanUserId.isEmpty || limit <= 0) {
+      return <VideoPost>[];
+    }
 
     try {
       final collection = _firestore.collection('videos');
 
-      final results = await Future.wait([
-        collection.where('userId', isEqualTo: id).get(),
-        collection.where('ownerId', isEqualTo: id).get(),
+      final snapshots = await Future.wait([
+        collection.where('userId', isEqualTo: cleanUserId).get(),
+        collection.where('ownerId', isEqualTo: cleanUserId).get(),
       ]);
 
-      final byId = <String, VideoPost>{};
+      final Map<String, VideoPost> uniqueVideos = {};
 
-      for (final snapshot in results) {
+      for (final snapshot in snapshots) {
         for (final doc in snapshot.docs) {
           final video = VideoPost.fromMap(doc.id, doc.data());
 
-          if (video.videoUrl.trim().isNotEmpty) {
-            byId[doc.id] = video;
+          if (video.videoUrl.trim().isEmpty) {
+            continue;
           }
+
+          uniqueVideos[doc.id] = video;
         }
       }
 
-      final videos = byId.values.toList()
-        ..sort((a, b) {
-          if (a.createdAt == null && b.createdAt == null) return 0;
-          if (a.createdAt == null) return 1;
-          if (b.createdAt == null) return -1;
-          return b.createdAt!.compareTo(a.createdAt!);
-        });
+      final videos = uniqueVideos.values.toList();
+
+      videos.sort((a, b) {
+        final dateA = a.createdAt;
+        final dateB = b.createdAt;
+
+        if (dateA == null && dateB == null) return 0;
+        if (dateA == null) return 1;
+        if (dateB == null) return -1;
+
+        return dateB.compareTo(dateA);
+      });
 
       return videos.take(limit).toList();
-    } catch (e) {
+    } catch (error) {
       throw ProfileVideoServiceException(
         'প্রোফাইলের ভিডিও লোড করা যায়নি।',
-        e,
+        error,
       );
     }
   }
@@ -59,7 +68,10 @@ class ProfileVideoServiceException implements Exception {
   final String message;
   final Object? originalError;
 
-  const ProfileVideoServiceException(this.message, [this.originalError]);
+  const ProfileVideoServiceException(
+    this.message, [
+    this.originalError,
+  ]);
 
   @override
   String toString() => message;
