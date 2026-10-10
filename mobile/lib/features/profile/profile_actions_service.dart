@@ -99,27 +99,31 @@ class ProfileActionsService {
     });
   }
 
-  Future<void> createNotification({
-    required String recipientUserId,
-    required String type,
-    required String message,
-  }) async {
-    final currentUser = _auth.currentUser;
-    if (currentUser == null || recipientUserId == currentUser.uid) return;
 
-    final notificationRef = _db
-        .collection('users')
-        .doc(recipientUserId)
-        .collection('notifications')
-        .doc();
+Future<void> createNotification({
+  required String recipientUserId,
+  required String type,
+  required String message,
+}) async {
+  final currentUser = _auth.currentUser;
 
-    await notificationRef.set({
-      'id': notificationRef.id,
-      'type': type,
-      'message': message,
-      'senderId': currentUser.uid,
-      'createdAt': FieldValue.serverTimestamp(),
-      'isRead': false,
-    });
+  if (currentUser == null ||
+      recipientUserId == currentUser.uid) {
+    return;
   }
+
+  final notificationRef = _db
+      .collection('users')
+      .doc(recipientUserId)
+      .collection('notifications')
+      .doc();
+
+  await notificationRef.set({
+    'id': notificationRef.id,
+    'type': type,
+    'message': message,
+    'fromUserId': currentUser.uid,
+    'createdAt': FieldValue.serverTimestamp(),
+    'read': false,
+  });
 }
