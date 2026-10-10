@@ -4,7 +4,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'profile_service.dart';
 import 'profile_model.dart';
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({Key? key}) : super(key: key);
+  final String? userId;
+
+  const ProfileScreen({
+    Key? key,
+    this.userId,
+  }) : super(key: key);
+
+  final ProfileService _profileService = ProfileService();
 
   @override
   Widget build(BuildContext context) {
