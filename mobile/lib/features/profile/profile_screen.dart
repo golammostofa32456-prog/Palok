@@ -531,15 +531,16 @@ class _ProfileVideoPlayerScreenState
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        AspectRatio(
-                          aspectRatio: controller.value.aspectRatio > 0
-                              ? controller.value.aspectRatio
-                              : 9 / 16,
-                          child: VideoPlayerWidget(
-                            controller: controller,
-                            fit: BoxFit.contain,
-                          ),
-                        ),
+                    Positioned.fill(
+  child: FittedBox(
+    fit: BoxFit.contain,
+    child: SizedBox(
+      width: controller.value.size.width,
+      height: controller.value.size.height,
+      child: VideoPlayer(controller),
+    ),
+  ),
+),
                         if (!_isPlaying)
                           const Icon(
                             Icons.play_circle_fill,
