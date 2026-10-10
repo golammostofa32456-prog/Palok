@@ -1,25 +1,36 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class ProfileService {
-  final FirebaseFirestore _firestore =
-      FirebaseFirestore.instance;
+import 'profile_model.dart';
 
-  Future<Map<String, dynamic>?> getProfile(
-    String userId,
-  ) async {
-    if (userId.trim().isEmpty) {
+class ProfileService {
+  final FirebaseFirestore _firestore;
+
+  ProfileService({
+    FirebaseFirestore? firestore,
+  }) : _firestore = firestore ?? FirebaseFirestore.instance;
+
+  Future<ProfileModel?> getProfile(String userId) async {
+    final id = userId.trim();
+
+    if (id.isEmpty) {
       return null;
     }
 
-    final doc = await _firestore
+    final snapshot = await _firestore
         .collection('users')
-        .doc(userId)
+        .doc(id)
         .get();
 
-    if (!doc.exists) {
+    if (!snapshot.exists) {
       return null;
     }
 
-    return doc.data();
+    final data = snapshot.data();
+
+    if (data == null) {
+      return null;
+    }
+
+    return ProfileModel.fromMap(snapshot.id, data);
   }
 }
