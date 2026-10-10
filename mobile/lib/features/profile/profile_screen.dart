@@ -657,3 +657,109 @@ class _ProfileVideoPlayerScreenState
     );
   }
 }
+
+class _FollowButton extends StatefulWidget {
+  final String targetUserId;
+  final int initialFollowersCount;
+
+  const _FollowButton({
+    required this.targetUserId,
+    required this.initialFollowersCount,
+  });
+
+  @override
+  State<_FollowButton> createState() => _FollowButtonState();
+}
+
+class _FollowButtonState extends State<_FollowButton> {
+  final ProfileActionsService _service = ProfileActionsService();
+  bool _following = false;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStatus();
+  }
+
+  Future<void> _loadStatus() async {
+    try {
+      final result = await _service.isFollowing(widget.targetUserId);
+      if (!mounted) return;
+      setState(() {
+        _following = result;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _toggle() async {
+    if (_loading) return;
+
+    setState(() => _loading = true);
+
+    try {
+      final result = await _service.toggleFollow(widget.targetUserId);
+
+      if (result) {
+        await _service.createNotification(
+          recipientUserId: widget.targetUserId,
+          type: 'follow',
+          message: 'কেউ আপনাকে ফলো করেছেন',
+        );
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _following = result;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: _loading ? null : _toggle,
+      style: OutlinedButton.styleFrom(
+        side: BorderSide(
+          color: _following ? Colors.grey : Colors.pink,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(4),
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 36,
+          vertical: 12,
+        ),
+      ),
+      child: _loading
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                color: Colors.pink,
+                strokeWidth: 2,
+              ),
+            )
+          : Text(
+              _following ? 'Following' : 'Follow',
+              style: TextStyle(
+                color: _following ? Colors.white : Colors.pink,
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+              ),
+            ),
+    );
+  }
+}
+
