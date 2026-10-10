@@ -1,8 +1,10 @@
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'profile_service.dart';
 import 'profile_model.dart';
+import 'profile_video_service.dart';
 
 class ProfileScreen extends StatelessWidget {
   final String? userId;
@@ -27,9 +29,7 @@ class ProfileScreen extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             backgroundColor: Colors.black,
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
+            body: Center(child: CircularProgressIndicator()),
           );
         }
 
@@ -38,7 +38,6 @@ class ProfileScreen extends StatelessWidget {
         }
 
         final profile = snapshot.data;
-
         if (profile == null) {
           return _messageScreen('এই প্রোফাইল পাওয়া যায়নি');
         }
@@ -61,7 +60,7 @@ class ProfileScreen extends StatelessWidget {
             elevation: 0,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back, color: Colors.white),
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.maybePop(context),
             ),
             title: Text(
               displayName,
@@ -82,8 +81,6 @@ class ProfileScreen extends StatelessWidget {
             child: Column(
               children: [
                 const SizedBox(height: 10),
-
-                // Profile picture
                 Center(
                   child: Container(
                     width: 96,
@@ -92,19 +89,14 @@ class ProfileScreen extends StatelessWidget {
                     decoration: const BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: LinearGradient(
-                        colors: [
-                          Colors.cyan,
-                          Colors.pink,
-                          Colors.purple,
-                        ],
+                        colors: [Colors.cyan, Colors.pink, Colors.purple],
                       ),
                     ),
                     child: CircleAvatar(
                       backgroundColor: const Color(0xFF1E1E1E),
-                      backgroundImage:
-                          profile.profileImageUrl.isNotEmpty
-                              ? NetworkImage(profile.profileImageUrl)
-                              : null,
+                      backgroundImage: profile.profileImageUrl.isNotEmpty
+                          ? NetworkImage(profile.profileImageUrl)
+                          : null,
                       child: profile.profileImageUrl.isEmpty
                           ? const Icon(
                               Icons.person,
@@ -115,9 +107,7 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 12),
-
                 Text(
                   username,
                   style: const TextStyle(
@@ -126,33 +116,18 @@ class ProfileScreen extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-
                 const SizedBox(height: 18),
-
-                // Profile statistics
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _buildStatItem(
-                      '${profile.followingCount}',
-                      'Following',
-                    ),
+                    _buildStatItem('${profile.followingCount}', 'Following'),
                     _buildDivider(),
-                    _buildStatItem(
-                      '${profile.followersCount}',
-                      'Followers',
-                    ),
+                    _buildStatItem('${profile.followersCount}', 'Followers'),
                     _buildDivider(),
-                    _buildStatItem(
-                      '${profile.likesCount}',
-                      'Likes',
-                    ),
+                    _buildStatItem('${profile.likesCount}', 'Likes'),
                   ],
                 ),
-
                 const SizedBox(height: 18),
-
-                // Own profile and other users' profiles are different
                 if (isOwnProfile)
                   OutlinedButton(
                     onPressed: () {},
@@ -198,9 +173,7 @@ class ProfileScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-
                 const SizedBox(height: 14),
-
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32),
                   child: Text(
@@ -212,11 +185,8 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 20),
                 const Divider(color: Colors.white12, height: 1),
-
-                // Profile tabs
                 const Row(
                   children: [
                     Expanded(
@@ -228,42 +198,143 @@ class ProfileScreen extends StatelessWidget {
                     Expanded(
                       child: Padding(
                         padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Icon(
-                          Icons.favorite_border,
-                          color: Colors.grey,
-                        ),
+                        child: Icon(Icons.favorite_border, color: Colors.grey),
                       ),
                     ),
                     Expanded(
                       child: Padding(
                         padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Icon(
-                          Icons.lock_outline,
-                          color: Colors.grey,
-                        ),
+                        child: Icon(Icons.lock_outline, color: Colors.grey),
                       ),
                     ),
                   ],
                 ),
+                _buildVideos(targetUserId),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
-                const SizedBox(height: 60),
+  Widget _buildVideos(String targetUserId) {
+    return FutureBuilder(
+      future: ProfileVideoService().getUserVideos(targetUserId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.all(32),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
 
-                const Icon(
+        if (snapshot.hasError) {
+          return const Padding(
+            padding: EdgeInsets.all(32),
+            child: Text(
+              'ভিডিও লোড করা যায়নি',
+              style: TextStyle(color: Colors.grey),
+            ),
+          );
+        }
+
+        final videos = snapshot.data;
+        if (videos == null || videos.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.only(top: 60, bottom: 40),
+            child: Column(
+              children: [
+                Icon(
                   Icons.video_collection_outlined,
                   size: 64,
                   color: Colors.grey,
                 ),
-                const SizedBox(height: 12),
-                const Text(
+                SizedBox(height: 12),
+                Text(
                   'এখনো কোনো ভিডিও নেই',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.grey, fontSize: 14),
                 ),
               ],
             ),
+          );
+        }
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: EdgeInsets.zero,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 2,
+            mainAxisSpacing: 2,
+            childAspectRatio: 0.68,
           ),
+          itemCount: videos.length,
+          itemBuilder: (context, index) {
+            final video = videos[index];
+            final thumbnail = video.thumbnailUrl.trim();
+
+            return GestureDetector(
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'ভিডিও চালানোর স্ক্রিন পরের ধাপে যুক্ত করা হবে',
+                    ),
+                  ),
+                );
+              },
+              child: Container(
+                color: const Color(0xFF1E1E1E),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (thumbnail.isNotEmpty)
+                      Image.network(
+                        thumbnail,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Center(
+                          child: Icon(
+                            Icons.play_circle_outline,
+                            color: Colors.white70,
+                            size: 36,
+                          ),
+                        ),
+                      )
+                    else
+                      const Center(
+                        child: Icon(
+                          Icons.play_circle_outline,
+                          color: Colors.white70,
+                          size: 36,
+                        ),
+                      ),
+                    Positioned(
+                      left: 6,
+                      bottom: 5,
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.play_arrow,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                          Text(
+                            '${video.likeCount}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -299,10 +370,7 @@ class ProfileScreen extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.grey,
-            fontSize: 12,
-          ),
+          style: const TextStyle(color: Colors.grey, fontSize: 12),
         ),
       ],
     );
