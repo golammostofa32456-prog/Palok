@@ -2107,7 +2107,9 @@ onProfileTap: () {
   Navigator.push(
     context,
     MaterialPageRoute(
-      builder: (_) => const ProfileScreen(),
+      builder: (_) => ProfileScreen(
+        userId: video.userId,
+      ),
     ),
   );
 },
