@@ -11,6 +11,7 @@ import 'features/video/video_page.dart';
 import 'features/home/home_top_bar.dart';
 import 'features/video/video_action_stack.dart';
 import 'features/video/video_view_service.dart';
+import 'features/profile/profile_screen.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
