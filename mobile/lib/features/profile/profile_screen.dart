@@ -1,10 +1,12 @@
-
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:video_player/video_player.dart';
 
 import 'profile_service.dart';
 import 'profile_model.dart';
 import 'profile_video_service.dart';
+import '../video/video_post.dart';
+import '../video/video_player_widget.dart';
 
 class ProfileScreen extends StatelessWidget {
   final String? userId;
@@ -120,9 +122,15 @@ class ProfileScreen extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _buildStatItem('${profile.followingCount}', 'Following'),
+                    _buildStatItem(
+                      '${profile.followingCount}',
+                      'Following',
+                    ),
                     _buildDivider(),
-                    _buildStatItem('${profile.followersCount}', 'Followers'),
+                    _buildStatItem(
+                      '${profile.followersCount}',
+                      'Followers',
+                    ),
                     _buildDivider(),
                     _buildStatItem('${profile.likesCount}', 'Likes'),
                   ],
@@ -198,13 +206,19 @@ class ProfileScreen extends StatelessWidget {
                     Expanded(
                       child: Padding(
                         padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Icon(Icons.favorite_border, color: Colors.grey),
+                        child: Icon(
+                          Icons.favorite_border,
+                          color: Colors.grey,
+                        ),
                       ),
                     ),
                     Expanded(
                       child: Padding(
                         padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Icon(Icons.lock_outline, color: Colors.grey),
+                        child: Icon(
+                          Icons.lock_outline,
+                          color: Colors.grey,
+                        ),
                       ),
                     ),
                   ],
@@ -219,7 +233,7 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildVideos(String targetUserId) {
-    return FutureBuilder(
+    return FutureBuilder<List<VideoPost>>(
       future: ProfileVideoService().getUserVideos(targetUserId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -277,11 +291,9 @@ class ProfileScreen extends StatelessWidget {
 
             return GestureDetector(
               onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'ভিডিও চালানোর স্ক্রিন পরের ধাপে যুক্ত করা হবে',
-                    ),
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => _ProfileVideoPlayerScreen(video: video),
                   ),
                 );
               },
@@ -321,7 +333,7 @@ class ProfileScreen extends StatelessWidget {
                             color: Colors.white,
                           ),
                           Text(
-                            '${video.likeCount}',
+                            '${video.viewCount}',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 11,
@@ -382,6 +394,182 @@ class ProfileScreen extends StatelessWidget {
       width: 1,
       color: Colors.grey.shade800,
       margin: const EdgeInsets.symmetric(horizontal: 20),
+    );
+  }
+}
+
+class _ProfileVideoPlayerScreen extends StatefulWidget {
+  final VideoPost video;
+
+  const _ProfileVideoPlayerScreen({
+    required this.video,
+  });
+
+  @override
+  State<_ProfileVideoPlayerScreen> createState() =>
+      _ProfileVideoPlayerScreenState();
+}
+
+class _ProfileVideoPlayerScreenState
+    extends State<_ProfileVideoPlayerScreen> {
+  VideoPlayerController? _controller;
+  String? _errorMessage;
+  bool _isPlaying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeVideo();
+  }
+
+  Future<void> _initializeVideo() async {
+    final url = widget.video.videoUrl.trim();
+
+    if (url.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'এই ভিডিওর লিংক পাওয়া যায়নি';
+        });
+      }
+      return;
+    }
+
+    VideoPlayerController? controller;
+
+    try {
+      controller = VideoPlayerController.networkUrl(Uri.parse(url));
+      _controller = controller;
+
+      await controller.initialize();
+
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+
+      await controller.setLooping(true);
+      await controller.play();
+
+      if (!mounted) return;
+
+      setState(() {
+        _isPlaying = true;
+      });
+    } catch (_) {
+      if (controller != null) {
+        await controller.dispose();
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _controller = null;
+        _errorMessage = 'ভিডিও চালানো যাচ্ছে না। ইন্টারনেট বা ভিডিও লিংক পরীক্ষা করুন।';
+      });
+    }
+  }
+
+  Future<void> _togglePlayback() async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+
+    if (controller.value.isPlaying) {
+      await controller.pause();
+      if (mounted) {
+        setState(() => _isPlaying = false);
+      }
+    } else {
+      await controller.play();
+      if (mounted) {
+        setState(() => _isPlaying = true);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.maybePop(context),
+        ),
+        title: const Text(
+          'ভিডিও',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: Center(
+        child: _errorMessage != null
+            ? Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  _errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70),
+                ),
+              )
+            : controller == null || !controller.value.isInitialized
+                ? const CircularProgressIndicator(color: Colors.white)
+                : GestureDetector(
+                    onTap: _togglePlayback,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        AspectRatio(
+                          aspectRatio: controller.value.aspectRatio > 0
+                              ? controller.value.aspectRatio
+                              : 9 / 16,
+                          child: VideoPlayerWidget(
+                            controller: controller,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                        if (!_isPlaying)
+                          const Icon(
+                            Icons.play_circle_fill,
+                            color: Colors.white,
+                            size: 64,
+                          ),
+                        Positioned(
+                          left: 16,
+                          right: 16,
+                          bottom: 20,
+                          child: Text(
+                            widget.video.caption,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black,
+                                  blurRadius: 5,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+      ),
     );
   }
 }
