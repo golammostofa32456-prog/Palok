@@ -73,11 +73,39 @@ class ProfileScreen extends StatelessWidget {
             ),
             centerTitle: true,
             actions: [
-              IconButton(
-                icon: const Icon(Icons.more_vert, color: Colors.white),
-                onPressed: () {},
-              ),
-            ],
+  IconButton(
+    tooltip: 'নোটিফিকেশন',
+    icon: const Icon(
+      Icons.notifications_none,
+      color: Colors.white,
+    ),
+    onPressed: () {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('নোটিফিকেশন ফিচার পরে যুক্ত করা হবে'),
+        ),
+      );
+    },
+  ),
+  IconButton(
+    tooltip: 'শেয়ার',
+    icon: const Icon(
+      Icons.share_outlined,
+      color: Colors.white,
+    ),
+    onPressed: () {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('প্রোফাইল শেয়ার ফিচার পরে যুক্ত করা হবে'),
+        ),
+      );
+    },
+  ),
+  IconButton(
+    icon: const Icon(Icons.more_vert, color: Colors.white),
+    onPressed: () {},
+  ),
+],
           ),
           body: SingleChildScrollView(
             child: Column(
