@@ -2102,7 +2102,14 @@ unawaited(
     saveCount: saveCount,
     shareCount: shareCount,
     profileImageUrl: video.profileImageUrl,
-onProfileTap: null,
+onProfileTap: () {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => const ProfileScreen(),
+    ),
+  );
+},
     showFollow:
         video.userId != _auth.currentUser?.uid,
     onFollow: () {
