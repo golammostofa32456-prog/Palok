@@ -1,162 +1,58 @@
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-class ProfileActionsService {
+import '../video/video_post.dart';
+
+class ProfileVideoService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  Future<bool> isFollowing(String targetUserId) async {
-    final currentUserId = _auth.currentUser?.uid;
-
-    if (currentUserId == null || currentUserId == targetUserId) {
-      return false;
+  Future<List<VideoPost>> getUserVideos(String userId) async {
+    if (userId.trim().isEmpty) {
+      return [];
     }
 
-    final doc = await _db
-        .collection('users')
-        .doc(currentUserId)
-        .collection('following')
-        .doc(targetUserId)
+    final snapshot = await _db
+        .collection('videos')
+        .where('userId', isEqualTo: userId)
         .get();
 
-    return doc.exists;
-  }
+    final videos = snapshot.docs.map((doc) {
+      final data = doc.data();
 
-  Future<bool> toggleFollow(String targetUserId) async {
-    final currentUserId = _auth.currentUser?.uid;
+      return VideoPost(
+        id: doc.id,
+        videoUrl: (data['videoUrl'] ?? '').toString(),
+        userId: (data['userId'] ?? userId).toString(),
+        username: (data['username'] ?? 'PALOK User').toString(),
+        caption: (data['caption'] ?? '').toString(),
+        hashtags: _hashtagsToString(data['hashtags']),
+        likeCount: _toInt(data['likeCount']),
+        commentCount: _toInt(data['commentCount']),
+        saveCount: _toInt(data['saveCount']),
+        shareCount: _toInt(data['shareCount']),
+        thumbnailUrl: (data['thumbnailUrl'] ?? '').toString(),
+        viewCount: _toInt(data['viewCount']),
+      );
+    }).where((video) => video.videoUrl.trim().isNotEmpty).toList();
 
-    if (currentUserId == null) {
-      throw Exception('ফলো করতে আগে লগইন করুন');
-    }
-
-    if (currentUserId == targetUserId) {
-      throw Exception('নিজের প্রোফাইল ফলো করা যাবে না');
-    }
-
-    final currentUser = _db.collection('users').doc(currentUserId);
-    final targetUser = _db.collection('users').doc(targetUserId);
-
-    final followingRef =
-        currentUser.collection('following').doc(targetUserId);
-    final followerRef =
-        targetUser.collection('followers').doc(currentUserId);
-
-    final isNowFollowing = await _db.runTransaction<bool>(
-      (transaction) async {
-        final followingSnapshot = await transaction.get(followingRef);
-        final followerSnapshot = await transaction.get(followerRef);
-        final currentSnapshot = await transaction.get(currentUser);
-        final targetSnapshot = await transaction.get(targetUser);
-
-        if (!targetSnapshot.exists) {
-          throw Exception('এই ব্যবহারকারীকে পাওয়া যায়নি');
-        }
-
-        final currentData =
-            currentSnapshot.data() ?? <String, dynamic>{};
-        final targetData =
-            targetSnapshot.data() ?? <String, dynamic>{};
-
-        final followingCount =
-            (currentData['followingCount'] as num?)?.toInt() ?? 0;
-        final followersCount =
-            (targetData['followersCount'] as num?)?.toInt() ?? 0;
-
-        if (followingSnapshot.exists) {
-          transaction.delete(followingRef);
-
-          if (followerSnapshot.exists) {
-            transaction.delete(followerRef);
-          }
-
-          transaction.set(
-            currentUser,
-            {
-              'followingCount':
-                  followingCount > 0 ? followingCount - 1 : 0,
-            },
-            SetOptions(merge: true),
-          );
-
-          transaction.set(
-            targetUser,
-            {
-              'followersCount':
-                  followersCount > 0 ? followersCount - 1 : 0,
-            },
-            SetOptions(merge: true),
-          );
-
-          return false;
-        }
-
-        transaction.set(followingRef, {
-          'userId': targetUserId,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-
-        transaction.set(followerRef, {
-          'userId': currentUserId,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-
-        transaction.set(
-          currentUser,
-          {'followingCount': followingCount + 1},
-          SetOptions(merge: true),
-        );
-
-        transaction.set(
-          targetUser,
-          {'followersCount': followersCount + 1},
-          SetOptions(merge: true),
-        );
-
-        return true;
-      },
-    );
-
-    // Follow সফল হলেই শুধু notification তৈরি হবে।
-    if (isNowFollowing) {
-      try {
-        await createNotification(
-          recipientUserId: targetUserId,
-          type: 'follow',
-          message: 'তোমাকে Follow করেছে',
-        );
-      } catch (_) {
-        // Notification ব্যর্থ হলেও Follow বাতিল হবে না।
-      }
-    }
-
-    return isNowFollowing;
-  }
-
-  Future<void> createNotification({
-    required String recipientUserId,
-    required String type,
-    required String message,
-  }) async {
-    final currentUser = _auth.currentUser;
-
-    if (currentUser == null ||
-        recipientUserId == currentUser.uid) {
-      return;
-    }
-
-    final notificationRef = _db
-        .collection('users')
-        .doc(recipientUserId)
-        .collection('notifications')
-        .doc();
-
-    await notificationRef.set({
-      'id': notificationRef.id,
-      'type': type,
-      'message': message,
-      'fromUserId': currentUser.uid,
-      'createdAt': FieldValue.serverTimestamp(),
-      'read': false,
+    videos.sort((a, b) {
+      return b.videoUrl.compareTo(a.videoUrl);
     });
+
+    return videos;
+  }
+
+  int _toInt(dynamic value) {
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  String _hashtagsToString(dynamic value) {
+    if (value is List) {
+      return value.map((item) => item.toString()).join(' ');
+    }
+    return value?.toString() ?? '';
   }
 }
