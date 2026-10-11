@@ -1,25 +1,23 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:share_plus/share_plus.dart';
-
-import 'profile_actions_service.dart';
-import 'profile_notifications_screen.dart';
-import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 
-import 'profile_service.dart';
+import 'profile_actions_service.dart';
 import 'profile_model.dart';
+import 'profile_notifications_screen.dart';
+import 'profile_service.dart';
 import 'profile_video_service.dart';
 import '../video/video_post.dart';
-import '../video/video_player_widget.dart';
 
 class ProfileScreen extends StatelessWidget {
   final String? userId;
 
   const ProfileScreen({
-    Key? key,
+    super.key,
     this.userId,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -36,29 +34,31 @@ class ProfileScreen extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             backgroundColor: Colors.black,
-            body: Center(child: CircularProgressIndicator()),
+            body: Center(
+              child: CircularProgressIndicator(color: Colors.pink),
+            ),
           );
         }
 
-        if (snapshot.hasError) {
-          return _messageScreen('প্রোফাইল লোড করা যায়নি');
+        if (snapshot.hasError || snapshot.data == null) {
+          return _messageScreen('প্রোফাইল লোড করা যায়নি');
         }
 
-        final profile = snapshot.data;
-        if (profile == null) {
-          return _messageScreen('এই প্রোফাইল পাওয়া যায়নি');
-        }
-
+        final profile = snapshot.data!;
         final isOwnProfile = targetUserId == currentUserId;
-        final displayName = profile.displayName.isNotEmpty
-            ? profile.displayName
-            : profile.username.isNotEmpty
-                ? profile.username
+
+        final displayName = profile.displayName.trim().isNotEmpty
+            ? profile.displayName.trim()
+            : profile.username.trim().isNotEmpty
+                ? profile.username.trim()
                 : 'ব্যবহারকারী';
 
-        final username = profile.username.isNotEmpty
-            ? '@${profile.username.replaceFirst(RegExp(r'^@'), '')}'
-            : '@${profile.id}';
+        final cleanUsername = profile.username
+            .trim()
+            .replaceFirst(RegExp(r'^@'), '');
+
+        final username =
+            cleanUsername.isNotEmpty ? '@$cleanUsername' : '@${profile.id}';
 
         return Scaffold(
           backgroundColor: Colors.black,
@@ -66,11 +66,14 @@ class ProfileScreen extends StatelessWidget {
             backgroundColor: Colors.black,
             elevation: 0,
             leading: IconButton(
+              tooltip: 'ফিরে যান',
               icon: const Icon(Icons.arrow_back, color: Colors.white),
               onPressed: () => Navigator.maybePop(context),
             ),
             title: Text(
               displayName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -78,135 +81,144 @@ class ProfileScreen extends StatelessWidget {
             ),
             centerTitle: true,
             actions: [
-  IconButton(
-    tooltip: 'নোটিফিকেশন',
-    icon: const Icon(
-      Icons.notifications_none,
-      color: Colors.white,
-    ),
-    onPressed: () {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('নোটিফিকেশন ফিচার পরে যুক্ত করা হবে'),
-        ),
-      );
-    },
-  ),
-  IconButton(
-    tooltip: 'শেয়ার',
-    icon: const Icon(
-      Icons.share_outlined,
-      color: Colors.white,
-    ),
-    onPressed: () {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('প্রোফাইল শেয়ার ফিচার পরে যুক্ত করা হবে'),
-        ),
-      );
-    },
-  ),
-  
-IconButton(
-  tooltip: 'আরও অপশন',
-  icon: const Icon(Icons.more_vert, color: Colors.white),
-  onPressed: () {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF1E1E1E),
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.share, color: Colors.white),
-                title: const Text(
-                  'প্রোফাইল শেয়ার',
-                  style: TextStyle(color: Colors.white),
+              IconButton(
+                tooltip: 'নোটিফিকেশন',
+                icon: const Icon(
+                  Icons.notifications_none,
+                  color: Colors.white,
                 ),
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  await Share.share(
-                    'PALOK-এ $displayName-এর প্রোফাইল\n'
-                    '$username\nUser ID: ${profile.id}',
+                onPressed: () {
+                  if (FirebaseAuth.instance.currentUser == null) {
+                    _showMessage(context, 'নোটিফিকেশন দেখতে লগইন করুন');
+                    return;
+                  }
+
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const ProfileNotificationsScreen(),
+                    ),
                   );
                 },
               ),
-              if (isOwnProfile)
-                ListTile(
-                  leading: const Icon(Icons.refresh, color: Colors.white),
-                  title: const Text(
-                    'প্রোফাইল রিফ্রেশ',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute<void>(
-                        builder: (_) =>
-                            ProfileScreen(userId: targetUserId),
-                      ),
-                    );
-                  },
-                )
-              else
-                ListTile(
-                  leading: const Icon(
-                    Icons.flag_outlined,
-                    color: Colors.white,
-                  ),
-                  title: const Text(
-                    'প্রোফাইল রিপোর্ট',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('রিপোর্ট ফিচার এখনো যুক্ত করা হয়নি'),
-                      ),
-                    );
-                  },
+              IconButton(
+                tooltip: 'প্রোফাইল শেয়ার',
+                icon: const Icon(
+                  Icons.share_outlined,
+                  color: Colors.white,
                 ),
-            ],
-          ),
-        );
-      },
-    );
-  },
-),
+                onPressed: () => _shareProfile(
+                  context,
+                  displayName,
+                  username,
+                  profile.id,
+                ),
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'আরও অপশন',
+                color: const Color(0xFF242424),
+                icon: const Icon(Icons.more_vert, color: Colors.white),
+                onSelected: (value) async {
+                  switch (value) {
+                    case 'share':
+                      await _shareProfile(
+                        context,
+                        displayName,
+                        username,
+                        profile.id,
+                      );
+                      break;
 
-],
+                    case 'refresh':
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute<void>(
+                          builder: (_) => ProfileScreen(
+                            userId: targetUserId,
+                          ),
+                        ),
+                      );
+                      break;
+
+                    case 'copy_id':
+                      await Share.share(
+                        'PALOK User ID: ${profile.id}',
+                      );
+                      break;
+
+                    case 'report':
+                      await _reportProfile(
+                        context,
+                        targetUserId,
+                        displayName,
+                      );
+                      break;
+                  }
+                },
+                itemBuilder: (_) => [
+                  const PopupMenuItem<String>(
+                    value: 'share',
+                    child: _MenuItem(
+                      icon: Icons.share_outlined,
+                      label: 'প্রোফাইল শেয়ার',
+                    ),
+                  ),
+                  if (isOwnProfile)
+                    const PopupMenuItem<String>(
+                      value: 'refresh',
+                      child: _MenuItem(
+                        icon: Icons.refresh,
+                        label: 'প্রোফাইল রিফ্রেশ',
+                      ),
+                    )
+                  else ...[
+                    const PopupMenuItem<String>(
+                      value: 'copy_id',
+                      child: _MenuItem(
+                        icon: Icons.copy,
+                        label: 'User ID শেয়ার',
+                      ),
+                    ),
+                    const PopupMenuItem<String>(
+                      value: 'report',
+                      child: _MenuItem(
+                        icon: Icons.flag_outlined,
+                        label: 'প্রোফাইল রিপোর্ট',
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
           ),
           body: SingleChildScrollView(
             child: Column(
               children: [
                 const SizedBox(height: 10),
-                Center(
-                  child: Container(
-                    width: 96,
-                    height: 96,
-                    padding: const EdgeInsets.all(3),
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [Colors.cyan, Colors.pink, Colors.purple],
-                      ),
+                Container(
+                  width: 96,
+                  height: 96,
+                  padding: const EdgeInsets.all(3),
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.cyan,
+                        Colors.pink,
+                        Colors.purple,
+                      ],
                     ),
-                    child: CircleAvatar(
-                      backgroundColor: const Color(0xFF1E1E1E),
-                      backgroundImage: profile.profileImageUrl.isNotEmpty
-                          ? NetworkImage(profile.profileImageUrl)
-                          : null,
-                      child: profile.profileImageUrl.isEmpty
-                          ? const Icon(
-                              Icons.person,
-                              size: 55,
-                              color: Colors.white,
-                            )
-                          : null,
-                    ),
+                  ),
+                  child: CircleAvatar(
+                    backgroundColor: const Color(0xFF1E1E1E),
+                    backgroundImage: profile.profileImageUrl.trim().isNotEmpty
+                        ? NetworkImage(profile.profileImageUrl)
+                        : null,
+                    child: profile.profileImageUrl.trim().isEmpty
+                        ? const Icon(
+                            Icons.person,
+                            size: 55,
+                            color: Colors.white,
+                          )
+                        : null,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -232,13 +244,21 @@ IconButton(
                       'Followers',
                     ),
                     _buildDivider(),
-                    _buildStatItem('${profile.likesCount}', 'Likes'),
+                    _buildStatItem(
+                      '${profile.likesCount}',
+                      'Likes',
+                    ),
                   ],
                 ),
                 const SizedBox(height: 18),
                 if (isOwnProfile)
                   OutlinedButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      _showMessage(
+                        context,
+                        'Edit Profile স্ক্রিন এখনো যুক্ত করা হয়নি',
+                      );
+                    },
                     style: OutlinedButton.styleFrom(
                       side: BorderSide(color: Colors.grey.shade800),
                       shape: RoundedRectangleBorder(
@@ -260,10 +280,10 @@ IconButton(
                     ),
                   )
                 else
-  _FollowButton(
-    targetUserId: targetUserId,
-    initialFollowersCount: profile.followersCount,
-  ),
+                  _FollowButton(
+                    key: ValueKey(targetUserId),
+                    targetUserId: targetUserId,
+                  ),
                 const SizedBox(height: 14),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -315,6 +335,96 @@ IconButton(
     );
   }
 
+  static Future<void> _shareProfile(
+    BuildContext context,
+    String displayName,
+    String username,
+    String profileId,
+  ) async {
+    try {
+      await Share.share(
+        'PALOK-এ $displayName-এর প্রোফাইল\n'
+        '$username\n'
+        'User ID: $profileId',
+        subject: '$displayName-এর PALOK প্রোফাইল',
+      );
+    } catch (_) {
+      if (context.mounted) {
+        _showMessage(context, 'প্রোফাইল শেয়ার করা যায়নি');
+      }
+    }
+  }
+
+  static Future<void> _reportProfile(
+    BuildContext context,
+    String targetUserId,
+    String displayName,
+  ) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+
+    if (currentUser == null) {
+      _showMessage(context, 'রিপোর্ট করতে আগে লগইন করুন');
+      return;
+    }
+
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return SimpleDialog(
+          backgroundColor: const Color(0xFF222222),
+          title: const Text(
+            'প্রোফাইল রিপোর্ট করুন',
+            style: TextStyle(color: Colors.white),
+          ),
+          children: [
+            _reportOption(dialogContext, 'spam', 'স্প্যাম'),
+            _reportOption(dialogContext, 'abuse', 'হয়রানি বা অপব্যবহার'),
+            _reportOption(dialogContext, 'fake', 'ভুয়া প্রোফাইল'),
+            _reportOption(dialogContext, 'other', 'অন্যান্য'),
+          ],
+        );
+      },
+    );
+
+    if (reason == null) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('profileReports').add({
+        'reportedUserId': targetUserId,
+        'reportedUsername': displayName,
+        'reporterUserId': currentUser.uid,
+        'reason': reason,
+        'createdAt': FieldValue.serverTimestamp(),
+        'status': 'pending',
+      });
+
+      if (context.mounted) {
+        _showMessage(context, 'রিপোর্ট জমা দেওয়া হয়েছে');
+      }
+    } catch (_) {
+      if (context.mounted) {
+        _showMessage(
+          context,
+          'রিপোর্ট জমা হয়নি। Firestore Rules পরীক্ষা করুন।',
+        );
+      }
+    }
+  }
+
+  static Widget _reportOption(
+    BuildContext context,
+    String value,
+    String label,
+  ) {
+    return SimpleDialogOption(
+      onPressed: () => Navigator.pop(context, value),
+      child: Text(
+        label,
+        style: const TextStyle(color: Colors.white),
+      ),
+    );
+  }
+
   Widget _buildVideos(String targetUserId) {
     return FutureBuilder<List<VideoPost>>(
       future: ProfileVideoService().getUserVideos(targetUserId),
@@ -322,7 +432,9 @@ IconButton(
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Padding(
             padding: EdgeInsets.all(32),
-            child: Center(child: CircularProgressIndicator()),
+            child: Center(
+              child: CircularProgressIndicator(color: Colors.pink),
+            ),
           );
         }
 
@@ -330,13 +442,14 @@ IconButton(
           return const Padding(
             padding: EdgeInsets.all(32),
             child: Text(
-              'ভিডিও লোড করা যায়নি',
+              'ভিডিও লোড করা যায়নি',
               style: TextStyle(color: Colors.grey),
             ),
           );
         }
 
         final videos = snapshot.data;
+
         if (videos == null || videos.isEmpty) {
           return const Padding(
             padding: EdgeInsets.only(top: 60, bottom: 40),
@@ -451,6 +564,12 @@ IconButton(
     );
   }
 
+  static void _showMessage(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   static Widget _buildStatItem(String count, String label) {
     return Column(
       children: [
@@ -477,6 +596,30 @@ IconButton(
       width: 1,
       color: Colors.grey.shade800,
       margin: const EdgeInsets.symmetric(horizontal: 20),
+    );
+  }
+}
+
+class _MenuItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _MenuItem({
+    required this.icon,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.white70, size: 21),
+        const SizedBox(width: 12),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white),
+        ),
+      ],
     );
   }
 }
@@ -511,7 +654,7 @@ class _ProfileVideoPlayerScreenState
     if (url.isEmpty) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'এই ভিডিওর লিংক পাওয়া যায়নি';
+          _errorMessage = 'এই ভিডিওর লিংক পাওয়া যায়নি';
         });
       }
       return;
@@ -547,13 +690,15 @@ class _ProfileVideoPlayerScreenState
 
       setState(() {
         _controller = null;
-        _errorMessage = 'ভিডিও চালানো যাচ্ছে না। ইন্টারনেট বা ভিডিও লিংক পরীক্ষা করুন।';
+        _errorMessage =
+            'ভিডিও চালানো যাচ্ছে না। ইন্টারনেট বা ভিডিও লিংক পরীক্ষা করুন।';
       });
     }
   }
 
   Future<void> _togglePlayback() async {
     final controller = _controller;
+
     if (controller == null || !controller.value.isInitialized) return;
 
     if (controller.value.isPlaying) {
@@ -614,16 +759,16 @@ class _ProfileVideoPlayerScreenState
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                    Positioned.fill(
-  child: FittedBox(
-    fit: BoxFit.contain,
-    child: SizedBox(
-      width: controller.value.size.width,
-      height: controller.value.size.height,
-      child: VideoPlayer(controller),
-    ),
-  ),
-),
+                        Positioned.fill(
+                          child: FittedBox(
+                            fit: BoxFit.contain,
+                            child: SizedBox(
+                              width: controller.value.size.width,
+                              height: controller.value.size.height,
+                              child: VideoPlayer(controller),
+                            ),
+                          ),
+                        ),
                         if (!_isPlaying)
                           const Icon(
                             Icons.play_circle_fill,
@@ -660,11 +805,10 @@ class _ProfileVideoPlayerScreenState
 
 class _FollowButton extends StatefulWidget {
   final String targetUserId;
-  final int initialFollowersCount;
 
   const _FollowButton({
+    super.key,
     required this.targetUserId,
-    required this.initialFollowersCount,
   });
 
   @override
@@ -673,6 +817,7 @@ class _FollowButton extends StatefulWidget {
 
 class _FollowButtonState extends State<_FollowButton> {
   final ProfileActionsService _service = ProfileActionsService();
+
   bool _following = false;
   bool _loading = true;
 
@@ -685,7 +830,9 @@ class _FollowButtonState extends State<_FollowButton> {
   Future<void> _loadStatus() async {
     try {
       final result = await _service.isFollowing(widget.targetUserId);
+
       if (!mounted) return;
+
       setState(() {
         _following = result;
         _loading = false;
@@ -702,24 +849,28 @@ class _FollowButtonState extends State<_FollowButton> {
     setState(() => _loading = true);
 
     try {
+      // Notification toggleFollow() সার্ভিসের ভেতরেই তৈরি করে।
       final result = await _service.toggleFollow(widget.targetUserId);
 
-      if (result) {
-        await _service.createNotification(
-          recipientUserId: widget.targetUserId,
-          type: 'follow',
-          message: 'কেউ আপনাকে ফলো করেছেন',
-        );
-      }
-
       if (!mounted) return;
+
       setState(() {
         _following = result;
         _loading = false;
       });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result ? 'Follow করা হয়েছে' : 'Unfollow করা হয়েছে',
+          ),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
+
       setState(() => _loading = false);
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString())),
       );
@@ -762,4 +913,3 @@ class _FollowButtonState extends State<_FollowButton> {
     );
   }
 }
-
