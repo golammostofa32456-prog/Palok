@@ -1,78 +1,162 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-import '../video/video_post.dart';
+class ProfileActionsService {
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
-class ProfileVideoService {
-  final FirebaseFirestore _firestore;
+  Future<bool> isFollowing(String targetUserId) async {
+    final currentUserId = _auth.currentUser?.uid;
 
-  ProfileVideoService({
-    FirebaseFirestore? firestore,
-  }) : _firestore = firestore ?? FirebaseFirestore.instance;
-
-  Future<List<VideoPost>> getUserVideos(
-    String userId, {
-    int limit = 100,
-  }) async {
-    final cleanUserId = userId.trim();
-
-    if (cleanUserId.isEmpty || limit <= 0) {
-      return <VideoPost>[];
+    if (currentUserId == null || currentUserId == targetUserId) {
+      return false;
     }
 
-    try {
-      final collection = _firestore.collection('videos');
+    final doc = await _db
+        .collection('users')
+        .doc(currentUserId)
+        .collection('following')
+        .doc(targetUserId)
+        .get();
 
-      final snapshots = await Future.wait([
-        collection.where('userId', isEqualTo: cleanUserId).get(),
-        collection.where('ownerId', isEqualTo: cleanUserId).get(),
-      ]);
+    return doc.exists;
+  }
 
-      final Map<String, VideoPost> uniqueVideos = {};
+  Future<bool> toggleFollow(String targetUserId) async {
+    final currentUserId = _auth.currentUser?.uid;
 
-      for (final snapshot in snapshots) {
-        for (final doc in snapshot.docs) {
-          final video = VideoPost.fromMap(doc.id, doc.data());
+    if (currentUserId == null) {
+      throw Exception('ফলো করতে আগে লগইন করুন');
+    }
 
-          if (video.videoUrl.trim().isEmpty) {
-            continue;
+    if (currentUserId == targetUserId) {
+      throw Exception('নিজের প্রোফাইল ফলো করা যাবে না');
+    }
+
+    final currentUser = _db.collection('users').doc(currentUserId);
+    final targetUser = _db.collection('users').doc(targetUserId);
+
+    final followingRef =
+        currentUser.collection('following').doc(targetUserId);
+    final followerRef =
+        targetUser.collection('followers').doc(currentUserId);
+
+    final isNowFollowing = await _db.runTransaction<bool>(
+      (transaction) async {
+        final followingSnapshot = await transaction.get(followingRef);
+        final followerSnapshot = await transaction.get(followerRef);
+        final currentSnapshot = await transaction.get(currentUser);
+        final targetSnapshot = await transaction.get(targetUser);
+
+        if (!targetSnapshot.exists) {
+          throw Exception('এই ব্যবহারকারীকে পাওয়া যায়নি');
+        }
+
+        final currentData =
+            currentSnapshot.data() ?? <String, dynamic>{};
+        final targetData =
+            targetSnapshot.data() ?? <String, dynamic>{};
+
+        final followingCount =
+            (currentData['followingCount'] as num?)?.toInt() ?? 0;
+        final followersCount =
+            (targetData['followersCount'] as num?)?.toInt() ?? 0;
+
+        if (followingSnapshot.exists) {
+          transaction.delete(followingRef);
+
+          if (followerSnapshot.exists) {
+            transaction.delete(followerRef);
           }
 
-          uniqueVideos[doc.id] = video;
+          transaction.set(
+            currentUser,
+            {
+              'followingCount':
+                  followingCount > 0 ? followingCount - 1 : 0,
+            },
+            SetOptions(merge: true),
+          );
+
+          transaction.set(
+            targetUser,
+            {
+              'followersCount':
+                  followersCount > 0 ? followersCount - 1 : 0,
+            },
+            SetOptions(merge: true),
+          );
+
+          return false;
         }
+
+        transaction.set(followingRef, {
+          'userId': targetUserId,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+        transaction.set(followerRef, {
+          'userId': currentUserId,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+        transaction.set(
+          currentUser,
+          {'followingCount': followingCount + 1},
+          SetOptions(merge: true),
+        );
+
+        transaction.set(
+          targetUser,
+          {'followersCount': followersCount + 1},
+          SetOptions(merge: true),
+        );
+
+        return true;
+      },
+    );
+
+    // Follow সফল হলেই শুধু notification তৈরি হবে।
+    if (isNowFollowing) {
+      try {
+        await createNotification(
+          recipientUserId: targetUserId,
+          type: 'follow',
+          message: 'তোমাকে Follow করেছে',
+        );
+      } catch (_) {
+        // Notification ব্যর্থ হলেও Follow বাতিল হবে না।
       }
-
-      final videos = uniqueVideos.values.toList();
-
-      videos.sort((a, b) {
-        final dateA = a.createdAt;
-        final dateB = b.createdAt;
-
-        if (dateA == null && dateB == null) return 0;
-        if (dateA == null) return 1;
-        if (dateB == null) return -1;
-
-        return dateB.compareTo(dateA);
-      });
-
-      return videos.take(limit).toList();
-    } catch (error) {
-      throw ProfileVideoServiceException(
-        'প্রোফাইলের ভিডিও লোড করা যায়নি।',
-        error,
-      );
     }
+
+    return isNowFollowing;
   }
-}
 
-class ProfileVideoServiceException implements Exception {
-  final String message;
-  final Object? originalError;
+  Future<void> createNotification({
+    required String recipientUserId,
+    required String type,
+    required String message,
+  }) async {
+    final currentUser = _auth.currentUser;
 
-  const ProfileVideoServiceException(
-    this.message, [
-    this.originalError,
-  ]);
+    if (currentUser == null ||
+        recipientUserId == currentUser.uid) {
+      return;
+    }
 
-  @override
-  String toString() => message;
+    final notificationRef = _db
+        .collection('users')
+        .doc(recipientUserId)
+        .collection('notifications')
+        .doc();
+
+    await notificationRef.set({
+      'id': notificationRef.id,
+      'type': type,
+      'message': message,
+      'fromUserId': currentUser.uid,
+      'createdAt': FieldValue.serverTimestamp(),
+      'read': false,
+    });
+  }
 }
