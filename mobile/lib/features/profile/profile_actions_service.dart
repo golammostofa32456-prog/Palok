@@ -127,3 +127,4 @@ Future<void> createNotification({
     'read': false,
   });
 }
+}
