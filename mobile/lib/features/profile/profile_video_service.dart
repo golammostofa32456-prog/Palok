@@ -1,16 +1,14 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 import '../video/video_post.dart';
 
 class ProfileVideoService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   Future<List<VideoPost>> getUserVideos(String userId) async {
     if (userId.trim().isEmpty) {
-      return [];
+      return <VideoPost>[];
     }
 
     final snapshot = await _db
@@ -18,41 +16,22 @@ class ProfileVideoService {
         .where('userId', isEqualTo: userId)
         .get();
 
-    final videos = snapshot.docs.map((doc) {
-      final data = doc.data();
-
-      return VideoPost(
-        id: doc.id,
-        videoUrl: (data['videoUrl'] ?? '').toString(),
-        userId: (data['userId'] ?? userId).toString(),
-        username: (data['username'] ?? 'PALOK User').toString(),
-        caption: (data['caption'] ?? '').toString(),
-        hashtags: _hashtagsToString(data['hashtags']),
-        likeCount: _toInt(data['likeCount']),
-        commentCount: _toInt(data['commentCount']),
-        saveCount: _toInt(data['saveCount']),
-        shareCount: _toInt(data['shareCount']),
-        thumbnailUrl: (data['thumbnailUrl'] ?? '').toString(),
-        viewCount: _toInt(data['viewCount']),
-      );
-    }).where((video) => video.videoUrl.trim().isNotEmpty).toList();
+    final videos = snapshot.docs
+        .map((doc) => VideoPost.fromMap(doc.id, doc.data()))
+        .where((video) => video.videoUrl.trim().isNotEmpty)
+        .toList();
 
     videos.sort((a, b) {
-      return b.videoUrl.compareTo(a.videoUrl);
+      final aDate = a.createdAt;
+      final bDate = b.createdAt;
+
+      if (aDate == null && bDate == null) return 0;
+      if (aDate == null) return 1;
+      if (bDate == null) return -1;
+
+      return bDate.compareTo(aDate);
     });
 
     return videos;
-  }
-
-  int _toInt(dynamic value) {
-    if (value is num) return value.toInt();
-    return int.tryParse(value?.toString() ?? '') ?? 0;
-  }
-
-  String _hashtagsToString(dynamic value) {
-    if (value is List) {
-      return value.map((item) => item.toString()).join(' ');
-    }
-    return value?.toString() ?? '';
   }
 }
