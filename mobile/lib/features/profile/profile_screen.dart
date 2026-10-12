@@ -40,9 +40,15 @@ class ProfileScreen extends StatelessWidget {
           );
         }
 
-        if (snapshot.hasError || snapshot.data == null) {
-          return _messageScreen('প্রোফাইল লোড করা যায়নি');
-        }
+        if (snapshot.hasError) {
+  return _messageScreen(
+    'প্রোফাইল লোডের ত্রুটি:\n${snapshot.error}',
+  );
+}
+
+if (snapshot.data == null) {
+  return _messageScreen('প্রোফাইলের তথ্য পাওয়া যায়নি');
+}
 
         final profile = snapshot.data!;
         final isOwnProfile = targetUserId == currentUserId;
