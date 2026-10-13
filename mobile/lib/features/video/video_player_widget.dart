@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
@@ -9,7 +10,7 @@ class VideoPlayerWidget extends StatelessWidget {
   const VideoPlayerWidget({
     super.key,
     required this.controller,
-    this.fit = BoxFit.contain,
+    this.fit = BoxFit.cover,
     this.showLoading = true,
   });
 
@@ -40,14 +41,15 @@ class VideoPlayerWidget extends StatelessWidget {
     }
 
     return SizedBox.expand(
-      child: FittedBox(
-        fit: fit,
-        alignment: Alignment.center,
-        clipBehavior: Clip.hardEdge,
-        child: SizedBox(
-          width: videoWidth,
-          height: videoHeight,
-          child: VideoPlayer(controller),
+      child: ClipRect(
+        child: FittedBox(
+          fit: fit,
+          alignment: Alignment.center,
+          child: SizedBox(
+            width: videoWidth,
+            height: videoHeight,
+            child: VideoPlayer(controller),
+          ),
         ),
       ),
     );
