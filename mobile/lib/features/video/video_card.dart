@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
@@ -28,16 +29,13 @@ class VideoCard extends StatelessWidget {
     super.key,
     required this.video,
     this.controller,
-
     this.isLiked = false,
     this.isSaved = false,
     this.isFollowing = false,
-
     this.likeCount,
     this.commentCount,
     this.saveCount,
     this.shareCount,
-
     this.onLike,
     this.onComment,
     this.onSave,
@@ -46,58 +44,79 @@ class VideoCard extends StatelessWidget {
     this.onProfile,
   });
 
+  static const Color _pink = Color(0xFFFF2D55);
+
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        _buildVideo(),
-        _buildBottomGradient(),
-        _buildVideoInfo(),
-        _buildActionButtons(),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenHeight = constraints.maxHeight;
+
+        // নিচের নেভিগেশন বারের জন্য নিরাপদ জায়গা।
+        final bottomSafeSpace =
+            MediaQuery.of(context).padding.bottom + 76.0;
+
+        final actionBottom =
+            bottomSafeSpace + 12.0;
+
+        final infoBottom =
+            bottomSafeSpace + 12.0;
+
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            _buildVideo(),
+            _buildBottomGradient(),
+            _buildVideoInfo(infoBottom),
+            _buildActionButtons(actionBottom),
+          ],
+        );
+      },
     );
   }
 
-  // ============================================================
-  // VIDEO
-  // ============================================================
+  // FULL-SCREEN VIDEO
 
   Widget _buildVideo() {
-    if (controller == null) {
+    final videoController = controller;
+
+    if (videoController == null ||
+        !videoController.value.isInitialized) {
       return const ColoredBox(
         color: Colors.black,
         child: Center(
-          child: CircularProgressIndicator(),
+          child: CircularProgressIndicator(
+            color: _pink,
+          ),
         ),
       );
     }
 
     return VideoPlayerWidget(
-      controller: controller!,
+      controller: videoController,
       fit: BoxFit.cover,
     );
   }
 
-  // ============================================================
-  // GRADIENT
-  // ============================================================
+  // BOTTOM GRADIENT
 
   Widget _buildBottomGradient() {
-    return IgnorePointer(
+    return const IgnorePointer(
       child: Align(
         alignment: Alignment.bottomCenter,
-        child: Container(
-          height: 280,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.transparent,
-                Colors.black54,
-                Colors.black87,
-              ],
+        child: SizedBox(
+          height: 330,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Colors.black38,
+                  Colors.black87,
+                ],
+              ),
             ),
           ),
         ),
@@ -105,20 +124,19 @@ class VideoCard extends StatelessWidget {
     );
   }
 
-  // ============================================================
-  // VIDEO INFO
-  // ============================================================
+  // VIDEO INFORMATION
 
-  Widget _buildVideoInfo() {
+  Widget _buildVideoInfo(double bottom) {
     return Positioned(
       left: 16,
-      right: 90,
-      bottom: 24,
+      right: 88,
+      bottom: bottom,
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: onProfile,
             child: Row(
               children: [
@@ -127,8 +145,7 @@ class VideoCard extends StatelessWidget {
                   backgroundColor: Colors.white24,
                   child: Text(
                     video.username.isNotEmpty
-                        ? video.username[0]
-                            .toUpperCase()
+                        ? video.username[0].toUpperCase()
                         : 'P',
                     style: const TextStyle(
                       color: Colors.white,
@@ -136,9 +153,7 @@ class VideoCard extends StatelessWidget {
                     ),
                   ),
                 ),
-
                 const SizedBox(width: 10),
-
                 Expanded(
                   child: Text(
                     '@${video.username.replaceFirst('@', '')}',
@@ -146,29 +161,26 @@ class VideoCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
-
-                const SizedBox(width: 8),
-
-                if (!isFollowing)
+                if (!isFollowing) ...[
+                  const SizedBox(width: 8),
                   GestureDetector(
                     onTap: onFollow,
                     child: Container(
-                      padding:
-                          const EdgeInsets.symmetric(
+                      padding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
                         border: Border.all(
-                          color: Colors.white,
+                          color: _pink,
+                          width: 1.2,
                         ),
-                        borderRadius:
-                            BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: const Text(
                         'Follow',
@@ -180,43 +192,40 @@ class VideoCard extends StatelessWidget {
                       ),
                     ),
                   ),
+                ],
               ],
             ),
           ),
-
-          const SizedBox(height: 12),
-
-          if (video.caption.isNotEmpty)
+          if (video.caption.isNotEmpty) ...[
+            const SizedBox(height: 10),
             Text(
               video.caption,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 15,
+                fontSize: 14,
+                height: 1.3,
               ),
             ),
-
+          ],
           if (video.hashtags.isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(
               video.hashtags
                   .map(
-                    (tag) => tag.startsWith('#')
-                        ? tag
-                        : '#$tag',
+                    (tag) => tag.startsWith('#') ? tag : '#$tag',
                   )
                   .join(' '),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ],
-
           if (video.soundName.isNotEmpty) ...[
             const SizedBox(height: 8),
             Row(
@@ -234,7 +243,7 @@ class VideoCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 13,
+                      fontSize: 12,
                     ),
                   ),
                 ),
@@ -246,14 +255,12 @@ class VideoCard extends StatelessWidget {
     );
   }
 
-  // ============================================================
   // ACTION BUTTONS
-  // ============================================================
 
-  Widget _buildActionButtons() {
+  Widget _buildActionButtons(double bottom) {
     return Positioned(
-      right: 12,
-      bottom: 24,
+      right: 10,
+      bottom: bottom,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -267,9 +274,7 @@ class VideoCard extends StatelessWidget {
             active: isLiked,
             onTap: onLike,
           ),
-
           const SizedBox(height: 18),
-
           _ActionButton(
             icon: Icons.comment_outlined,
             label: _formatCount(
@@ -277,9 +282,7 @@ class VideoCard extends StatelessWidget {
             ),
             onTap: onComment,
           ),
-
           const SizedBox(height: 18),
-
           _ActionButton(
             icon: isSaved
                 ? Icons.bookmark
@@ -290,9 +293,7 @@ class VideoCard extends StatelessWidget {
             active: isSaved,
             onTap: onSave,
           ),
-
           const SizedBox(height: 18),
-
           _ActionButton(
             icon: Icons.share_outlined,
             label: _formatCount(
@@ -304,10 +305,6 @@ class VideoCard extends StatelessWidget {
       ),
     );
   }
-
-  // ============================================================
-  // COUNT FORMAT
-  // ============================================================
 
   String _formatCount(int count) {
     if (count >= 1000000) {
@@ -321,10 +318,6 @@ class VideoCard extends StatelessWidget {
     return count.toString();
   }
 }
-
-// ================================================================
-// ACTION BUTTON
-// ================================================================
 
 class _ActionButton extends StatelessWidget {
   final IconData icon;
@@ -352,13 +345,11 @@ class _ActionButton extends StatelessWidget {
             Icon(
               icon,
               color: active
-                  ? Colors.redAccent
+                  ? const Color(0xFFFF2D55)
                   : Colors.white,
-              size: 32,
+              size: 31,
             ),
-
             const SizedBox(height: 4),
-
             Text(
               label,
               style: const TextStyle(
