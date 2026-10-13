@@ -21,111 +21,93 @@ class HomeController extends ChangeNotifier {
   final FirebaseAuth _auth;
   final VideoService _videoService;
 
-  // ============================================================
   // FEED
-  // ============================================================
 
   final List<VideoPost> _videos = [];
 
   List<VideoPost> get videos => List.unmodifiable(_videos);
 
   bool _loading = false;
-
   bool get loading => _loading;
 
   String? _error;
-
   String? get error => _error;
 
-  // ============================================================
   // VIDEO CONTROLLERS
-  // ============================================================
 
   final Map<int, VideoPlayerController> _controllers = {};
+
+  // Prevent duplicate initialization of the same video.
+  final Map<int, Future<void>> _preparing = {};
 
   VideoPlayerController? controllerFor(int index) {
     return _controllers[index];
   }
 
-  // ============================================================
   // CURRENT VIDEO
-  // ============================================================
 
   int _currentIndex = 0;
-
   int get currentIndex => _currentIndex;
 
-  // ============================================================
+  bool _disposed = false;
+
+  void _notify() {
+    if (!_disposed) {
+      notifyListeners();
+    }
+  }
+
   // USER STATES
-  // ============================================================
 
   final Set<String> _likedIds = {};
   final Set<String> _savedIds = {};
   final Set<String> _followingIds = {};
 
-  bool isLiked(String videoId) {
-    return _likedIds.contains(videoId);
-  }
+  bool isLiked(String videoId) => _likedIds.contains(videoId);
 
-  bool isSaved(String videoId) {
-    return _savedIds.contains(videoId);
-  }
+  bool isSaved(String videoId) => _savedIds.contains(videoId);
 
-  bool isFollowing(String userId) {
-    return _followingIds.contains(userId);
-  }
+  bool isFollowing(String userId) =>
+      _followingIds.contains(userId);
 
-  // ============================================================
   // LOCAL COUNT DELTAS
-  // ============================================================
 
   final Map<String, int> _likeDeltas = {};
   final Map<String, int> _saveDeltas = {};
   final Map<String, int> _commentDeltas = {};
   final Map<String, int> _shareDeltas = {};
 
-  int likeCount(VideoPost video) {
-    return _safeCount(
-      video.likeCount + (_likeDeltas[video.id] ?? 0),
-    );
-  }
+  int _safeCount(int value) => value < 0 ? 0 : value;
 
-  int saveCount(VideoPost video) {
-    return _safeCount(
-      video.saveCount + (_saveDeltas[video.id] ?? 0),
-    );
-  }
+  int likeCount(VideoPost video) => _safeCount(
+        video.likeCount + (_likeDeltas[video.id] ?? 0),
+      );
 
-  int commentCount(VideoPost video) {
-    return _safeCount(
-      video.commentCount + (_commentDeltas[video.id] ?? 0),
-    );
-  }
+  int saveCount(VideoPost video) => _safeCount(
+        video.saveCount + (_saveDeltas[video.id] ?? 0),
+      );
 
-  int shareCount(VideoPost video) {
-    return _safeCount(
-      video.shareCount + (_shareDeltas[video.id] ?? 0),
-    );
-  }
+  int commentCount(VideoPost video) => _safeCount(
+        video.commentCount + (_commentDeltas[video.id] ?? 0),
+      );
 
-  int _safeCount(int value) {
-    return value < 0 ? 0 : value;
-  }
+  int shareCount(VideoPost video) => _safeCount(
+        video.shareCount + (_shareDeltas[video.id] ?? 0),
+      );
 
-  // ============================================================
   // LOAD
-  // ============================================================
 
   Future<void> load() async {
-    if (_loading) return;
+    if (_loading || _disposed) return;
 
     _loading = true;
     _error = null;
-
-    notifyListeners();
+    _notify();
 
     try {
       final loadedVideos = await _videoService.getVideos();
+
+      if (_disposed) return;
 
       _videos
         ..clear()
@@ -133,45 +115,45 @@ class HomeController extends ChangeNotifier {
 
       await _loadUserData();
 
+      if (_disposed) return;
+
       if (_videos.isNotEmpty) {
+        // Prepare the first video and preload nearby content.
+        unawaited(_preloadNearby(0));
         await prepareVideo(0);
       }
     } catch (e) {
       _error = e.toString();
-
       debugPrint('Home load error: $e');
     } finally {
       _loading = false;
-
-      notifyListeners();
+      _notify();
     }
   }
 
   Future<void> refresh() async {
+    if (_disposed) return;
+
     await disposeControllers();
 
     _videos.clear();
-
     _likeDeltas.clear();
     _saveDeltas.clear();
     _commentDeltas.clear();
     _shareDeltas.clear();
 
     _currentIndex = 0;
-
-    notifyListeners();
+    _notify();
 
     await load();
   }
 
-  // ============================================================
   // USER DATA
-  // ============================================================
 
   Future<void> _loadUserData() async {
     final user = _auth.currentUser;
 
-    if (user == null) return;
+    if (user == null || _disposed) return;
 
     try {
       final results = await Future.wait([
@@ -180,13 +162,11 @@ class HomeController extends ChangeNotifier {
             .doc(user.uid)
             .collection('likedVideos')
             .get(),
-
         _firestore
             .collection('users')
             .doc(user.uid)
             .collection('savedVideos')
             .get(),
-
         _firestore
             .collection('users')
             .doc(user.uid)
@@ -194,119 +174,78 @@ class HomeController extends ChangeNotifier {
             .get(),
       ]);
 
+      if (_disposed) return;
+
       _likedIds
         ..clear()
-        ..addAll(
-          results[0].docs.map((doc) => doc.id),
-        );
+        ..addAll(results[0].docs.map((doc) => doc.id));
 
       _savedIds
         ..clear()
-        ..addAll(
-          results[1].docs.map((doc) => doc.id),
-        );
+        ..addAll(results[1].docs.map((doc) => doc.id));
 
       _followingIds
         ..clear()
-        ..addAll(
-          results[2].docs.map((doc) => doc.id),
-        );
+        ..addAll(results[2].docs.map((doc) => doc.id));
     } catch (e) {
       debugPrint('Home user data error: $e');
     }
 
-    notifyListeners();
+    _notify();
   }
 
-  // ============================================================
   // VIDEO PREPARATION
-  // ============================================================
-
-  Future<void> prepareVideo(int index) async {
-    if (index < 0 || index >= _videos.length) {
-      return;
-    }
-
-    final existing = _controllers[index];
-
-    if (existing != null && existing.value.isInitialized) {
-      await existing.play();
-      return;
-    }
-
-    final video = _videos[index];
-
-    final url = video.videoUrl.trim();
-
-    if (url.isEmpty) return;
-
-    VideoPlayerController? controller;
-
-    try {
-      if (_isNetworkUrl(url)) {
-        controller = VideoPlayerController.networkUrl(
-          Uri.parse(url),
-        );
-      } else {
-        controller = VideoPlayerController.asset(url);
-      }
-
-      _controllers[index] = controller;
-
-      await controller.initialize();
-
-      await controller.setLooping(true);
-
-      if (index == _currentIndex) {
-        await controller.play();
-      }
-
-      notifyListeners();
-
-      unawaited(
-        _preloadNearby(index),
-      );
-    } catch (e) {
-      debugPrint(
-        'Video initialization failed at index $index: $e',
-      );
-
-      _controllers.remove(index);
-
-      await controller?.dispose();
-
-      notifyListeners();
-    }
-  }
 
   bool _isNetworkUrl(String url) {
     return url.startsWith('http://') ||
         url.startsWith('https://');
   }
 
-  // ============================================================
-  // PRELOAD
-  // ============================================================
-
-  Future<void> _preloadNearby(int index) async {
-    final nextIndex = index + 1;
-    final previousIndex = index - 1;
-
-    if (nextIndex < _videos.length) {
-      unawaited(
-        _prepareWithoutPlaying(nextIndex),
+  VideoPlayerController _createController(String url) {
+    if (_isNetworkUrl(url)) {
+      return VideoPlayerController.networkUrl(
+        Uri.parse(url),
       );
     }
 
-    if (previousIndex >= 0) {
-      unawaited(
-        _prepareWithoutPlaying(previousIndex),
-      );
+    return VideoPlayerController.asset(url);
+  }
+
+  Future<void> prepareVideo(int index) async {
+    if (_disposed || index < 0 || index >= _videos.length) {
+      return;
+    }
+
+    final url = _videos[index].videoUrl.trim();
+    if (url.isEmpty) return;
+
+    await _ensurePrepared(index);
+
+    if (_disposed || index != _currentIndex) return;
+
+    final controller = _controllers[index];
+
+    if (controller == null ||
+        !controller.value.isInitialized) {
+      return;
+    }
+
+    try {
+      // Don't wait for unrelated videos to pause.
+      await controller.play();
+    } catch (e) {
+      debugPrint('Video play error at index $index: $e');
+    }
+
+    _notify();
+
+    if (!_disposed) {
+      unawaited(_preloadNearby(index));
     }
   }
 
-  Future<void> _prepareWithoutPlaying(int index) async {
-    if (index < 0 || index >= _videos.length) {
+  Future<void> _ensurePrepared(int index) async {
+    if (_disposed || index < 0 || index >= _videos.length) {
       return;
     }
 
@@ -316,71 +255,146 @@ class HomeController extends ChangeNotifier {
       return;
     }
 
-    final url = _videos[index].videoUrl.trim();
+    // Reuse an initialization already in progress.
+    final pending = _preparing[index];
 
+    if (pending != null) {
+      await pending;
+      return;
+    }
+
+    final url = _videos[index].videoUrl.trim();
     if (url.isEmpty) return;
 
+    late final Future<void> task;
+
+    task = _initializeController(index, url);
+
+    _preparing[index] = task;
+
+    try {
+      await task;
+    } finally {
+      if (identical(_preparing[index], task)) {
+        _preparing.remove(index);
+      }
+    }
+  }
+
+  Future<void> _initializeController(
+    int index,
+    String url,
+  ) async {
     VideoPlayerController? controller;
 
     try {
-      if (_isNetworkUrl(url)) {
-        controller = VideoPlayerController.networkUrl(
-          Uri.parse(url),
-        );
-      } else {
-        controller = VideoPlayerController.asset(url);
-      }
-
+      controller = _createController(url);
       _controllers[index] = controller;
 
       await controller.initialize();
 
+      if (_disposed ||
+          !identical(_controllers[index], controller)) {
+        await controller.dispose();
+        return;
+      }
+
       await controller.setLooping(true);
 
-      await controller.pause();
+      if (_disposed ||
+          !identical(_controllers[index], controller)) {
+        return;
+      }
 
-      notifyListeners();
+      // Play only if this is still the selected page.
+      if (index == _currentIndex) {
+        await controller.play();
+      } else {
+        await controller.pause();
+      }
+
+      _notify();
     } catch (e) {
       debugPrint(
-        'Video preload failed at index $index: $e',
+        'Video initialization failed at index $index: $e',
       );
 
-      _controllers.remove(index);
+      if (identical(_controllers[index], controller)) {
+        _controllers.remove(index);
+      }
 
-      await controller?.dispose();
+      if (controller != null) {
+        try {
+          await controller.dispose();
+        } catch (_) {}
+      }
+
+      _notify();
     }
   }
 
-  // ============================================================
+  // PRELOAD NEARBY VIDEOS
+
+  Future<void> _preloadNearby(int index) async {
+    if (_disposed) return;
+
+    // Preload the next video first to reduce data and memory use.
+    final nextIndex = index + 1;
+
+    if (nextIndex < _videos.length) {
+      await _ensurePrepared(nextIndex);
+    }
+  }
+
   // PAGE CHANGED
-  // ============================================================
 
   Future<void> onVideoChanged(int index) async {
-    if (index < 0 || index >= _videos.length) {
+    if (_disposed || index < 0 || index >= _videos.length) {
       return;
     }
 
     _currentIndex = index;
 
-    for (final entry in _controllers.entries) {
+    final target = _controllers[index];
+
+    // Pause other videos without serially awaiting each pause.
+    for (final entry in _controllers.entries.toList()) {
       if (entry.key != index &&
-          entry.value.value.isInitialized) {
-        await entry.value.pause();
+          entry.value.value.isInitialized &&
+          entry.value.value.isPlaying) {
+        unawaited(
+          entry.value.pause().catchError((Object e) {
+            debugPrint('Video pause error: $e');
+          }),
+        );
       }
     }
 
-    await prepareVideo(index);
+    // If preloaded, play immediately; otherwise initialize it.
+    if (target != null && target.value.isInitialized) {
+      try {
+        await target.play();
+      } catch (e) {
+        debugPrint('Video play error at index $index: $e');
+      }
+    } else {
+      await prepareVideo(index);
+    }
+
+    if (_disposed || index != _currentIndex) return;
 
     _disposeFarControllers(index);
+    _notify();
 
-    notifyListeners();
+    // Start preloading the next page in the background.
+    unawaited(_preloadNearby(index));
   }
 
-  // ============================================================
   // PLAY / PAUSE
-  // ============================================================
 
   Future<void> togglePlay() async {
+    if (_disposed) return;
+
     final controller = _controllers[_currentIndex];
 
     if (controller == null ||
@@ -389,13 +403,17 @@ class HomeController extends ChangeNotifier {
       return;
     }
 
-    if (controller.value.isPlaying) {
-      await controller.pause();
-    } else {
-      await controller.play();
+    try {
+      if (controller.value.isPlaying) {
+        await controller.pause();
+      } else {
+        await controller.play();
+      }
+    } catch (e) {
+      debugPrint('Toggle play error: $e');
     }
 
-    notifyListeners();
+    _notify();
   }
 
   bool isPlaying(int index) {
@@ -409,35 +427,26 @@ class HomeController extends ChangeNotifier {
     return controller.value.isPlaying;
   }
 
-  // ============================================================
   // LIKE
-  // ============================================================
 
   Future<bool> toggleLike(VideoPost video) async {
     final user = _auth.currentUser;
-
-    if (user == null) {
-      return false;
-    }
+    if (user == null) return false;
 
     final videoId = video.id;
-
-    final currentlyLiked =
-        _likedIds.contains(videoId);
+    final currentlyLiked = _likedIds.contains(videoId);
 
     if (currentlyLiked) {
       _likedIds.remove(videoId);
-
       _likeDeltas[videoId] =
           (_likeDeltas[videoId] ?? 0) - 1;
     } else {
       _likedIds.add(videoId);
-
       _likeDeltas[videoId] =
           (_likeDeltas[videoId] ?? 0) + 1;
     }
 
-    notifyListeners();
+    _notify();
 
     try {
       final likedRef = _firestore
@@ -474,53 +483,40 @@ class HomeController extends ChangeNotifier {
     } catch (e) {
       if (currentlyLiked) {
         _likedIds.add(videoId);
-
         _likeDeltas[videoId] =
             (_likeDeltas[videoId] ?? 0) + 1;
       } else {
         _likedIds.remove(videoId);
-
         _likeDeltas[videoId] =
             (_likeDeltas[videoId] ?? 0) - 1;
       }
 
-      notifyListeners();
-
+      _notify();
       debugPrint('Like error: $e');
-
       return false;
     }
   }
 
-  // ============================================================
   // SAVE
-  // ============================================================
 
   Future<bool> toggleSave(VideoPost video) async {
     final user = _auth.currentUser;
-
-    if (user == null) {
-      return false;
-    }
+    if (user == null) return false;
 
     final videoId = video.id;
-
-    final currentlySaved =
-        _savedIds.contains(videoId);
+    final currentlySaved = _savedIds.contains(videoId);
 
     if (currentlySaved) {
       _savedIds.remove(videoId);
-
       _saveDeltas[videoId] =
           (_saveDeltas[videoId] ?? 0) - 1;
     } else {
       _savedIds.add(videoId);
-
       _saveDeltas[videoId] =
           (_saveDeltas[videoId] ?? 0) + 1;
     }
 
-    notifyListeners();
+    _notify();
 
     try {
       final savedRef = _firestore
@@ -557,42 +553,29 @@ class HomeController extends ChangeNotifier {
     } catch (e) {
       if (currentlySaved) {
         _savedIds.add(videoId);
-
         _saveDeltas[videoId] =
             (_saveDeltas[videoId] ?? 0) + 1;
       } else {
         _savedIds.remove(videoId);
-
         _saveDeltas[videoId] =
             (_saveDeltas[videoId] ?? 0) - 1;
       }
 
-      notifyListeners();
-
+      _notify();
       debugPrint('Save error: $e');
-
       return false;
     }
   }
 
-  // ============================================================
   // FOLLOW
-  // ============================================================
 
   Future<bool> toggleFollow(VideoPost video) async {
     final user = _auth.currentUser;
-
-    if (user == null) {
-      return false;
-    }
+    if (user == null) return false;
 
     final targetUserId = video.ownerId.trim();
 
-    if (targetUserId.isEmpty) {
-      return false;
-    }
-
-    if (targetUserId == user.uid) {
+    if (targetUserId.isEmpty || targetUserId == user.uid) {
       return false;
     }
 
@@ -605,7 +588,7 @@ class HomeController extends ChangeNotifier {
       _followingIds.add(targetUserId);
     }
 
-    notifyListeners();
+    _notify();
 
     try {
       final followingRef = _firestore
@@ -631,53 +614,37 @@ class HomeController extends ChangeNotifier {
         _followingIds.remove(targetUserId);
       }
 
-      notifyListeners();
-
+      _notify();
       debugPrint('Follow error: $e');
-
       return false;
     }
   }
 
-  // ============================================================
   // COMMENT COUNT
-  // ============================================================
 
-  void addCommentCount(
-    String videoId,
-    int amount,
-  ) {
+  void addCommentCount(String videoId, int amount) {
     if (amount == 0) return;
 
     _commentDeltas[videoId] =
         (_commentDeltas[videoId] ?? 0) + amount;
 
-    notifyListeners();
+    _notify();
   }
 
-  // ============================================================
   // ADD COMMENT
-  // ============================================================
 
   Future<bool> addComment(
     VideoPost video,
     String text,
   ) async {
     final user = _auth.currentUser;
-
-    if (user == null) {
-      return false;
-    }
+    if (user == null) return false;
 
     final cleanText = text.trim();
-
-    if (cleanText.isEmpty) {
-      return false;
-    }
+    if (cleanText.isEmpty) return false;
 
     final videoId = video.id;
 
-    // Demo video হলে Firestore video document নেই।
     if (_isDemoVideo(videoId)) {
       addCommentCount(videoId, 1);
       return true;
@@ -691,12 +658,12 @@ class HomeController extends ChangeNotifier {
 
       final data = userDoc.data();
 
-      final username =
-          (data?['username'] ??
-                  data?['displayName'] ??
-                  user.displayName ??
-                  'PALOK User')
-              .toString();
+      final username = (
+        data?['username'] ??
+        data?['displayName'] ??
+        user.displayName ??
+        'PALOK User'
+      ).toString();
 
       final commentRef = _firestore
           .collection('videos')
@@ -723,18 +690,14 @@ class HomeController extends ChangeNotifier {
       await batch.commit();
 
       addCommentCount(videoId, 1);
-
       return true;
     } catch (e) {
       debugPrint('Comment error: $e');
-
       return false;
     }
   }
 
-  // ============================================================
   // COMMENT STREAM
-  // ============================================================
 
   Stream<QuerySnapshot<Map<String, dynamic>>> commentsStream(
     String videoId,
@@ -743,16 +706,11 @@ class HomeController extends ChangeNotifier {
         .collection('videos')
         .doc(videoId)
         .collection('comments')
-        .orderBy(
-          'createdAt',
-          descending: false,
-        )
+        .orderBy('createdAt', descending: false)
         .snapshots();
   }
 
-  // ============================================================
   // SHARE
-  // ============================================================
 
   Future<bool> addShare(VideoPost video) async {
     final videoId = video.id;
@@ -760,7 +718,7 @@ class HomeController extends ChangeNotifier {
     _shareDeltas[videoId] =
         (_shareDeltas[videoId] ?? 0) + 1;
 
-    notifyListeners();
+    _notify();
 
     try {
       if (!_isDemoVideo(videoId)) {
@@ -790,73 +748,68 @@ class HomeController extends ChangeNotifier {
       _shareDeltas[videoId] =
           (_shareDeltas[videoId] ?? 0) - 1;
 
-      notifyListeners();
-
+      _notify();
       debugPrint('Share error: $e');
-
       return false;
     }
   }
 
-  // ============================================================
   // DEMO VIDEO
-  // ============================================================
 
-  bool _isDemoVideo(String id) {
-    return id.startsWith('demo_');
-  }
+  bool _isDemoVideo(String id) => id.startsWith('demo_');
 
-  // ============================================================
   // DISPOSE FAR CONTROLLERS
-  // ============================================================
 
-  void _disposeFarControllers(
-    int currentIndex,
-  ) {
+  void _disposeFarControllers(int currentIndex) {
     final indexesToRemove = <int>[];
 
     for (final index in _controllers.keys) {
-      if ((index - currentIndex).abs() > 1) {
+      if ((index - currentIndex).abs() > 1 &&
+          !_preparing.containsKey(index)) {
         indexesToRemove.add(index);
       }
     }
 
     for (final index in indexesToRemove) {
-      final controller =
-          _controllers.remove(index);
+      final controller = _controllers.remove(index);
 
-      unawaited(
-        controller?.dispose(),
-      );
+      if (controller != null) {
+        unawaited(controller.dispose());
+      }
     }
   }
 
-  // ============================================================
-  // DISPOSE CONTROLLERS
-  // ============================================================
+  // DISPOSE ALL CONTROLLERS
 
   Future<void> disposeControllers() async {
     final controllers =
-        List<VideoPlayerController>.from(
-      _controllers.values,
-    );
+        List<VideoPlayerController>.from(_controllers.values);
 
     _controllers.clear();
+    _preparing.clear();
 
     for (final controller in controllers) {
-      await controller.dispose();
+      try {
+        await controller.dispose();
+      } catch (e) {
+        debugPrint('Controller dispose error: $e');
+      }
     }
   }
 
   @override
   void dispose() {
-    for (final controller in _controllers.values) {
-      unawaited(
-        controller.dispose(),
-      );
-    }
+    _disposed = true;
+
+    final controllers =
+        List<VideoPlayerController>.from(_controllers.values);
 
     _controllers.clear();
+    _preparing.clear();
+
+    for (final controller in controllers) {
+      unawaited(controller.dispose());
+    }
 
     super.dispose();
   }
