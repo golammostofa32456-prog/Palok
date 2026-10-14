@@ -3072,18 +3072,17 @@ onProfileTap: () {
         top: false,
         child: Container(
           height: 78,
-          decoration:
-              const BoxDecoration(
-            color: Colors.black,
-            border:
-                Border(
-              top: BorderSide(
-                color:
-                    Colors.white12,
-                width: 0.7,
-              ),
-            ),
-          ),
+          decoration: const BoxDecoration(
+  gradient: LinearGradient(
+    begin: Alignment.bottomCenter,
+    end: Alignment.topCenter,
+    colors: [
+      Colors.black87,
+      Colors.black54,
+      Colors.transparent,
+    ],
+  ),
+
           child: Row(
             children: [
               Expanded(
