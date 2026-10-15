@@ -3063,133 +3063,98 @@ onProfileTap: () {
   // BOTTOM NAVIGATION
   // ============================================================
 
-  Widget _buildBottomNavigation() {
-    return Positioned(
-      left: 0,
-      right: 0,
-      bottom: 0,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          height: 78,
-          decoration: const BoxDecoration(
-  gradient: LinearGradient(
-    begin: Alignment.bottomCenter,
-    end: Alignment.topCenter,
-    colors: [
-      Colors.black87,
-      Colors.black54,
-      Colors.transparent,
-    ],
-  ),
-
-          child: Row(
-            children: [
-              Expanded(
-                child:
-                    _bottomItem(
-                  icon:
-                      Icons.home_rounded,
-                  label:
-                      'Home',
-                  index: 0,
-                ),
+  
+Widget _buildBottomNavigation() {
+  return Positioned(
+    left: 0,
+    right: 0,
+    bottom: 0,
+    child: SafeArea(
+      top: false,
+      child: Container(
+        height: 78,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+            colors: [
+              Colors.black87,
+              Colors.black54,
+              Colors.transparent,
+            ],
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: _bottomItem(
+                icon: Icons.home_rounded,
+                label: 'Home',
+                index: 0,
               ),
-              Expanded(
-                child:
-                    _bottomItem(
-                  icon: Icons
-                      .people_alt_outlined,
-                  label:
-                      'Friends',
-                  index: 1,
-                ),
+            ),
+            Expanded(
+              child: _bottomItem(
+                icon: Icons.people_alt_outlined,
+                label: 'Friends',
+                index: 1,
               ),
-              SizedBox(
-                width: 92,
-                child: Center(
-                  child:
-                      GestureDetector(
-                    onTap: () {
-                      unawaited(
-                        _selectBottom(
-                          2,
-                        ),
-                      );
-                    },
-                    child:
-                        Container(
-                      width: 72,
-                      height: 48,
-                      decoration:
-                          BoxDecoration(
-                        gradient:
-                            const LinearGradient(
-                          colors: [
-                            _cyan,
-                            _pink,
-                          ],
-                          begin:
-                              Alignment
-                                  .centerLeft,
-                          end:
-                              Alignment
-                                  .centerRight,
-                        ),
-                        borderRadius:
-                            BorderRadius
-                                .circular(
-                          16,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _pink
-                                .withOpacity(
-                              0.20,
-                            ),
-                            blurRadius:
-                                15,
-                          ),
+            ),
+            SizedBox(
+              width: 92,
+              child: Center(
+                child: GestureDetector(
+                  onTap: () async {
+                    await _selectBottom(2);
+                  },
+                  child: Container(
+                    width: 72,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          _cyan,
+                          _pink,
                         ],
                       ),
-                      child:
-                          const Icon(
-                        Icons
-                            .add_rounded,
-                        color:
-                            Colors.white,
-                        size: 30,
-                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _pink.withOpacity(0.20),
+                          blurRadius: 15,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.add_rounded,
+                      color: Colors.white,
+                      size: 30,
                     ),
                   ),
                 ),
               ),
-              Expanded(
-                child:
-                    _bottomItem(
-                  icon: Icons
-                      .chat_bubble_outline_rounded,
-                  label:
-                      'Inbox',
-                  index: 3,
-                ),
+            ),
+            Expanded(
+              child: _bottomItem(
+                icon: Icons.chat_bubble_outline_rounded,
+                label: 'Inbox',
+                index: 3,
               ),
-              Expanded(
-                child:
-                    _bottomItem(
-                  icon: Icons
-                      .person_outline_rounded,
-                  label:
-                      'Profile',
-                  index: 4,
-                ),
+            ),
+            Expanded(
+              child: _bottomItem(
+                icon: Icons.person_outline_rounded,
+                label: 'Profile',
+                index: 4,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
+
 
   Widget _bottomItem({
     required IconData icon,
