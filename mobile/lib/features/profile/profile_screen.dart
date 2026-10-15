@@ -87,18 +87,16 @@ class ProfileScreen extends StatelessWidget {
           ),
           body: SingleChildScrollView(
             child: Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // TikTok Style Header Section (Left: Text/Stats, Right: Image)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Row(
-                    crossAxisAlignment: CrossAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Left Side: Name, Username, Stats
                       Expanded(
                         child: Column(
-                          crossAxisAlignment: CrossAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               displayName,
@@ -117,7 +115,6 @@ class ProfileScreen extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            // Stats Row
                             Row(
                               children: [
                                 _buildStatItem('${profile.followingCount}', 'অনুসরণ করছেন'),
@@ -130,8 +127,6 @@ class ProfileScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-
-                      // Right Side: Profile Picture
                       Container(
                         width: 90,
                         height: 90,
@@ -152,10 +147,7 @@ class ProfileScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 16),
-
-                // Follow / Edit Profile Action Bar (TikTok Style)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Row(
@@ -205,10 +197,7 @@ class ProfileScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 12),
-
-                // Bio
                 if (profile.bio.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -220,10 +209,7 @@ class ProfileScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-
                 const SizedBox(height: 16),
-
-                // Grid Navigation Tabs
                 const Divider(height: 1, color: Colors.black12),
                 Row(
                   children: [
@@ -246,8 +232,6 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ],
                 ),
-
-                // Video Grid List
                 _buildVideos(targetUserId),
               ],
             ),
@@ -390,7 +374,7 @@ class ProfileScreen extends StatelessWidget {
 
   static Widget _buildStatItem(String count, String label) {
     return Column(
-      crossAxisAlignment: CrossAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           count,
@@ -409,7 +393,6 @@ class ProfileScreen extends StatelessWidget {
   }
 }
 
-// TikTok Red Follow Button Component
 class _TikTokFollowButton extends StatefulWidget {
   final String targetUserId;
 
@@ -497,7 +480,7 @@ class _ProfileVideoPlayerScreenState extends State<_ProfileVideoPlayerScreen> {
     super.initState();
     _controller = VideoPlayerController.networkUrl(Uri.parse(widget.video.videoUrl.trim()))
       ..initialize().then((_) {
-        setState(() {});
+        if (mounted) setState(() {});
         _controller?.play();
         _controller?.setLooping(true);
       });
