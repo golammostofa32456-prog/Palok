@@ -33,22 +33,20 @@ class ProfileScreen extends StatelessWidget {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
-            backgroundColor: Colors.black,
+            backgroundColor: Colors.white,
             body: Center(
-              child: CircularProgressIndicator(color: Colors.pink),
+              child: CircularProgressIndicator(color: Color(0xFFFE2C55)),
             ),
           );
         }
 
         if (snapshot.hasError) {
-  return _messageScreen(
-    'প্রোফাইল লোডের ত্রুটি:\n${snapshot.error}',
-  );
-}
+          return _messageScreen('প্রোফাইল লোডের ত্রুটি:\n${snapshot.error}');
+        }
 
-if (snapshot.data == null) {
-  return _messageScreen('প্রোফাইলের তথ্য পাওয়া যায়নি');
-}
+        if (snapshot.data == null) {
+          return _messageScreen('প্রোফাইলের তথ্য পাওয়া যায়নি');
+        }
 
         final profile = snapshot.data!;
         final isOwnProfile = targetUserId == currentUserId;
@@ -67,51 +65,17 @@ if (snapshot.data == null) {
             cleanUsername.isNotEmpty ? '@$cleanUsername' : '@${profile.id}';
 
         return Scaffold(
-          backgroundColor: Colors.black,
+          backgroundColor: Colors.white,
           appBar: AppBar(
-            backgroundColor: Colors.black,
+            backgroundColor: Colors.white,
             elevation: 0,
             leading: IconButton(
-              tooltip: 'ফিরে যান',
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              icon: const Icon(Icons.arrow_back, color: Colors.black),
               onPressed: () => Navigator.maybePop(context),
             ),
-            title: Text(
-              displayName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            centerTitle: true,
             actions: [
               IconButton(
-                tooltip: 'নোটিফিকেশন',
-                icon: const Icon(
-                  Icons.notifications_none,
-                  color: Colors.white,
-                ),
-                onPressed: () {
-                  if (FirebaseAuth.instance.currentUser == null) {
-                    _showMessage(context, 'নোটিফিকেশন দেখতে লগইন করুন');
-                    return;
-                  }
-
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const ProfileNotificationsScreen(),
-                    ),
-                  );
-                },
-              ),
-              IconButton(
-                tooltip: 'প্রোফাইল শেয়ার',
-                icon: const Icon(
-                  Icons.share_outlined,
-                  color: Colors.white,
-                ),
+                icon: const Icon(Icons.share_outlined, color: Colors.black),
                 onPressed: () => _shareProfile(
                   context,
                   displayName,
@@ -119,219 +83,171 @@ if (snapshot.data == null) {
                   profile.id,
                 ),
               ),
-              PopupMenuButton<String>(
-                tooltip: 'আরও অপশন',
-                color: const Color(0xFF242424),
-                icon: const Icon(Icons.more_vert, color: Colors.white),
-                onSelected: (value) async {
-                  switch (value) {
-                    case 'share':
-                      await _shareProfile(
-                        context,
-                        displayName,
-                        username,
-                        profile.id,
-                      );
-                      break;
-
-                    case 'refresh':
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute<void>(
-                          builder: (_) => ProfileScreen(
-                            userId: targetUserId,
-                          ),
-                        ),
-                      );
-                      break;
-
-                    case 'copy_id':
-                      await Share.share(
-                        'PALOK User ID: ${profile.id}',
-                      );
-                      break;
-
-                    case 'report':
-                      await _reportProfile(
-                        context,
-                        targetUserId,
-                        displayName,
-                      );
-                      break;
-                  }
-                },
-                itemBuilder: (_) => [
-                  const PopupMenuItem<String>(
-                    value: 'share',
-                    child: _MenuItem(
-                      icon: Icons.share_outlined,
-                      label: 'প্রোফাইল শেয়ার',
-                    ),
-                  ),
-                  if (isOwnProfile)
-                    const PopupMenuItem<String>(
-                      value: 'refresh',
-                      child: _MenuItem(
-                        icon: Icons.refresh,
-                        label: 'প্রোফাইল রিফ্রেশ',
-                      ),
-                    )
-                  else ...[
-                    const PopupMenuItem<String>(
-                      value: 'copy_id',
-                      child: _MenuItem(
-                        icon: Icons.copy,
-                        label: 'User ID শেয়ার',
-                      ),
-                    ),
-                    const PopupMenuItem<String>(
-                      value: 'report',
-                      child: _MenuItem(
-                        icon: Icons.flag_outlined,
-                        label: 'প্রোফাইল রিপোর্ট',
-                      ),
-                    ),
-                  ],
-                ],
-              ),
             ],
           ),
           body: SingleChildScrollView(
             child: Column(
+              crossAxisAlignment: CrossAlignment.start,
               children: [
-                const SizedBox(height: 10),
-                Container(
-                  width: 96,
-                  height: 96,
-                  padding: const EdgeInsets.all(3),
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.cyan,
-                        Colors.pink,
-                        Colors.purple,
-                      ],
-                    ),
-                  ),
-                  child: CircleAvatar(
-                    backgroundColor: const Color(0xFF1E1E1E),
-                    backgroundImage: profile.profileImageUrl.trim().isNotEmpty
-                        ? NetworkImage(profile.profileImageUrl)
-                        : null,
-                    child: profile.profileImageUrl.trim().isEmpty
-                        ? const Icon(
-                            Icons.person,
-                            size: 55,
-                            color: Colors.white,
-                          )
-                        : null,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  username,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildStatItem(
-                      '${profile.followingCount}',
-                      'Following',
-                    ),
-                    _buildDivider(),
-                    _buildStatItem(
-                      '${profile.followersCount}',
-                      'Followers',
-                    ),
-                    _buildDivider(),
-                    _buildStatItem(
-                      '${profile.likesCount}',
-                      'Likes',
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                if (isOwnProfile)
-                  OutlinedButton(
-                    onPressed: () {
-                      _showMessage(
-                        context,
-                        'Edit Profile স্ক্রিন এখনো যুক্ত করা হয়নি',
-                      );
-                    },
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: Colors.grey.shade800),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 36,
-                        vertical: 12,
-                      ),
-                      backgroundColor: const Color(0xFF1A1A1A),
-                    ),
-                    child: const Text(
-                      'Edit Profile',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                      ),
-                    ),
-                  )
-                else
-                  _FollowButton(
-                    key: ValueKey(targetUserId),
-                    targetUserId: targetUserId,
-                  ),
-                const SizedBox(height: 14),
+                // TikTok Style Header Section (Left: Text/Stats, Right: Image)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: Text(
-                    profile.bio,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.grey,
-                      fontSize: 14,
-                    ),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    crossAxisAlignment: CrossAlignment.start,
+                    children: [
+                      // Left Side: Name, Username, Stats
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAlignment.start,
+                          children: [
+                            Text(
+                              displayName,
+                              style: const TextStyle(
+                                color: Colors.black,
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              username,
+                              style: const TextStyle(
+                                color: Colors.black54,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            // Stats Row
+                            Row(
+                              children: [
+                                _buildStatItem('${profile.followingCount}', 'অনুসরণ করছেন'),
+                                const SizedBox(width: 15),
+                                _buildStatItem('${profile.followersCount}', 'অনুসরণকারীগণ'),
+                                const SizedBox(width: 15),
+                                _buildStatItem('${profile.likesCount}', 'লাইক'),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Right Side: Profile Picture
+                      Container(
+                        width: 90,
+                        height: 90,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.black12, width: 1),
+                        ),
+                        child: CircleAvatar(
+                          backgroundColor: Colors.grey.shade200,
+                          backgroundImage: profile.profileImageUrl.trim().isNotEmpty
+                              ? NetworkImage(profile.profileImageUrl)
+                              : null,
+                          child: profile.profileImageUrl.trim().isEmpty
+                              ? const Icon(Icons.person, size: 50, color: Colors.grey)
+                              : null,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 20),
-                const Divider(color: Colors.white12, height: 1),
-                const Row(
+
+                const SizedBox(height: 16),
+
+                // Follow / Edit Profile Action Bar (TikTok Style)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: isOwnProfile
+                            ? OutlinedButton(
+                                onPressed: () {
+                                  _showMessage(context, 'Edit Profile স্ক্রিন এখনো যুক্ত করা হয়নি');
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(color: Colors.grey.shade300),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  backgroundColor: const Color(0xFFF1F1F2),
+                                ),
+                                child: const Text(
+                                  'প্রোফাইল এডিট করুন',
+                                  style: TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              )
+                            : _TikTokFollowButton(
+                                targetUserId: targetUserId,
+                              ),
+                      ),
+                      if (!isOwnProfile) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          height: 44,
+                          width: 44,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F1F2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: IconButton(
+                            icon: const Icon(Icons.person_add_outlined, color: Colors.black),
+                            onPressed: () {},
+                          ),
+                        ),
+                      ]
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // Bio
+                if (profile.bio.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Text(
+                      profile.bio,
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+
+                const SizedBox(height: 16),
+
+                // Grid Navigation Tabs
+                const Divider(height: 1, color: Colors.black12),
+                Row(
                   children: [
                     Expanded(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Icon(Icons.grid_on, color: Colors.white),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: const BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(color: Colors.black, width: 2),
+                          ),
+                        ),
+                        child: const Icon(Icons.menu, color: Colors.black),
                       ),
                     ),
-                    Expanded(
+                    const Expanded(
                       child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Icon(
-                          Icons.favorite_border,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Icon(
-                          Icons.lock_outline,
-                          color: Colors.grey,
-                        ),
+                        padding: EdgeInsets.symmetric(vertical: 10),
+                        child: Icon(Icons.favorite_border, color: Colors.grey),
                       ),
                     ),
                   ],
                 ),
+
+                // Video Grid List
                 _buildVideos(targetUserId),
               ],
             ),
@@ -349,86 +265,9 @@ if (snapshot.data == null) {
   ) async {
     try {
       await Share.share(
-        'PALOK-এ $displayName-এর প্রোফাইল\n'
-        '$username\n'
-        'User ID: $profileId',
-        subject: '$displayName-এর PALOK প্রোফাইল',
+        'PALOK-এ $displayName-এর প্রোফাইল\n$username\nUser ID: $profileId',
       );
-    } catch (_) {
-      if (context.mounted) {
-        _showMessage(context, 'প্রোফাইল শেয়ার করা যায়নি');
-      }
-    }
-  }
-
-  static Future<void> _reportProfile(
-    BuildContext context,
-    String targetUserId,
-    String displayName,
-  ) async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-
-    if (currentUser == null) {
-      _showMessage(context, 'রিপোর্ট করতে আগে লগইন করুন');
-      return;
-    }
-
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        return SimpleDialog(
-          backgroundColor: const Color(0xFF222222),
-          title: const Text(
-            'প্রোফাইল রিপোর্ট করুন',
-            style: TextStyle(color: Colors.white),
-          ),
-          children: [
-            _reportOption(dialogContext, 'spam', 'স্প্যাম'),
-            _reportOption(dialogContext, 'abuse', 'হয়রানি বা অপব্যবহার'),
-            _reportOption(dialogContext, 'fake', 'ভুয়া প্রোফাইল'),
-            _reportOption(dialogContext, 'other', 'অন্যান্য'),
-          ],
-        );
-      },
-    );
-
-    if (reason == null) return;
-
-    try {
-      await FirebaseFirestore.instance.collection('profileReports').add({
-        'reportedUserId': targetUserId,
-        'reportedUsername': displayName,
-        'reporterUserId': currentUser.uid,
-        'reason': reason,
-        'createdAt': FieldValue.serverTimestamp(),
-        'status': 'pending',
-      });
-
-      if (context.mounted) {
-        _showMessage(context, 'রিপোর্ট জমা দেওয়া হয়েছে');
-      }
-    } catch (_) {
-      if (context.mounted) {
-        _showMessage(
-          context,
-          'রিপোর্ট জমা হয়নি। Firestore Rules পরীক্ষা করুন।',
-        );
-      }
-    }
-  }
-
-  static Widget _reportOption(
-    BuildContext context,
-    String value,
-    String label,
-  ) {
-    return SimpleDialogOption(
-      onPressed: () => Navigator.pop(context, value),
-      child: Text(
-        label,
-        style: const TextStyle(color: Colors.white),
-      ),
-    );
+    } catch (_) {}
   }
 
   Widget _buildVideos(String targetUserId) {
@@ -439,17 +278,7 @@ if (snapshot.data == null) {
           return const Padding(
             padding: EdgeInsets.all(32),
             child: Center(
-              child: CircularProgressIndicator(color: Colors.pink),
-            ),
-          );
-        }
-
-        if (snapshot.hasError) {
-          return const Padding(
-            padding: EdgeInsets.all(32),
-            child: Text(
-              'ভিডিও লোড করা যায়নি',
-              style: TextStyle(color: Colors.grey),
+              child: CircularProgressIndicator(color: Color(0xFFFE2C55)),
             ),
           );
         }
@@ -459,19 +288,14 @@ if (snapshot.data == null) {
         if (videos == null || videos.isEmpty) {
           return const Padding(
             padding: EdgeInsets.only(top: 60, bottom: 40),
-            child: Column(
-              children: [
-                Icon(
-                  Icons.video_collection_outlined,
-                  size: 64,
-                  color: Colors.grey,
-                ),
-                SizedBox(height: 12),
-                Text(
-                  'এখনো কোনো ভিডিও নেই',
-                  style: TextStyle(color: Colors.grey, fontSize: 14),
-                ),
-              ],
+            child: Center(
+              child: Column(
+                children: [
+                  Icon(Icons.video_collection_outlined, size: 64, color: Colors.grey),
+                  SizedBox(height: 12),
+                  Text('এখনো কোনো ভিডিও নেই', style: TextStyle(color: Colors.grey)),
+                ],
+              ),
             ),
           );
         }
@@ -482,14 +306,16 @@ if (snapshot.data == null) {
           padding: EdgeInsets.zero,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 3,
-            crossAxisSpacing: 2,
-            mainAxisSpacing: 2,
-            childAspectRatio: 0.68,
+            crossAxisSpacing: 1,
+            mainAxisSpacing: 1,
+            childAspectRatio: 0.75,
           ),
           itemCount: videos.length,
           itemBuilder: (context, index) {
             final video = videos[index];
-            final thumbnail = video.thumbnailUrl.trim();
+            final thumbnail = video.thumbnailUrl.trim().isNotEmpty
+                ? video.thumbnailUrl.trim()
+                : video.videoUrl.trim();
 
             return GestureDetector(
               onTap: () {
@@ -499,53 +325,43 @@ if (snapshot.data == null) {
                   ),
                 );
               },
-              child: Container(
-                color: const Color(0xFF1E1E1E),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (thumbnail.isNotEmpty)
-                      Image.network(
-                        thumbnail,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Center(
-                          child: Icon(
-                            Icons.play_circle_outline,
-                            color: Colors.white70,
-                            size: 36,
-                          ),
-                        ),
-                      )
-                    else
-                      const Center(
-                        child: Icon(
-                          Icons.play_circle_outline,
-                          color: Colors.white70,
-                          size: 36,
-                        ),
-                      ),
-                    Positioned(
-                      left: 6,
-                      bottom: 5,
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.play_arrow,
-                            size: 16,
-                            color: Colors.white,
-                          ),
-                          Text(
-                            '${video.viewCount}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Container(
+                    color: Colors.grey.shade200,
+                    child: thumbnail.isNotEmpty
+                        ? Image.network(
+                            thumbnail,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Center(
+                              child: Icon(Icons.play_arrow, color: Colors.black38),
                             ),
+                          )
+                        : const Center(
+                            child: Icon(Icons.play_arrow, color: Colors.black38),
                           ),
-                        ],
-                      ),
+                  ),
+                  Positioned(
+                    left: 6,
+                    bottom: 6,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.play_arrow_outlined, size: 16, color: Colors.white),
+                        const SizedBox(width: 2),
+                        Text(
+                          '${video.viewCount}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             );
           },
@@ -556,17 +372,13 @@ if (snapshot.data == null) {
 
   static Widget _messageScreen(String message) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.black,
-        leading: const BackButton(color: Colors.white),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: const BackButton(color: Colors.black),
       ),
-      body: Center(
-        child: Text(
-          message,
-          style: const TextStyle(color: Colors.white),
-        ),
-      ),
+      body: Center(child: Text(message, style: const TextStyle(color: Colors.black))),
     );
   }
 
@@ -578,252 +390,37 @@ if (snapshot.data == null) {
 
   static Widget _buildStatItem(String count, String label) {
     return Column(
+      crossAxisAlignment: CrossAlignment.start,
       children: [
         Text(
           count,
           style: const TextStyle(
-            color: Colors.white,
+            color: Colors.black,
             fontSize: 17,
             fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(color: Colors.grey, fontSize: 12),
-        ),
-      ],
-    );
-  }
-
-  static Widget _buildDivider() {
-    return Container(
-      height: 14,
-      width: 1,
-      color: Colors.grey.shade800,
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-    );
-  }
-}
-
-class _MenuItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _MenuItem({
-    required this.icon,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, color: Colors.white70, size: 21),
-        const SizedBox(width: 12),
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(color: Colors.black54, fontSize: 12),
         ),
       ],
     );
   }
 }
 
-class _ProfileVideoPlayerScreen extends StatefulWidget {
-  final VideoPost video;
-
-  const _ProfileVideoPlayerScreen({
-    required this.video,
-  });
-
-  @override
-  State<_ProfileVideoPlayerScreen> createState() =>
-      _ProfileVideoPlayerScreenState();
-}
-
-class _ProfileVideoPlayerScreenState
-    extends State<_ProfileVideoPlayerScreen> {
-  VideoPlayerController? _controller;
-  String? _errorMessage;
-  bool _isPlaying = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeVideo();
-  }
-
-  Future<void> _initializeVideo() async {
-    final url = widget.video.videoUrl.trim();
-
-    if (url.isEmpty) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'এই ভিডিওর লিংক পাওয়া যায়নি';
-        });
-      }
-      return;
-    }
-
-    VideoPlayerController? controller;
-
-    try {
-      controller = VideoPlayerController.networkUrl(Uri.parse(url));
-      _controller = controller;
-
-      await controller.initialize();
-
-      if (!mounted) {
-        await controller.dispose();
-        return;
-      }
-
-      await controller.setLooping(true);
-      await controller.play();
-
-      if (!mounted) return;
-
-      setState(() {
-        _isPlaying = true;
-      });
-    } catch (_) {
-      if (controller != null) {
-        await controller.dispose();
-      }
-
-      if (!mounted) return;
-
-      setState(() {
-        _controller = null;
-        _errorMessage =
-            'ভিডিও চালানো যাচ্ছে না। ইন্টারনেট বা ভিডিও লিংক পরীক্ষা করুন।';
-      });
-    }
-  }
-
-  Future<void> _togglePlayback() async {
-    final controller = _controller;
-
-    if (controller == null || !controller.value.isInitialized) return;
-
-    if (controller.value.isPlaying) {
-      await controller.pause();
-      if (mounted) {
-        setState(() => _isPlaying = false);
-      }
-    } else {
-      await controller.play();
-      if (mounted) {
-        setState(() => _isPlaying = true);
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = _controller;
-
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.maybePop(context),
-        ),
-        title: const Text(
-          'ভিডিও',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: true,
-      ),
-      body: Center(
-        child: _errorMessage != null
-            ? Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  _errorMessage!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white70),
-                ),
-              )
-            : controller == null || !controller.value.isInitialized
-                ? const CircularProgressIndicator(color: Colors.white)
-                : GestureDetector(
-                    onTap: _togglePlayback,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Positioned.fill(
-                          child: FittedBox(
-                            fit: BoxFit.contain,
-                            child: SizedBox(
-                              width: controller.value.size.width,
-                              height: controller.value.size.height,
-                              child: VideoPlayer(controller),
-                            ),
-                          ),
-                        ),
-                        if (!_isPlaying)
-                          const Icon(
-                            Icons.play_circle_fill,
-                            color: Colors.white,
-                            size: 64,
-                          ),
-                        Positioned(
-                          left: 16,
-                          right: 16,
-                          bottom: 20,
-                          child: Text(
-                            widget.video.caption,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              shadows: [
-                                Shadow(
-                                  color: Colors.black,
-                                  blurRadius: 5,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-      ),
-    );
-  }
-}
-
-class _FollowButton extends StatefulWidget {
+// TikTok Red Follow Button Component
+class _TikTokFollowButton extends StatefulWidget {
   final String targetUserId;
 
-  const _FollowButton({
-    super.key,
-    required this.targetUserId,
-  });
+  const _TikTokFollowButton({required this.targetUserId});
 
   @override
-  State<_FollowButton> createState() => _FollowButtonState();
+  State<_TikTokFollowButton> createState() => _TikTokFollowButtonState();
 }
 
-class _FollowButtonState extends State<_FollowButton> {
+class _TikTokFollowButtonState extends State<_TikTokFollowButton> {
   final ProfileActionsService _service = ProfileActionsService();
-
   bool _following = false;
   bool _loading = true;
 
@@ -836,86 +433,95 @@ class _FollowButtonState extends State<_FollowButton> {
   Future<void> _loadStatus() async {
     try {
       final result = await _service.isFollowing(widget.targetUserId);
-
-      if (!mounted) return;
-
-      setState(() {
-        _following = result;
-        _loading = false;
-      });
+      if (mounted) setState(() { _following = result; _loading = false; });
     } catch (_) {
-      if (!mounted) return;
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   Future<void> _toggle() async {
     if (_loading) return;
-
     setState(() => _loading = true);
 
     try {
-      // Notification toggleFollow() সার্ভিসের ভেতরেই তৈরি করে।
       final result = await _service.toggleFollow(widget.targetUserId);
-
-      if (!mounted) return;
-
-      setState(() {
-        _following = result;
-        _loading = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            result ? 'Follow করা হয়েছে' : 'Unfollow করা হয়েছে',
-          ),
-        ),
-      );
+      if (mounted) setState(() { _following = result; _loading = false; });
     } catch (e) {
-      if (!mounted) return;
-
-      setState(() => _loading = false);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: _loading ? null : _toggle,
-      style: OutlinedButton.styleFrom(
-        side: BorderSide(
-          color: _following ? Colors.grey : Colors.pink,
+    return SizedBox(
+      height: 44,
+      child: ElevatedButton(
+        onPressed: _loading ? null : _toggle,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _following ? const Color(0xFFF1F1F2) : const Color(0xFFFE2C55),
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(4),
-        ),
-        padding: const EdgeInsets.symmetric(
-          horizontal: 36,
-          vertical: 12,
-        ),
+        child: _loading
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+              )
+            : Text(
+                _following ? 'মেসেজ' : 'অনুসরণ করুন',
+                style: TextStyle(
+                  color: _following ? Colors.black : Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
+              ),
       ),
-      child: _loading
-          ? const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                color: Colors.pink,
-                strokeWidth: 2,
-              ),
-            )
-          : Text(
-              _following ? 'Following' : 'Follow',
-              style: TextStyle(
-                color: _following ? Colors.white : Colors.pink,
-                fontWeight: FontWeight.w600,
-                fontSize: 15,
-              ),
-            ),
+    );
+  }
+}
+
+class _ProfileVideoPlayerScreen extends StatefulWidget {
+  final VideoPost video;
+  const _ProfileVideoPlayerScreen({required this.video});
+
+  @override
+  State<_ProfileVideoPlayerScreen> createState() => _ProfileVideoPlayerScreenState();
+}
+
+class _ProfileVideoPlayerScreenState extends State<_ProfileVideoPlayerScreen> {
+  VideoPlayerController? _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.video.videoUrl.trim()))
+      ..initialize().then((_) {
+        setState(() {});
+        _controller?.play();
+        _controller?.setLooping(true);
+      });
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(backgroundColor: Colors.black, leading: const BackButton(color: Colors.white)),
+      body: Center(
+        child: _controller != null && _controller!.value.isInitialized
+            ? AspectRatio(
+                aspectRatio: _controller!.value.aspectRatio,
+                child: VideoPlayer(_controller!),
+              )
+            : const CircularProgressIndicator(color: Colors.white),
+      ),
     );
   }
 }
