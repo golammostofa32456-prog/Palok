@@ -3060,18 +3060,7 @@ onProfileTap: () {
     );
   }
 
-  // ============================================================
-  // BOTTOM NAVIGATION
-  // ============================================================
-BottomNavigator(
-  selectedIndex: _bottomIndex,
-  onSelect: _selectBottom,
-  pink: _pink,
-  cyan: _cyan,
-),
-
   
-
   // ============================================================
   // HELPERS
   // ============================================================
@@ -3148,7 +3137,14 @@ BottomNavigator(
 
     return value.toString();
   }
-
+Widget _buildBottomNavigation() {
+  return BottomNavigator(
+    selectedIndex: _bottomIndex,
+    onSelect: _selectBottom,
+    pink: _pink,
+    cyan: _cyan,
+  );
+}
   @override
   Widget build(
     BuildContext context,
