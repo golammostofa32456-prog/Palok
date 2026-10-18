@@ -249,44 +249,25 @@ class _HomeScreenState extends State<HomeScreen> {
                                           color: Colors.white70,
                                         ),
                                       ),
-                                      onTap: () {
-                                        final feedIndex =
-                                            _homeController.videos
-                                                .indexWhere(
-                                          (item) =>
-                                              item.id == video.id,
-                                        );
-
-                                        Navigator.pop(dialogContext);
-
-                                        if (feedIndex >= 0 &&
-                                            _pageController.hasClients) {
-                                          _pageController.jumpToPage(
-                                            feedIndex,
-                                          );
-                                          _homeController
-                                              .onVideoChanged(feedIndex);
-                                        }
-                                      },
-                                    );
-                                  },
-                                ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('বন্ধ করুন'),
-                ),
-              ],
-            );
+                                      
+                                     void _openSearch() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SearchScreen(
+          videos: _homeController.videos,
+          onVideoSelected: (actualIndex) async {
+            if (_pageController.hasClients) {
+              _pageController.jumpToPage(actualIndex);
+              _homeController.onVideoChanged(actualIndex);
+            }
           },
-        );
-      },
-    ).whenComplete(searchController.dispose);
+        ),
+      ),
+    );
   }
+   
+                        
 
   Widget _buildFeed() {
     return AnimatedBuilder(
