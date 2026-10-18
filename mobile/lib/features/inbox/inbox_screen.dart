@@ -1,217 +1,363 @@
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-class InboxScreen extends StatefulWidget {
-  const InboxScreen({super.key});
+class SearchScreen extends StatefulWidget {
+  final List<dynamic> videos;
+  final Future<void> Function(int actualIndex)? onVideoSelected;
+
+  const SearchScreen({
+    super.key,
+    required this.videos,
+    this.onVideoSelected,
+  });
 
   @override
-  State<InboxScreen> createState() => _InboxScreenState();
+  State<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _InboxScreenState extends State<InboxScreen> {
+class _SearchScreenState extends State<SearchScreen> {
+  static const Color _pink = Color(0xFFFF2D55);
+  static const Color _cyan = Color(0xFF00E5FF);
+
+  final TextEditingController _controller = TextEditingController();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  Timer? _searchTimer;
+  List<Map<String, dynamic>> _users = [];
+  List<Map<String, dynamic>> _firestoreVideos = [];
+  bool _searching = false;
+  String _lastQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(() {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchTimer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  String _normalize(String value) {
+    return value.trim().toLowerCase().replaceAll('@', '').replaceAll('#', '');
+  }
+
+  void _onSearchChanged(String value) {
+    _searchTimer?.cancel();
+    final query = value.trim();
+
+    if (query.isEmpty) {
+      setState(() {
+        _users = [];
+        _firestoreVideos = [];
+        _searching = false;
+        _lastQuery = '';
+      });
+      return;
+    }
+
+    _searchTimer = Timer(const Duration(milliseconds: 350), () {
+      _performSearch(query);
+    });
+  }
+
+  Future<void> _performSearch(String query) async {
+    final text = _normalize(query);
+    if (text.isEmpty) return;
+
+    setState(() {
+      _searching = true;
+      _lastQuery = text;
+    });
+
+    final localResults = _searchLocalVideos(text);
+    List<Map<String, dynamic>> users = [];
+    List<Map<String, dynamic>> firestoreVideos = [];
+
+    try {
+      users = await _searchUsers(text);
+    } catch (_) {}
+
+    try {
+      firestoreVideos = await _searchVideos(text);
+    } catch (_) {}
+
+    if (!mounted || _lastQuery != text) return;
+
+    final localIds = <String>{};
+    for (final video in localResults) {
+      final id = _readString(video, 'id');
+      if (id.isNotEmpty) localIds.add(id);
+    }
+
+    firestoreVideos = firestoreVideos.where((video) {
+      final id = (video['id'] ?? '').toString();
+      return id.isEmpty || !localIds.contains(id);
+    }).toList();
+
+    setState(() {
+      _users = users;
+      _firestoreVideos = firestoreVideos;
+      _searching = false;
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> _searchUsers(String query) async {
+    final snapshot = await _firestore.collection('users').limit(200).get();
+    final users = <Map<String, dynamic>>[];
+
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final name = (data['name'] ?? '').toString();
+      final username = (data['username'] ?? '').toString();
+      final displayName = (data['displayName'] ?? '').toString();
+      final email = (data['email'] ?? '').toString();
+
+      final searchText = [name, username, displayName, email].join(' ').toLowerCase();
+      if (!_containsSearchText(searchText, query)) continue;
+
+      users.add({
+        'id': doc.id,
+        'name': name,
+        'username': username,
+        'displayName': displayName,
+        'email': email,
+        'photoURL': (data['photoURL'] ?? data['profileImage'] ?? data['photoUrl'] ?? '').toString(),
+      });
+    }
+
+    return users;
+  }
+
+  Future<List<Map<String, dynamic>>> _searchVideos(String query) async {
+    final snapshot = await _firestore.collection('videos').limit(200).get();
+    final videos = <Map<String, dynamic>>[];
+
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final username = (data['username'] ?? '').toString();
+      final caption = (data['caption'] ?? '').toString();
+      final hashtags = _valueToSearchString(data['hashtags']);
+      final userId = (data['userId'] ?? '').toString();
+
+      final searchText = [username, caption, hashtags, userId].join(' ').toLowerCase();
+      if (!_containsSearchText(searchText, query)) continue;
+
+      videos.add({
+        'id': doc.id,
+        'username': username,
+        'caption': caption,
+        'hashtags': hashtags,
+        'userId': userId,
+        'videoUrl': (data['videoUrl'] ?? '').toString(),
+        'thumbnailUrl': (data['thumbnailUrl'] ?? '').toString(),
+      });
+    }
+
+    return videos;
+  }
+
+  List<dynamic> _searchLocalVideos(String query) {
+    final textQuery = _normalize(query);
+    if (textQuery.isEmpty) return [];
+    final results = <dynamic>[];
+
+    for (final video in widget.videos) {
+      final text = [
+        _readString(video, 'id'),
+        _readString(video, 'username'),
+        _readString(video, 'caption'),
+        _readString(video, 'hashtags'),
+        _readString(video, 'userId'),
+      ].join(' ');
+
+      if (_containsSearchText(text, textQuery)) {
+        results.add(video);
+      }
+    }
+
+    return results;
+  }
+
+  bool _containsSearchText(String source, String query) {
+    return _normalize(source).contains(_normalize(query));
+  }
+
+  String _readString(dynamic object, String field) {
+    try {
+      if (object == null) return '';
+      if (object is Map) return object[field]?.toString() ?? '';
+      switch (field) {
+        case 'id':
+          return object.id?.toString() ?? '';
+        case 'username':
+          return object.username?.toString() ?? '';
+        case 'caption':
+          return object.caption?.toString() ?? '';
+        case 'hashtags':
+          return object.hashtags?.toString() ?? '';
+        case 'thumbnailUrl':
+          return object.thumbnailUrl?.toString() ?? '';
+        default:
+          return '';
+      }
+    } catch (_) {
+      return '';
+    }
+  }
+
+  String _valueToSearchString(dynamic value) {
+    if (value == null) return '';
+    if (value is Iterable) return value.map((e) => e.toString()).join(' ');
+    return value.toString();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
+    final query = _controller.text.trim();
+    final localVideos = query.isEmpty ? <dynamic>[] : _searchLocalVideos(query);
+    final hasResults = _users.isNotEmpty || localVideos.isNotEmpty || _firestoreVideos.isNotEmpty;
+
+    return SafeArea(
+      child: Scaffold(
         backgroundColor: Colors.white,
-        elevation: 0.5,
-        leading: IconButton(
-          icon: const Icon(Icons.person_add_alt_1_outlined, color: Colors.black, size: 26),
-          onPressed: () {},
-        ),
-        title: const Text(
-          'ইনবক্স',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
+        appBar: AppBar(
+          toolbarHeight: 56,
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.black),
+            onPressed: () => Navigator.pop(context),
           ),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search, color: Colors.black, size: 26),
-            onPressed: () {},
-          ),
-        ],
-      ),
-      body: ListView(
-        children: [
-          // ১. ওপরে বন্ধুদের স্টোরি/অ্যাক্টিভিটি সেকশন
-          SizedBox(
-            height: 105,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              children: [
-                _buildStoryItem(
-                  icon: Icons.add,
-                  label: 'তৈরি করুন',
-                  isAdd: true,
-                ),
-                _buildStoryItem(
-                  icon: Icons.lock_outline,
-                  label: 'এই দিনে',
-                  isLock: true,
-                ),
-                _buildUserStoryItem('It\'s_E.O', 'https://via.placeholder.com/150'),
-                _buildUserStoryItem('MOHON', 'https://via.placeholder.com/150'),
-              ],
-            ),
-          ),
-
-          const Divider(height: 1, thickness: 0.5),
-
-          // ২. কার্যকলাপ ও সিস্টেম নোটিফিকেশন সেকশন
-          _buildNotificationItem(
-            icon: Icons.flash_on,
-            iconBgColor: const Color(0xFFFF2C55),
-            title: 'কার্যকলাপ ও নতুন অনুসারী',
-            subtitle: 'সাম্প্রতিক নোটিফিকেশন ও মেসেজ...',
-            onTap: () {},
-          ),
-          _buildNotificationItem(
-            icon: Icons.inbox,
-            iconBgColor: const Color(0xFF161823),
-            title: 'সিস্টেমের নোটিফিকেশন',
-            subtitle: 'TikTok: নতুন আপডেট ও নোটিশ...',
-            time: '৭ঘন্টা',
-            hasRedDot: true,
-            onTap: () {},
-          ),
-
-          const Padding(
-            padding: EdgeInsets.only(left: 16, top: 16, bottom: 8),
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              color: Colors.black54,
-            ),
-            child: Text('সুপারিশকৃত অ্যাকাউন্ট'),
-          ),
-
-          // ৩. ডেমো ইউজার মেসেজ/পরামর্শ তালিকা
-          _buildUserMessageItem(
-            name: 'এমন একজনকে ভালোবাসো...',
-            subtitle: 'আপনাকে অনুসরণ করছে',
-            showFollowBtn: true,
-          ),
-          _buildUserMessageItem(
-            name: 'মেসি লাভার',
-            subtitle: 'মেসি লাভার কে হাই বলুন',
-            showFollowBtn: true,
-          ),
-        ],
-      ),
-    );
-  }
-
-  // স্টোরি আইটেম উইজেট
-  Widget _buildStoryItem({required IconData icon, required String label, bool isAdd = false, bool isLock = false}) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 16),
-      child: Column(
-        children: [
-          Stack(
-            children: [
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: isLock ? Colors.grey.shade300 : const Color(0xFF009688),
-                child: Icon(icon, color: Colors.white, size: 24),
-              ),
-              if (isAdd)
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      color: Colors.blue,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.add, color: Colors.white, size: 16),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-        ],
-      ),
-    );
-  }
-
-  // ইউজার স্টোরি উইজেট
-  Widget _buildUserStoryItem(String name, String imgUrl) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 16),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(2),
+          title: Container(
+            height: 42,
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.blue, width: 2),
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: CircleAvatar(
-              radius: 26,
-              backgroundImage: NetworkImage(imgUrl),
+            child: TextField(
+              controller: _controller,
+              autofocus: true,
+              onChanged: _onSearchChanged,
+              textInputAction: TextInputAction.search,
+              style: const TextStyle(color: Colors.black, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'অনুসন্ধান করুন',
+                hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                prefixIcon: const Icon(Icons.search, color: Colors.grey, size: 20),
+                suffixIcon: query.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, color: Colors.grey, size: 18),
+                        onPressed: () {
+                          _controller.clear();
+                          _onSearchChanged('');
+                        },
+                      )
+                    : null,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              ),
             ),
           ),
-          const SizedBox(height: 6),
-          Text(name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-        ],
-      ),
-    );
-  }
-
-  // নোটিফিকেশন রো উইজেট
-  Widget _buildNotificationItem({
-    required IconData icon,
-    required Color iconBgColor,
-    required String title,
-    required String subtitle,
-    String? time,
-    bool hasRedDot = false,
-    required VoidCallback onTap,
-  }) {
-    return ListTile(
-      onTap: onTap,
-      leading: CircleAvatar(
-        radius: 24,
-        backgroundColor: iconBgColor,
-        child: Icon(icon, color: Colors.white, size: 24),
-      ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-      subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (time != null) Text(time, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-          if (hasRedDot) ...[
-            const SizedBox(width: 6),
-            const CircleAvatar(radius: 4, backgroundColor: Colors.red),
+          actions: [
+            TextButton(
+              onPressed: () => _performSearch(_controller.text),
+              child: const Text(
+                'অনুসন্ধান',
+                style: TextStyle(
+                  color: _pink,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
+              ),
+            ),
           ],
-        ],
+        ),
+        body: _searching
+            ? const Center(child: CircularProgressIndicator(color: _pink))
+            : query.isEmpty
+                ? _buildEmptySearch()
+                : !hasResults
+                    ? _buildNoResults(query)
+                    : ListView(
+                        padding: const EdgeInsets.all(16),
+                        children: [
+                          if (_users.isNotEmpty) ...[
+                            const Text('ব্যবহারকারী', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            const SizedBox(height: 8),
+                            ..._users.map((user) => _buildUserItem(user)),
+                            const SizedBox(height: 16),
+                          ],
+                          if (localVideos.isNotEmpty) ...[
+                            const Text('ভিডিওসমূহ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            const SizedBox(height: 8),
+                            ...localVideos.map((v) => _buildVideoItem(v, isLocal: true)),
+                          ],
+                          if (_firestoreVideos.isNotEmpty) ...[
+                            const Text('আরও ভিডিও', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            const SizedBox(height: 8),
+                            ..._firestoreVideos.map((v) => _buildVideoItem(v, isLocal: false)),
+                          ],
+                        ],
+                      ),
       ),
     );
   }
 
-  // ইউজার মেসেজ/ফলো আইটেম উইজেট
-  Widget _buildUserMessageItem({required String name, required String subtitle, bool showFollowBtn = false}) {
+  Widget _buildEmptySearch() {
+    return const Center(
+      child: Text(
+        'আপনি অনুসন্ধান করতে পারেন',
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+      ),
+    );
+  }
+
+  Widget _buildNoResults(String query) {
+    return Center(
+      child: Text(
+        '"$query" নিয়ে কোনো ফলাফল পাওয়া যায়নি',
+        style: const TextStyle(color: Colors.grey),
+      ),
+    );
+  }
+
+  Widget _buildUserItem(Map<String, dynamic> user) {
+    final username = (user['username'] ?? user['name'] ?? 'User').toString();
     return ListTile(
       leading: const CircleAvatar(
-        radius: 24,
         backgroundColor: Colors.grey,
         child: Icon(Icons.person, color: Colors.white),
       ),
-      title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-      trailing: showFollowBtn
-          ? TextButton(
-              onPressed: () {},
-              child: const Text('+ অনুসরণ করুন', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-            )
-          : const Icon(Icons.waving_hand, color: Colors.amber),
+      title: Text('@$username', style: const TextStyle(fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _buildVideoItem(dynamic video, {required bool isLocal}) {
+    final username = _readString(video, 'username');
+    final caption = _readString(video, 'caption');
+    final thumb = _readString(video, 'thumbnailUrl');
+
+    return ListTile(
+      leading: Container(
+        width: 50,
+        height: 65,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade300,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: thumb.isNotEmpty
+            ? Image.network(thumb, fit: BoxFit.cover)
+            : const Icon(Icons.play_arrow),
+      ),
+      title: Text(username.isEmpty ? '@PALOK' : '@$username', style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(caption, maxLines: 2, overflow: TextOverflow.ellipsis),
     );
   }
 }
