@@ -1,311 +1,252 @@
-
 import 'package:flutter/material.dart';
 
-class InboxScreen extends StatefulWidget {
+class InboxScreen extends StatelessWidget {
   const InboxScreen({Key? key}) : super(key: key);
-
-  @override
-  State<InboxScreen> createState() => _InboxScreenState();
-}
-
-class _InboxScreenState extends State<InboxScreen> {
-  // ০ = অল অ্যাক্টিভিটি, ১ = লাইক, ২ = কমেন্ট, ৩ = ফলোয়ার
-  int _selectedFilterIndex = 0;
-
-  final List<String> _filters = [
-    'All activity',
-    'Likes',
-    'Comments',
-    'Mentions',
-    'Followers'
-  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        centerTitle: true,
-        title: DropdownButtonHideUnderline(
-          child: DropdownButton<int>(
-            value: _selectedFilterIndex,
-            dropdownColor: const Color(0xFF1F1F1F),
-            icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-            onChanged: (int? newValue) {
-              if (newValue != null) {
-                setState(() {
-                  _selectedFilterIndex = newValue;
-                });
-              }
-            },
-            items: List.generate(_filters.length, (index) {
-              return DropdownMenuItem<int>(
-                value: index,
-                child: Text(_filters[index]),
-              );
-            }),
-          ),
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+        leading: IconButton(
+          icon: const Icon(Icons.person_add_outlined, color: Colors.black),
+          onPressed: () {},
         ),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'ইনবক্স',
+              style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+            const SizedBox(width: 5),
+            Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: Colors.green,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ],
+        ),
+        centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.send_rounded, color: Colors.white, size: 22),
-            onPressed: () {
-              _openDirectMessagesSheet(context);
-            },
+            icon: const Icon(Icons.search, color: Colors.black),
+            onPressed: () {},
           ),
         ],
       ),
-      body: CustomScrollView(
-        slivers: [
-          // ১. একটিভ স্টোরি এবং ইউজার বার
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 100,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: 6,
-                itemBuilder: (context, index) {
-                  if (index == 0) return _buildCreateStoryTile();
-                  return _buildActiveUserTile(index);
-                },
+      body: ListView(
+        children: [
+          const SizedBox(height: 10),
+
+          // 1. Top Story / Active Users Horizontal Bar
+          SizedBox(
+            height: 100,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              children: [
+                _buildStoryItem('তৈরি করুন', true, false),
+                _buildStoryItem('এই দিনে', false, true),
+                _buildStoryItem("It's_E.O", false, false),
+                _buildStoryItem('MD FORID', false, false),
+              ],
+            ),
+          ),
+
+          const Divider(height: 1),
+
+          // 2. Main Notification Categories
+          _buildNotificationCategory(
+            icon: Icons.flash_on,
+            iconColor: Colors.pinkAccent,
+            title: 'কার্যকলাপ ও নতুন অনুসরণকারী',
+            subtitle: 'লাইক, কমেন্ট ও নতুন ফলোয়ারদের অ্যাক্টিভিটি',
+            onTap: () {},
+          ),
+          _buildNotificationCategory(
+            icon: Icons.notifications_active,
+            iconColor: Colors.blueAccent,
+            title: 'সিস্টেমের নোটিফিকেশন',
+            subtitle: 'PALOK: প্ল্যাটফর্ম সংক্রান্ত নোটিফিকেশন',
+            onTap: () {},
+          ),
+
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Text(
+              'মেসেজ ও সাজেস্টেড',
+              style: TextStyle(
+                color: Colors.grey,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
               ),
             ),
           ),
 
-          const SliverToBoxAdapter(
-            child: Divider(color: Colors.white12, height: 1),
+          // 3. User Messages / Suggested List
+          _buildUserMessageTile(
+            name: 'এমন একজনকে ভা...',
+            message: 'এমন একজনকে ভালোবাসো বাজার চে...',
+            time: 'নতুন',
+            isFollowBtn: true,
           ),
-
-          // ২. নিউ অ্যাক্টিভিটি শর্টকাট
-          SliverToBoxAdapter(
-            child: ListTile(
-              leading: Container(
-                width: 44,
-                height: 44,
-                decoration: const BoxDecoration(
-                  color: Colors.pinkAccent,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.people, color: Colors.white, size: 24),
-              ),
-              title: const Text(
-                'New activity',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-              ),
-              subtitle: Text(
-                _filters[_selectedFilterIndex],
-                style: const TextStyle(color: Colors.grey, fontSize: 13),
-              ),
-              trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-              onTap: () {
-                _showActivityFilterModal(context);
-              },
-            ),
+          _buildUserMessageTile(
+            name: 'মেসি লাভার',
+            message: 'মেসি লাভার কে হাই বলুন',
+            time: 'গতকাল',
+            isFollowBtn: true,
           ),
-
-          const SliverToBoxAdapter(
-            child: Divider(color: Colors.white12, height: 1),
-          ),
-
-          // ৩. মেসেজ হেডার
-          const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text(
-                'Messages',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-
-          // ৪. ডাইনামিক নোটিফিকেশন/মেসেজ লিস্ট
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.chat_bubble_outline_rounded,
-                    size: 56,
-                    color: Colors.grey,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _selectedFilterIndex == 0
-                        ? 'No notifications yet'
-                        : 'No ${_filters[_selectedFilterIndex]} yet',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Like, comment বা follow এলে এখানে দেখা যাবে',
-                    style: TextStyle(color: Colors.grey, fontSize: 13),
-                  ),
-                ],
-              ),
-            ),
+          _buildUserMessageTile(
+            name: 'litonsanaul',
+            message: 'litonsanaul কে হাই বলুন',
+            time: '২ দিন আগে',
+            isFollowBtn: true,
           ),
         ],
       ),
     );
   }
 
-  // স্টোরি অপশন
-  Widget _buildCreateStoryTile() {
-    return Padding(
-      padding: const EdgeInsets.only(right: 16),
+  Widget _buildStoryItem(String label, String isCreate, bool isLock) {
+    return Container(
+      margin: const EdgeInsets.only(right: 15),
       child: Column(
         children: [
           Stack(
             children: [
-              const CircleAvatar(
-                radius: 30,
-                backgroundColor: Color(0xFF262626),
-                child: Icon(Icons.person, color: Colors.white, size: 36),
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.blueAccent,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.add, color: Colors.white, size: 18),
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.cyan, width: 2),
+                  color: Colors.teal,
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          const Text('Create', style: TextStyle(color: Colors.grey, fontSize: 11)),
-        ],
-      ),
-    );
-  }
-
-  // একটিভ ফ্রেন্ড আইকন
-  Widget _buildActiveUserTile(int index) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 16),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.lightGreenAccent, width: 2),
-            ),
-            child: CircleAvatar(
-              radius: 28,
-              backgroundColor: Colors.grey[800],
-              child: Text(
-                'U$index',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text('User $index', style: const TextStyle(color: Colors.white, fontSize: 11)),
-        ],
-      ),
-    );
-  }
-
-  // ফিল্টার মোডাল ডায়ালগ
-  void _showActivityFilterModal(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF181818),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return ListView.builder(
-          shrinkWrap: true,
-          itemCount: _filters.length,
-          itemBuilder: (context, index) {
-            return ListTile(
-              title: Text(
-                _filters[index],
-                style: const TextStyle(color: Colors.white),
-              ),
-              trailing: _selectedFilterIndex == index
-                  ? const Icon(Icons.check, color: Colors.redAccent)
-                  : null,
-              onTap: () {
-                setState(() {
-                  _selectedFilterIndex = index;
-                });
-                Navigator.pop(context);
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // ডাইরেক্ট মেসেজ পপআপ
-  void _openDirectMessagesSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF121212),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.8,
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Direct Messages',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const Expanded(
                 child: Center(
-                  child: Text(
-                    'No direct messages yet',
-                    style: TextStyle(color: Colors.grey),
-                  ),
+                  child: isLock
+                      ? const Icon(Icons.lock, color: Colors.white)
+                      : Text(
+                          label[0],
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 20,
+                          ),
+                        ),
                 ),
               ),
+              if (isCreate)
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: const BoxDecoration(
+                      color: Colors.cyan,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.add, color: Colors.white, size: 16),
+                  ),
+                ),
             ],
           ),
-        );
-      },
+          const SizedBox(height: 5),
+          SizedBox(
+            width: 65,
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotificationCategory({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      onTap: onTap,
+      leading: CircleAvatar(
+        radius: 22,
+        backgroundColor: iconColor,
+        child: Icon(icon, color: Colors.white, size: 22),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+      ),
+      subtitle: Text(
+        subtitle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(color: Colors.grey, fontSize: 12),
+      ),
+      trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+    );
+  }
+
+  Widget _buildUserMessageTile({
+    required String name,
+    required String message,
+    required String time,
+    bool isFollowBtn = false,
+  }) {
+    return ListTile(
+      leading: CircleAvatar(
+        radius: 24,
+        backgroundColor: Colors.grey.shade300,
+        child: Text(
+          name[0],
+          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+        ),
+      ),
+      title: Text(
+        name,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+      ),
+      subtitle: Text(
+        message,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(color: Colors.grey, fontSize: 12),
+      ),
+      trailing: isFollowBtn
+          ? ElevatedButton(
+              onPressed: () {},
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFE2C55),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text(
+                '+ অনুসরণ করুন',
+                style: TextStyle(fontSize: 11, color: Colors.white),
+              ),
+            )
+          : Text(
+              time,
+              style: const TextStyle(color: Colors.grey, fontSize: 11),
+            ),
     );
   }
 }
