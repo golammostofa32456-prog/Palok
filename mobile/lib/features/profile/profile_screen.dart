@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({Key? key}) : super(key: key);
+  final String? userId; // যদি অন্য ইউজারের আইডি পাস করতে হয়
+  const ProfileScreen({Key? key, this.userId}) : super(key: key);
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -46,7 +47,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.footprints_outlined, color: Colors.black),
+            icon: const Icon(Icons.directions_walk, color: Colors.black), // ত্রুটিপূর্ণ আইকন পরিবর্তন করা হয়েছে
             onPressed: () {},
           ),
           Stack(
@@ -206,7 +207,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   Widget _buildVideoGrid() {
     return GridView.builder(
       padding: const EdgeInsets.all(2),
-      itemCount: 2, // আপনার ডাইনামিক ভিডিও লিস্টের লেন্থ অনুযায়ী দিন
+      itemCount: 2, 
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
         childAspectRatio: 0.75,
@@ -219,7 +220,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // ভিডিওর কভার/থাম্বনেইল ইমেজ এখানে দিবেন
               Container(color: Colors.grey.shade900),
               Positioned(
                 bottom: 5,
