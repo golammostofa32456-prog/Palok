@@ -224,7 +224,7 @@ class _SearchScreenState extends State<SearchScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        titleContainer: null,
+        
         title: Container(
           height: 42,
           decoration: BoxDecoration(
