@@ -215,15 +215,18 @@ class _SearchScreenState extends State<SearchScreen> {
     final localVideos = query.isEmpty ? <dynamic>[] : _searchLocalVideos(query);
     final hasResults = _users.isNotEmpty || localVideos.isNotEmpty || _firestoreVideos.isNotEmpty;
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
+      return SafeArea(
+      child: Scaffold(
         backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
+        appBar: AppBar(
+          toolbarHeight: 56,
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.black),
+            onPressed: () => Navigator.pop(context),
+          ),
+
         
         title: Container(
           height: 42,
