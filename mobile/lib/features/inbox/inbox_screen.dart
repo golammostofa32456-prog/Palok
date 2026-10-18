@@ -19,20 +19,13 @@ class InboxScreen extends StatelessWidget {
           children: [
             const Text(
               'ইনবক্স',
-              style: TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
+              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
             ),
-            const SizedBox(width: 5),
+            const SizedBox(width: 6),
             Container(
               width: 8,
               height: 8,
-              decoration: const BoxDecoration(
-                color: Colors.green,
-                shape: BoxShape.circle,
-              ),
+              decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
             ),
           ],
         ),
@@ -46,80 +39,83 @@ class InboxScreen extends StatelessWidget {
       ),
       body: ListView(
         children: [
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
 
-          // 1. Top Story / Active Users Horizontal Bar
+          // 1. Stories / Active Users Horizontal List
           SizedBox(
-            height: 100,
+            height: 95,
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12),
               children: [
-                _buildStoryItem('তৈরি করুন', true, false),
-                _buildStoryItem('এই দিনে', false, true),
-                _buildStoryItem("It's_E.O", false, false),
-                _buildStoryItem('MD FORID', false, false),
+                _buildStoryAvatar('তৈরি করুন', isAdd: true, subText: 'কী অবস্থা?'),
+                _buildStoryAvatar('এই দিনে', isLock: true),
+                _buildStoryAvatar('MD FORID', name: 'MD FORID'),
+                _buildStoryAvatar("It's_E.O", name: "It's_E.O"),
               ],
             ),
           ),
 
-          const Divider(height: 1),
+          const Divider(height: 1, color: Colors.black12),
 
-          // 2. Main Notification Categories
-          _buildNotificationCategory(
-            icon: Icons.flash_on,
-            iconColor: Colors.pinkAccent,
-            title: 'কার্যকলাপ ও নতুন অনুসরণকারী',
-            subtitle: 'লাইক, কমেন্ট ও নতুন ফলোয়ারদের অ্যাক্টিভিটি',
-            onTap: () {},
-          ),
-          _buildNotificationCategory(
-            icon: Icons.notifications_active,
-            iconColor: Colors.blueAccent,
-            title: 'সিস্টেমের নোটিফিকেশন',
-            subtitle: 'PALOK: প্ল্যাটফর্ম সংক্রান্ত নোটিফিকেশন',
-            onTap: () {},
-          ),
-
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Text(
-              'মেসেজ ও সাজেস্টেড',
-              style: TextStyle(
-                color: Colors.grey,
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-              ),
+          // 2. Banner Notification
+          Container(
+            color: Colors.grey.shade50,
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                const CircleAvatar(
+                  backgroundColor: Colors.blue,
+                  radius: 20,
+                  child: Icon(Icons.group, color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('নতুন অনুসরণকারীরা স্থানান্তরিত হয়েছে।', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text('কার্যকলাপে এটি খুঁজে পান', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                IconButton(icon: const Icon(Icons.close, size: 18, color: Colors.grey), onPressed: () {}),
+              ],
             ),
           ),
 
-          // 3. User Messages / Suggested List
-          _buildUserMessageTile(
-            name: 'এমন একজনকে ভা...',
-            message: 'এমন একজনকে ভালোবাসো বাজার চে...',
-            time: 'নতুন',
-            isFollowBtn: true,
+          // 3. Activity Categories
+          _buildActivityTile(
+            icon: Icons.bolt,
+            iconBg: Colors.pinkAccent,
+            title: 'কার্যকলাপ ও নতুন অনুসরণকারী',
+            subtitle: 'মন্তব্য করেছেন...',
           ),
-          _buildUserMessageTile(
-            name: 'মেসি লাভার',
-            message: 'মেসি লাভার কে হাই বলুন',
-            time: 'গতকাল',
-            isFollowBtn: true,
+          _buildActivityTile(
+            icon: Icons.notifications,
+            iconBg: const Color(0xFF1D263B),
+            title: 'সিস্টেমের নোটিফিকেশন',
+            subtitle: 'TikTok: ভিজ্যুয়াল অনুসন্ধান...',
+            time: '৫ঘণ্টা',
           ),
-          _buildUserMessageTile(
-            name: 'litonsanaul',
-            message: 'litonsanaul কে হাই বলুন',
-            time: '২ দিন আগে',
-            isFollowBtn: true,
+
+          // 4. Friend / User List Section
+          _buildUserTile('এমন একজনকে ভা...', 'এমন একজনকে ভালোবাসো বাজার চে...', hasWave: true),
+          _buildUserTile('মেসি লাভার', 'মেসি লাভার কে হাই বলুন', hasWave: true),
+          _buildUserTile('litonsanaul', 'litonsanaul কে হাই বলুন', hasWave: true),
+
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text('সুপারিশকৃত অ্যাকাউন্ট', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 13)),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStoryItem(String label, String isCreate, bool isLock) {
-    return Container(
-      margin: const EdgeInsets.only(right: 15),
+  Widget _buildStoryAvatar(String label, {bool isAdd = false, bool isLock = false, String? name, String? subText}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0),
       child: Column(
         children: [
           Stack(
@@ -129,38 +125,27 @@ class InboxScreen extends StatelessWidget {
                 height: 60,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.cyan, width: 2),
-                  color: Colors.teal,
+                  border: Border.all(color: isAdd ? Colors.teal : Colors.cyan, width: 2),
                 ),
-                child: Center(
+                child: CircleAvatar(
+                  backgroundColor: isAdd ? Colors.teal : Colors.grey.shade300,
                   child: isLock
                       ? const Icon(Icons.lock, color: Colors.white)
-                      : Text(
-                          label[0],
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 20,
-                          ),
-                        ),
+                      : Text(label[0], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
-              if (isCreate)
+              if (isAdd)
                 Positioned(
                   bottom: 0,
                   right: 0,
                   child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(
-                      color: Colors.cyan,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.add, color: Colors.white, size: 16),
+                    decoration: const BoxDecoration(color: Colors.cyan, shape: BoxShape.circle),
+                    child: const Icon(Icons.add, color: Colors.white, size: 18),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 4),
           SizedBox(
             width: 65,
             child: Text(
@@ -168,7 +153,7 @@ class InboxScreen extends StatelessWidget {
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+              style: const TextStyle(fontSize: 11),
             ),
           ),
         ],
@@ -176,77 +161,41 @@ class InboxScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildNotificationCategory({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
+  Widget _buildActivityTile({required IconData icon, required Color iconBg, required String title, required String subtitle, String? time}) {
     return ListTile(
-      onTap: onTap,
       leading: CircleAvatar(
+        backgroundColor: iconBg,
         radius: 22,
-        backgroundColor: iconColor,
         child: Icon(icon, color: Colors.white, size: 22),
       ),
-      title: Text(
-        title,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+      subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (time != null) Text(time, style: const TextStyle(color: Colors.grey, fontSize: 11)),
+          Container(margin: const EdgeInsets.only(left: 6), width: 8, height: 8, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle)),
+        ],
       ),
-      subtitle: Text(
-        subtitle,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(color: Colors.grey, fontSize: 12),
-      ),
-      trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
     );
   }
 
-  Widget _buildUserMessageTile({
-    required String name,
-    required String message,
-    required String time,
-    bool isFollowBtn = false,
-  }) {
+  Widget _buildUserTile(String name, String subText, {bool hasWave = false}) {
     return ListTile(
       leading: CircleAvatar(
-        radius: 24,
         backgroundColor: Colors.grey.shade300,
-        child: Text(
-          name[0],
-          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-        ),
+        radius: 24,
+        child: Text(name[0], style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
       ),
-      title: Text(
-        name,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+      title: Row(
+        children: [
+          Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          const SizedBox(width: 4),
+          const Text('+ অনুসরণ করুন', style: TextStyle(color: Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
+        ],
       ),
-      subtitle: Text(
-        message,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(color: Colors.grey, fontSize: 12),
-      ),
-      trailing: isFollowBtn
-          ? ElevatedButton(
-              onPressed: () {},
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFE2C55),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: const Text(
-                '+ অনুসরণ করুন',
-                style: TextStyle(fontSize: 11, color: Colors.white),
-              ),
-            )
-          : Text(
-              time,
-              style: const TextStyle(color: Colors.grey, fontSize: 11),
-            ),
+      subtitle: Text(subText, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+      trailing: hasWave ? const Icon(Icons.back_hand, color: Colors.amber, size: 22) : null,
     );
   }
 }
