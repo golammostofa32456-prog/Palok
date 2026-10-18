@@ -17,8 +17,8 @@ class SearchScreen extends StatefulWidget {
 }
 
 class _SearchScreenState extends State<SearchScreen> {
-  static const Color _pink = Color(0xFFFE2C55);
-  static const Color _cyan = Color(0xFF25F4EE);
+  static const Color _pink = Color(0xFFFF2D55);
+  static const Color _cyan = Color(0xFF00E5FF);
 
   final TextEditingController _controller = TextEditingController();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -131,6 +131,7 @@ class _SearchScreenState extends State<SearchScreen> {
         'photoURL': (data['photoURL'] ?? data['profileImage'] ?? data['photoUrl'] ?? '').toString(),
       });
     }
+
     return users;
   }
 
@@ -158,6 +159,7 @@ class _SearchScreenState extends State<SearchScreen> {
         'thumbnailUrl': (data['thumbnailUrl'] ?? '').toString(),
       });
     }
+
     return videos;
   }
 
@@ -179,6 +181,7 @@ class _SearchScreenState extends State<SearchScreen> {
         results.add(video);
       }
     }
+
     return results;
   }
 
@@ -191,12 +194,18 @@ class _SearchScreenState extends State<SearchScreen> {
       if (object == null) return '';
       if (object is Map) return object[field]?.toString() ?? '';
       switch (field) {
-        case 'id': return object.id?.toString() ?? '';
-        case 'username': return object.username?.toString() ?? '';
-        case 'caption': return object.caption?.toString() ?? '';
-        case 'hashtags': return object.hashtags?.toString() ?? '';
-        case 'thumbnailUrl': return object.thumbnailUrl?.toString() ?? '';
-        default: return '';
+        case 'id':
+          return object.id?.toString() ?? '';
+        case 'username':
+          return object.username?.toString() ?? '';
+        case 'caption':
+          return object.caption?.toString() ?? '';
+        case 'hashtags':
+          return object.hashtags?.toString() ?? '';
+        case 'thumbnailUrl':
+          return object.thumbnailUrl?.toString() ?? '';
+        default:
+          return '';
       }
     } catch (_) {
       return '';
@@ -215,7 +224,7 @@ class _SearchScreenState extends State<SearchScreen> {
     final localVideos = query.isEmpty ? <dynamic>[] : _searchLocalVideos(query);
     final hasResults = _users.isNotEmpty || localVideos.isNotEmpty || _firestoreVideos.isNotEmpty;
 
-      return SafeArea(
+    return SafeArea(
       child: Scaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(
@@ -226,96 +235,106 @@ class _SearchScreenState extends State<SearchScreen> {
             icon: const Icon(Icons.arrow_back, color: Colors.black),
             onPressed: () => Navigator.pop(context),
           ),
-
-        
-        title: Container(
-          height: 42,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: TextField(
-            controller: _controller,
-            autofocus: true,
-            onChanged: _onSearchChanged,
-            textInputAction: TextInputAction.search,
-            style: const TextStyle(color: Colors.black, fontSize: 14),
-            decoration: InputDecoration(
-              hintText: 'অনুসন্ধান করুন',
-              hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-              prefixIcon: const Icon(Icons.search, color: Colors.grey, size: 20),
-              suffixIcon: query.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear, color: Colors.grey, size: 18),
-                      onPressed: () {
-                        _controller.clear();
-                        _onSearchChanged('');
-                      },
-                    )
-                  : null,
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+          title: Container(
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: TextField(
+              controller: _controller,
+              autofocus: true,
+              onChanged: _onSearchChanged,
+              textInputAction: TextInputAction.search,
+              style: const TextStyle(color: Colors.black, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'অনুসন্ধান করুন',
+                hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                prefixIcon: const Icon(Icons.search, color: Colors.grey, size: 20),
+                suffixIcon: query.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, color: Colors.grey, size: 18),
+                        onPressed: () {
+                          _controller.clear();
+                          _onSearchChanged('');
+                        },
+                      )
+                    : null,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              ),
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => _performSearch(_controller.text),
+              child: const Text(
+                'অনুসন্ধান',
+                style: TextStyle(
+                  color: _pink,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => _performSearch(_controller.text),
-            child: const Text('অনুসন্ধান', style: TextStyle(color: _pink, fontWeight: FontWeight.bold, fontSize: 15)),
-          ),
-        ],
+        body: _searching
+            ? const Center(child: CircularProgressIndicator(color: _pink))
+            : query.isEmpty
+                ? _buildEmptySearch()
+                : !hasResults
+                    ? _buildNoResults(query)
+                    : ListView(
+                        padding: const EdgeInsets.all(16),
+                        children: [
+                          if (_users.isNotEmpty) ...[
+                            const Text('ব্যবহারকারী', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            const SizedBox(height: 8),
+                            ..._users.map((user) => _buildUserItem(user)),
+                            const SizedBox(height: 16),
+                          ],
+                          if (localVideos.isNotEmpty) ...[
+                            const Text('ভিডিওসমূহ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            const SizedBox(height: 8),
+                            ...localVideos.map((v) => _buildVideoItem(v, isLocal: true)),
+                          ],
+                          if (_firestoreVideos.isNotEmpty) ...[
+                            const Text('আরও ভিডিও', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            const SizedBox(height: 8),
+                            ..._firestoreVideos.map((v) => _buildVideoItem(v, isLocal: false)),
+                          ],
+                        ],
+                      ),
       ),
-      body: _searching
-          ? const Center(child: CircularProgressIndicator(color: _pink))
-          : query.isEmpty
-              ? _buildEmptySearch()
-              : !hasResults
-                  ? _buildNoResults(query)
-                  : ListView(
-                      padding: const EdgeInsets.all(16),
-                      children: [
-                        if (_users.isNotEmpty) ...[
-                          const Text('ইউজারসমূহ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          const SizedBox(height: 8),
-                          ..._users.map(_buildUserItem),
-                          const SizedBox(height: 16),
-                        ],
-                        if (localVideos.isNotEmpty) ...[
-                          const Text('ভিডিওসমূহ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          const SizedBox(height: 8),
-                          ...localVideos.map((v) => _buildVideoItem(v, isLocal: true)),
-                        ],
-                        if (_firestoreVideos.isNotEmpty) ...[
-                          const Text('আরও ভিডিও', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          const SizedBox(height: 8),
-                          ..._firestoreVideos.map((v) => _buildVideoItem(v, isLocal: false)),
-                        ],
-                      ],
-                    ),
     );
   }
 
   Widget _buildEmptySearch() {
     return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text('আপনি পছন্দ করতে পারেন', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        ],
+      child: Text(
+        'আপনি অনুসন্ধান করতে পারেন',
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
       ),
     );
   }
 
   Widget _buildNoResults(String query) {
     return Center(
-      child: Text('"$query" দিয়ে কোনো ফলাফল পাওয়া যায়নি', style: const TextStyle(color: Colors.grey)),
+      child: Text(
+        '"$query" নিয়ে কোনো ফলাফল পাওয়া যায়নি',
+        style: const TextStyle(color: Colors.grey),
+      ),
     );
   }
 
   Widget _buildUserItem(Map<String, dynamic> user) {
     final username = (user['username'] ?? user['name'] ?? 'User').toString();
     return ListTile(
-      leading: const CircleAvatar(backgroundColor: Colors.grey, child: Icon(Icons.person, color: Colors.white)),
+      leading: const CircleAvatar(
+        backgroundColor: Colors.grey,
+        child: Icon(Icons.person, color: Colors.white),
+      ),
       title: Text('@$username', style: const TextStyle(fontWeight: FontWeight.bold)),
     );
   }
@@ -329,8 +348,13 @@ class _SearchScreenState extends State<SearchScreen> {
       leading: Container(
         width: 50,
         height: 65,
-        decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(6)),
-        child: thumb.isNotEmpty ? Image.network(thumb, fit: BoxFit.cover) : const Icon(Icons.play_arrow),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade300,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: thumb.isNotEmpty
+            ? Image.network(thumb, fit: BoxFit.cover)
+            : const Icon(Icons.play_arrow),
       ),
       title: Text(username.isEmpty ? '@PALOK' : '@$username', style: const TextStyle(fontWeight: FontWeight.bold)),
       subtitle: Text(caption, maxLines: 2, overflow: TextOverflow.ellipsis),
