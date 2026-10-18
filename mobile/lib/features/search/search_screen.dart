@@ -18,15 +18,12 @@ class SearchScreen extends StatefulWidget {
 }
 
 class _SearchScreenState extends State<SearchScreen> {
-  // টিকটক স্টাইল কালার (লাইট থিম)
+  // টিকটক থিম কালার
   static const Color _pink = Color(0xFFFE2C55);
   static const Color _cyan = Color(0xFF25F4EE);
 
-  final TextEditingController _controller =
-      TextEditingController();
-
-  final FirebaseFirestore _firestore =
-      FirebaseFirestore.instance;
+  final TextEditingController _controller = TextEditingController();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Timer? _searchTimer;
 
@@ -39,7 +36,6 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   void initState() {
     super.initState();
-
     _controller.addListener(() {
       if (mounted) {
         setState(() {});
@@ -72,7 +68,6 @@ class _SearchScreenState extends State<SearchScreen> {
 
   void _onSearchChanged(String value) {
     _searchTimer?.cancel();
-
     final query = value.trim();
 
     if (query.isEmpty) {
@@ -82,7 +77,6 @@ class _SearchScreenState extends State<SearchScreen> {
         _searching = false;
         _lastQuery = '';
       });
-
       return;
     }
 
@@ -101,9 +95,7 @@ class _SearchScreenState extends State<SearchScreen> {
   Future<void> _performSearch(String query) async {
     final text = _normalize(query);
 
-    if (text.isEmpty) {
-      return;
-    }
+    if (text.isEmpty) return;
 
     setState(() {
       _searching = true;
@@ -127,19 +119,11 @@ class _SearchScreenState extends State<SearchScreen> {
       firestoreVideos = [];
     }
 
-    if (!mounted) {
-      return;
-    }
-
-    if (_lastQuery != text) {
-      return;
-    }
+    if (!mounted || _lastQuery != text) return;
 
     final localIds = <String>{};
-
     for (final video in localResults) {
       final id = _readString(video, 'id');
-
       if (id.isNotEmpty) {
         localIds.add(id);
       }
@@ -147,7 +131,6 @@ class _SearchScreenState extends State<SearchScreen> {
 
     firestoreVideos = firestoreVideos.where((video) {
       final id = (video['id'] ?? '').toString();
-
       return id.isEmpty || !localIds.contains(id);
     }).toList();
 
@@ -162,34 +145,20 @@ class _SearchScreenState extends State<SearchScreen> {
   // FIRESTORE USER SEARCH
   // ============================================================
 
-  Future<List<Map<String, dynamic>>> _searchUsers(
-    String query,
-  ) async {
-    final snapshot = await _firestore
-        .collection('users')
-        .limit(200)
-        .get();
-
+  Future<List<Map<String, dynamic>>> _searchUsers(String query) async {
+    final snapshot = await _firestore.collection('users').limit(200).get();
     final users = <Map<String, dynamic>>[];
 
     for (final doc in snapshot.docs) {
       final data = doc.data();
-
       final name = (data['name'] ?? '').toString();
       final username = (data['username'] ?? '').toString();
       final displayName = (data['displayName'] ?? '').toString();
       final email = (data['email'] ?? '').toString();
 
-      final searchText = [
-        name,
-        username,
-        displayName,
-        email,
-      ].join(' ').toLowerCase();
+      final searchText = [name, username, displayName, email].join(' ').toLowerCase();
 
-      if (!_containsSearchText(searchText, query)) {
-        continue;
-      }
+      if (!_containsSearchText(searchText, query)) continue;
 
       users.add({
         'id': doc.id,
@@ -197,12 +166,7 @@ class _SearchScreenState extends State<SearchScreen> {
         'username': username,
         'displayName': displayName,
         'email': email,
-        'photoURL': (
-          data['photoURL'] ??
-          data['profileImage'] ??
-          data['photoUrl'] ??
-          ''
-        ).toString(),
+        'photoURL': (data['photoURL'] ?? data['profileImage'] ?? data['photoUrl'] ?? '').toString(),
       });
     }
 
@@ -213,34 +177,20 @@ class _SearchScreenState extends State<SearchScreen> {
   // FIRESTORE VIDEO SEARCH
   // ============================================================
 
-  Future<List<Map<String, dynamic>>> _searchVideos(
-    String query,
-  ) async {
-    final snapshot = await _firestore
-        .collection('videos')
-        .limit(200)
-        .get();
-
+  Future<List<Map<String, dynamic>>> _searchVideos(String query) async {
+    final snapshot = await _firestore.collection('videos').limit(200).get();
     final videos = <Map<String, dynamic>>[];
 
     for (final doc in snapshot.docs) {
       final data = doc.data();
-
       final username = (data['username'] ?? '').toString();
       final caption = (data['caption'] ?? '').toString();
       final hashtags = _valueToSearchString(data['hashtags']);
       final userId = (data['userId'] ?? '').toString();
 
-      final searchText = [
-        username,
-        caption,
-        hashtags,
-        userId,
-      ].join(' ').toLowerCase();
+      final searchText = [username, caption, hashtags, userId].join(' ').toLowerCase();
 
-      if (!_containsSearchText(searchText, query)) {
-        continue;
-      }
+      if (!_containsSearchText(searchText, query)) continue;
 
       videos.add({
         'id': doc.id,
@@ -250,12 +200,7 @@ class _SearchScreenState extends State<SearchScreen> {
         'userId': userId,
         'videoUrl': (data['videoUrl'] ?? '').toString(),
         'thumbnailUrl': (data['thumbnailUrl'] ?? '').toString(),
-        'creatorImage': (
-          data['creatorImage'] ??
-          data['profileImage'] ??
-          data['photoURL'] ??
-          ''
-        ).toString(),
+        'creatorImage': (data['creatorImage'] ?? data['profileImage'] ?? data['photoURL'] ?? '').toString(),
       });
     }
 
@@ -268,10 +213,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   List<dynamic> _searchLocalVideos(String query) {
     final textQuery = _normalize(query);
-
-    if (textQuery.isEmpty) {
-      return [];
-    }
+    if (textQuery.isEmpty) return [];
 
     final results = <dynamic>[];
 
@@ -282,13 +224,7 @@ class _SearchScreenState extends State<SearchScreen> {
       final hashtags = _readString(video, 'hashtags').toLowerCase();
       final userId = _readString(video, 'userId').toLowerCase();
 
-      final text = [
-        id,
-        username,
-        caption,
-        hashtags,
-        userId,
-      ].join(' ');
+      final text = [id, username, caption, hashtags, userId].join(' ');
 
       if (_containsSearchText(text, textQuery)) {
         results.add(video);
@@ -298,86 +234,43 @@ class _SearchScreenState extends State<SearchScreen> {
     return results;
   }
 
-  // ============================================================
-  // SEARCH MATCH HELPER
-  // ============================================================
-
   bool _containsSearchText(String source, String query) {
     final normalizedSource = _normalize(source);
     final normalizedQuery = _normalize(query);
-
-    if (normalizedQuery.isEmpty) {
-      return true;
-    }
-
+    if (normalizedQuery.isEmpty) return true;
     return normalizedSource.contains(normalizedQuery);
   }
 
-  // ============================================================
-  // READ OBJECT FIELD SAFELY
-  // ============================================================
-
   String _readString(dynamic object, String field) {
     try {
-      if (object == null) {
-        return '';
-      }
-
-      if (object is Map) {
-        return object[field]?.toString() ?? '';
-      }
+      if (object == null) return '';
+      if (object is Map) return object[field]?.toString() ?? '';
 
       switch (field) {
-        case 'id':
-          return object.id?.toString() ?? '';
-        case 'username':
-          return object.username?.toString() ?? '';
-        case 'caption':
-          return object.caption?.toString() ?? '';
-        case 'hashtags':
-          return object.hashtags?.toString() ?? '';
-        case 'userId':
-          return object.userId?.toString() ?? '';
-        case 'creatorImage':
-          return object.creatorImage?.toString() ?? '';
-        case 'videoUrl':
-          return object.videoUrl?.toString() ?? '';
-        case 'thumbnailUrl':
-          return object.thumbnailUrl?.toString() ?? '';
-        default:
-          return '';
+        case 'id': return object.id?.toString() ?? '';
+        case 'username': return object.username?.toString() ?? '';
+        case 'caption': return object.caption?.toString() ?? '';
+        case 'hashtags': return object.hashtags?.toString() ?? '';
+        case 'userId': return object.userId?.toString() ?? '';
+        case 'creatorImage': return object.creatorImage?.toString() ?? '';
+        case 'videoUrl': return object.videoUrl?.toString() ?? '';
+        case 'thumbnailUrl': return object.thumbnailUrl?.toString() ?? '';
+        default: return '';
       }
     } catch (_) {
       return '';
     }
   }
 
-  // ============================================================
-  // FIRESTORE VALUE -> STRING
-  // ============================================================
-
   String _valueToSearchString(dynamic value) {
-    if (value == null) {
-      return '';
-    }
-
-    if (value is Iterable) {
-      return value.map((item) => item.toString()).join(' ');
-    }
-
+    if (value == null) return '';
+    if (value is Iterable) return value.map((item) => item.toString()).join(' ');
     return value.toString();
   }
 
-  // ============================================================
-  // FIND LOCAL VIDEO INDEX
-  // ============================================================
-
   int _findActualIndex(dynamic video) {
     final selectedId = _readString(video, 'id');
-
-    if (selectedId.isEmpty) {
-      return -1;
-    }
+    if (selectedId.isEmpty) return -1;
 
     return widget.videos.indexWhere((item) {
       final itemId = _readString(item, 'id');
@@ -385,44 +278,22 @@ class _SearchScreenState extends State<SearchScreen> {
     });
   }
 
-  // ============================================================
-  // SELECT LOCAL VIDEO
-  // ============================================================
-
-  Future<void> _selectLocalVideo(
-    BuildContext sheetContext,
-    dynamic video,
-  ) async {
+  Future<void> _selectLocalVideo(BuildContext sheetContext, dynamic video) async {
     final actualIndex = _findActualIndex(video);
-
-    if (actualIndex < 0) {
-      return;
-    }
+    if (actualIndex < 0) return;
 
     Navigator.of(sheetContext).pop();
 
     if (widget.onVideoSelected != null) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) async {
-          await widget.onVideoSelected!(actualIndex);
-        },
-      );
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await widget.onVideoSelected!(actualIndex);
+      });
     }
   }
 
-  // ============================================================
-  // SELECT FIRESTORE VIDEO
-  // ============================================================
-
-  Future<void> _selectFirestoreVideo(
-    BuildContext sheetContext,
-    Map<String, dynamic> video,
-  ) async {
+  Future<void> _selectFirestoreVideo(BuildContext sheetContext, Map<String, dynamic> video) async {
     final selectedId = (video['id'] ?? '').toString();
-
-    if (selectedId.isEmpty) {
-      return;
-    }
+    if (selectedId.isEmpty) return;
 
     final actualIndex = widget.videos.indexWhere((item) {
       final id = _readString(item, 'id');
@@ -431,32 +302,21 @@ class _SearchScreenState extends State<SearchScreen> {
 
     if (actualIndex >= 0) {
       Navigator.of(sheetContext).pop();
-
       if (widget.onVideoSelected != null) {
-        WidgetsBinding.instance.addPostFrameCallback(
-          (_) async {
-            await widget.onVideoSelected!(actualIndex);
-          },
-        );
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          await widget.onVideoSelected!(actualIndex);
+        });
       }
-
       return;
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('ভিডিওটি বর্তমানে Home feed-এ নেই'),
-      ),
+      const SnackBar(content: Text('ভিডিওটি বর্তমানে Home feed-এ নেই')),
     );
   }
 
-  // ============================================================
-  // CLEAR SEARCH
-  // ============================================================
-
   void _clearSearch() {
     _controller.clear();
-
     setState(() {
       _users = [];
       _firestoreVideos = [];
@@ -466,21 +326,14 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   // ============================================================
-  // BUILD (TikTok Light Theme UI)
+  // BUILD
   // ============================================================
 
   @override
   Widget build(BuildContext context) {
     final query = _controller.text.trim();
-
-    final localVideos = query.isEmpty
-        ? <dynamic>[]
-        : _searchLocalVideos(_normalize(query));
-
-    final hasResults =
-        _users.isNotEmpty ||
-        localVideos.isNotEmpty ||
-        _firestoreVideos.isNotEmpty;
+    final localVideos = query.isEmpty ? <dynamic>[] : _searchLocalVideos(_normalize(query));
+    final hasResults = _users.isNotEmpty || localVideos.isNotEmpty || _firestoreVideos.isNotEmpty;
 
     return Material(
       color: Colors.transparent,
@@ -494,16 +347,12 @@ class _SearchScreenState extends State<SearchScreen> {
           builder: (context, scrollController) {
             return Container(
               decoration: const BoxDecoration(
-                color: Colors.white, // টিকটকের মতো সাদা ব্যাকগ্রাউন্ড
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(26),
-                ),
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
               ),
               child: Column(
                 children: [
                   const SizedBox(height: 10),
-
-                  // DRAG HANDLE
                   Container(
                     width: 44,
                     height: 4,
@@ -512,37 +361,23 @@ class _SearchScreenState extends State<SearchScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-
                   const SizedBox(height: 16),
-
-                  // TITLE & CLOSE
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 18),
                     child: Row(
                       children: [
                         const Text(
-                          'অনুসন্ধান করুন', // টিকটকের মতো বাংলায় বা Search রাখতে পারেন
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                          ),
+                          'Search',
+                          style: TextStyle(color: Colors.black, fontSize: 22, fontWeight: FontWeight.w800),
                         ),
                         const Spacer(),
                         IconButton(
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                          },
-                          icon: const Icon(
-                            Icons.close,
-                            color: Colors.black87,
-                          ),
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close, color: Colors.black87),
                         ),
                       ],
                     ),
                   ),
-
-                  // SEARCH FIELD (TikTok Light Theme)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                     child: TextField(
@@ -563,10 +398,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             : null,
                         filled: true,
                         fillColor: Colors.grey.shade100,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 15,
-                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(18),
                           borderSide: BorderSide.none,
@@ -577,21 +409,14 @@ class _SearchScreenState extends State<SearchScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(18),
-                          borderSide: const BorderSide(
-                            color: _pink,
-                            width: 1.5,
-                          ),
+                          borderSide: const BorderSide(color: _pink, width: 1.5),
                         ),
                       ),
                     ),
                   ),
-
-                  // SEARCH BODY
                   Expanded(
                     child: _searching
-                        ? const Center(
-                            child: CircularProgressIndicator(color: _pink),
-                          )
+                        ? const Center(child: CircularProgressIndicator(color: _pink))
                         : query.isEmpty
                             ? _buildEmptySearch()
                             : !hasResults
@@ -603,14 +428,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                       if (_users.isNotEmpty) ...[
                                         const Padding(
                                           padding: EdgeInsets.only(bottom: 10),
-                                          child: Text(
-                                            'Users',
-                                            style: TextStyle(
-                                              color: Colors.black,
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
+                                          child: Text('Users', style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.w700)),
                                         ),
                                         ..._users.map(_buildUserItem),
                                         const SizedBox(height: 18),
@@ -618,35 +436,17 @@ class _SearchScreenState extends State<SearchScreen> {
                                       if (localVideos.isNotEmpty) ...[
                                         const Padding(
                                           padding: EdgeInsets.only(bottom: 10),
-                                          child: Text(
-                                            'Videos',
-                                            style: TextStyle(
-                                              color: Colors.black,
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
+                                          child: Text('Videos', style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.w700)),
                                         ),
-                                        ...localVideos.map(
-                                          (video) => _buildLocalVideoItem(context, video),
-                                        ),
+                                        ...localVideos.map((video) => _buildLocalVideoItem(context, video)),
                                         const SizedBox(height: 18),
                                       ],
                                       if (_firestoreVideos.isNotEmpty) ...[
                                         const Padding(
                                           padding: EdgeInsets.only(bottom: 10),
-                                          child: Text(
-                                            'More Videos',
-                                            style: TextStyle(
-                                              color: Colors.black,
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
+                                          child: Text('More Videos', style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.w700)),
                                         ),
-                                        ..._firestoreVideos.map(
-                                          (video) => _buildFirestoreVideoItem(context, video),
-                                        ),
+                                        ..._firestoreVideos.map((video) => _buildFirestoreVideoItem(context, video)),
                                       ],
                                     ],
                                   ),
@@ -659,10 +459,6 @@ class _SearchScreenState extends State<SearchScreen> {
       ),
     );
   }
-
-  // ============================================================
-  // EMPTY SEARCH
-  // ============================================================
 
   Widget _buildEmptySearch() {
     return Center(
@@ -681,29 +477,14 @@ class _SearchScreenState extends State<SearchScreen> {
               child: const Icon(Icons.search, color: Colors.white, size: 38),
             ),
             const SizedBox(height: 18),
-            const Text(
-              'Search PALOK',
-              style: TextStyle(
-                color: Colors.black,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
+            const Text('Search PALOK', style: TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
-            const Text(
-              'Username, caption অথবা hashtag দিয়ে ভিডিও খুঁজুন',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey, fontSize: 14),
-            ),
+            const Text('Username, caption অথবা hashtag দিয়ে ভিডিও খুঁজুন', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 14)),
           ],
         ),
       ),
     );
   }
-
-  // ============================================================
-  // NO RESULTS
-  // ============================================================
 
   Widget _buildNoResults(String query) {
     return Center(
@@ -714,29 +495,14 @@ class _SearchScreenState extends State<SearchScreen> {
           children: [
             const Icon(Icons.search_off_rounded, color: Colors.grey, size: 58),
             const SizedBox(height: 14),
-            const Text(
-              'কোনো ফলাফল পাওয়া যায়নি',
-              style: TextStyle(
-                color: Colors.black,
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            const Text('কোনো ফলাফল পাওয়া যায়নি', style: TextStyle(color: Colors.black, fontSize: 17, fontWeight: FontWeight.w700)),
             const SizedBox(height: 7),
-            Text(
-              '"$query" দিয়ে কোনো User বা Video পাওয়া যায়নি',
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.grey, fontSize: 13),
-            ),
+            Text('"$query" দিয়ে কোনো User বা Video পাওয়া যায়নি', textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey, fontSize: 13)),
           ],
         ),
       ),
     );
   }
-
-  // ============================================================
-  // USER ITEM
-  // ============================================================
 
   Widget _buildUserItem(Map<String, dynamic> user) {
     final username = (user['username'] ?? '').toString();
@@ -744,24 +510,12 @@ class _SearchScreenState extends State<SearchScreen> {
     final displayName = (user['displayName'] ?? '').toString();
     final photoURL = (user['photoURL'] ?? '').toString();
 
-    String title = username;
-    if (title.isEmpty) title = displayName;
-    if (title.isEmpty) title = name;
+    String title = username.isNotEmpty ? username : (displayName.isNotEmpty ? displayName : name);
     if (title.isEmpty) title = 'PALOK User';
-
-    String subtitle = '';
-    if (displayName.isNotEmpty && displayName != title) {
-      subtitle = displayName;
-    } else if (name.isNotEmpty && name != title) {
-      subtitle = name;
-    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(16),
-      ),
+      decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(16)),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         leading: _buildAvatar(photoURL, title),
@@ -769,19 +523,10 @@ class _SearchScreenState extends State<SearchScreen> {
           title.startsWith('@') ? title : '@$title',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.w700,
-            fontSize: 15,
-          ),
+          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15),
         ),
-        subtitle: subtitle.isNotEmpty
-            ? Text(
-                subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.grey, fontSize: 13),
-              )
+        subtitle: (displayName.isNotEmpty && displayName != title)
+            ? Text(displayName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey, fontSize: 13))
             : null,
         trailing: const Icon(Icons.person_outline, color: Colors.grey),
       ),
@@ -789,7 +534,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   // ============================================================
-  // LOCAL VIDEO ITEM
+  // TIKTOK STYLE VIDEO ITEM DETAILS (USERNAME + CAPTION)
   // ============================================================
 
   Widget _buildLocalVideoItem(BuildContext sheetContext, dynamic video) {
@@ -804,10 +549,7 @@ class _SearchScreenState extends State<SearchScreen> {
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(16),
-        ),
+        decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(16)),
         child: Row(
           children: [
             _buildVideoThumbnail(thumbnailUrl, username),
@@ -816,32 +558,32 @@ class _SearchScreenState extends State<SearchScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ১. ইউজারনেম (TikTok Style Bold Header)
                   Text(
-                    username.isEmpty ? '@PALOK' : '@$username',
+                    username.isEmpty ? '@PALOK' : (username.startsWith('@') ? username : '@$username'),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
+                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15),
                   ),
-                  if (caption.trim().isNotEmpty) ...[
-                    const SizedBox(height: 5),
+                  const SizedBox(height: 3),
+
+                  // ২. ক্যাপশন (আলাদা টেক্সট)
+                  if (caption.trim().isNotEmpty)
                     Text(
                       caption,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.black87, fontSize: 13),
+                      style: const TextStyle(color: Colors.black87, fontSize: 13, height: 1.2),
                     ),
-                  ],
+
+                  // ৩. হ্যাশট্যাগ (আলাদা হাইলাইট)
                   if (hashtags.trim().isNotEmpty) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Text(
                       hashtags,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.blue, fontSize: 12),
+                      style: const TextStyle(color: _pink, fontSize: 12, fontWeight: FontWeight.w600),
                     ),
                   ],
                 ],
@@ -855,14 +597,7 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  // ============================================================
-  // FIRESTORE VIDEO ITEM
-  // ============================================================
-
-  Widget _buildFirestoreVideoItem(
-    BuildContext sheetContext,
-    Map<String, dynamic> video,
-  ) {
+  Widget _buildFirestoreVideoItem(BuildContext sheetContext, Map<String, dynamic> video) {
     final username = (video['username'] ?? '').toString();
     final caption = (video['caption'] ?? '').toString();
     final hashtags = (video['hashtags'] ?? '').toString();
@@ -874,10 +609,7 @@ class _SearchScreenState extends State<SearchScreen> {
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(16),
-        ),
+        decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(16)),
         child: Row(
           children: [
             _buildVideoThumbnail(thumbnailUrl, username),
@@ -886,32 +618,32 @@ class _SearchScreenState extends State<SearchScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ১. ইউজারনেম (TikTok Style Bold Header)
                   Text(
-                    username.isEmpty ? '@PALOK' : '@$username',
+                    username.isEmpty ? '@PALOK' : (username.startsWith('@') ? username : '@$username'),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
+                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15),
                   ),
-                  if (caption.trim().isNotEmpty) ...[
-                    const SizedBox(height: 5),
+                  const SizedBox(height: 3),
+
+                  // ২. ক্যাপশন (আলাদা টেক্সট)
+                  if (caption.trim().isNotEmpty)
                     Text(
                       caption,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.black87, fontSize: 13),
+                      style: const TextStyle(color: Colors.black87, fontSize: 13, height: 1.2),
                     ),
-                  ],
+
+                  // ৩. হ্যাশট্যাগ (আলাদা হাইলাইট)
                   if (hashtags.trim().isNotEmpty) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Text(
                       hashtags,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.blue, fontSize: 12),
+                      style: const TextStyle(color: _pink, fontSize: 12, fontWeight: FontWeight.w600),
                     ),
                   ],
                 ],
@@ -926,13 +658,11 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   // ============================================================
-  // HELPERS (Thumbnails & Avatars)
+  // HELPERS
   // ============================================================
 
   Widget _buildVideoThumbnail(String imageUrl, String username) {
-    final firstLetter = username.trim().isEmpty
-        ? 'P'
-        : username.trim().substring(0, 1).toUpperCase();
+    final firstLetter = username.trim().isEmpty ? 'P' : username.trim().substring(0, 1).toUpperCase();
 
     if (imageUrl.trim().isNotEmpty) {
       return ClipRRect(
@@ -958,18 +688,13 @@ class _SearchScreenState extends State<SearchScreen> {
         gradient: const LinearGradient(colors: [_pink, _cyan]),
       ),
       child: Center(
-        child: Text(
-          letter,
-          style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900),
-        ),
+        child: Text(letter, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)),
       ),
     );
   }
 
   Widget _buildAvatar(String imageUrl, String name) {
-    final firstLetter = name.trim().isEmpty
-        ? 'P'
-        : name.trim().substring(0, 1).toUpperCase();
+    final firstLetter = name.trim().isEmpty ? 'P' : name.trim().substring(0, 1).toUpperCase();
 
     if (imageUrl.trim().isNotEmpty) {
       return ClipOval(
@@ -989,15 +714,9 @@ class _SearchScreenState extends State<SearchScreen> {
     return Container(
       width: 48,
       height: 48,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(colors: [_pink, _cyan]),
-      ),
+      decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [_pink, _cyan])),
       alignment: Alignment.center,
-      child: Text(
-        letter,
-        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
-      ),
+      child: Text(letter, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
     );
   }
 }
