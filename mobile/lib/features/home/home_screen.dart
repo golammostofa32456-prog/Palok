@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:share_plus/share_plus.dart';
+import '../search/search_screen.dart';
 
 import '../friends/friends_screen.dart';
 import '../inbox/inbox_screen.dart';
