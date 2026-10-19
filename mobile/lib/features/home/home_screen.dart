@@ -148,116 +148,13 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
   void _openSearch() {
-    final searchController = TextEditingController();
-
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final query =
-                searchController.text.trim().toLowerCase();
-
-            final results = _homeController.videos
-                .where((video) {
-              return video.username
-                      .toLowerCase()
-                      .contains(query) ||
-                  video.caption
-                      .toLowerCase()
-                      .contains(query) ||
-                  video.hashtags.any(
-                    (tag) => tag.toLowerCase().contains(query),
-                  );
-            }).toList();
-
-            return AlertDialog(
-              backgroundColor: const Color(0xFF202020),
-              title: const Text(
-                'Search PALOK',
-                style: TextStyle(color: Colors.white),
-              ),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: searchController,
-                      autofocus: true,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: 'Search videos, users...',
-                        hintStyle: const TextStyle(
-                          color: Colors.white54,
-                        ),
-                        prefixIcon: const Icon(
-                          Icons.search,
-                          color: Colors.white70,
-                        ),
-                        filled: true,
-                        fillColor: Colors.white10,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      onChanged: (_) => setDialogState(() {}),
-                    ),
-                    const SizedBox(height: 12),
-                    Flexible(
-                      child: searchController.text.trim().isEmpty
-                          ? const Center(
-                              child: Text(
-                                'ভিডিও বা ইউজারের নাম লিখুন',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                ),
-                              ),
-                            )
-                          : results.isEmpty
-                              ? const Center(
-                                  child: Text(
-                                    'কোনো ফলাফল পাওয়া যায়নি।',
-                                    style: TextStyle(
-                                      color: Colors.white70,
-                                    ),
-                                  ),
-                                )
-                              : ListView.builder(
-                                  shrinkWrap: true,
-                                  itemCount: results.length,
-                                  itemBuilder: (_, index) {
-                                    final video = results[index];
-
-                                    return ListTile(
-                                      leading: const Icon(
-                                        Icons.play_circle_outline,
-                                        color: _cyan,
-                                      ),
-                                      title: Text(
-                                        video.username,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                      subtitle: Text(
-                                        video.caption,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                        ),
-                                      ),
-                                      
-                                     void _openSearch() {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => SearchScreen(
           videos: _homeController.videos,
-          onVideoSelected: (actualIndex) async {
+          onVideoSelected: (actualIndex) {
             if (_pageController.hasClients) {
               _pageController.jumpToPage(actualIndex);
               _homeController.onVideoChanged(actualIndex);
@@ -267,9 +164,9 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-   
-                        
 
+  
+  
   Widget _buildFeed() {
     return AnimatedBuilder(
       animation: _homeController,
