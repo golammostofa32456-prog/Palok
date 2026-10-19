@@ -224,88 +224,101 @@ class _SearchScreenState extends State<SearchScreen> {
     final localVideos = query.isEmpty ? <dynamic>[] : _searchLocalVideos(query);
     final hasResults = _users.isNotEmpty || localVideos.isNotEmpty || _firestoreVideos.isNotEmpty;
 
-    return SafeArea(
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: AppBar(
-          toolbarHeight: 56,
-          backgroundColor: Colors.white,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.black),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: Container(
-            height: 42,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: TextField(
-              controller: _controller,
-              autofocus: true,
-              onChanged: _onSearchChanged,
-              textInputAction: TextInputAction.search,
-              style: const TextStyle(color: Colors.black, fontSize: 14),
-              decoration: InputDecoration(
-                hintText: 'অনুসন্ধান করুন',
-                hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-                prefixIcon: const Icon(Icons.search, color: Colors.grey, size: 20),
-                suffixIcon: query.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, color: Colors.grey, size: 18),
-                        onPressed: () {
-                          _controller.clear();
-                          _onSearchChanged('');
-                        },
-                      )
-                    : null,
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => _performSearch(_controller.text),
-              child: const Text(
-                'অনুসন্ধান',
-                style: TextStyle(
-                  color: _pink,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(top: 8.0),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                color: Colors.white,
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.black),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    Expanded(
+                      child: Container(
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: TextField(
+                          controller: _controller,
+                          autofocus: true,
+                          onChanged: _onSearchChanged,
+                          textInputAction: TextInputAction.search,
+                          style: const TextStyle(color: Colors.black, fontSize: 14),
+                          decoration: InputDecoration(
+                            hintText: 'অনুসন্ধান করুন',
+                            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                            prefixIcon: const Icon(Icons.search, color: Colors.grey, size: 20),
+                            suffixIcon: query.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear, color: Colors.grey, size: 18),
+                                    onPressed: () {
+                                      _controller.clear();
+                                      _onSearchChanged('');
+                                    },
+                                  )
+                                : null,
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => _performSearch(_controller.text),
+                      child: const Text(
+                        'অনুসন্ধান',
+                        style: TextStyle(
+                          color: _pink,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
+              const Divider(height: 1, thickness: 0.5),
+              Expanded(
+                child: _searching
+                    ? const Center(child: CircularProgressIndicator(color: _pink))
+                    : query.isEmpty
+                        ? _buildEmptySearch()
+                        : !hasResults
+                            ? _buildNoResults(query)
+                            : ListView(
+                                padding: const EdgeInsets.all(16),
+                                children: [
+                                  if (_users.isNotEmpty) ...[
+                                    const Text('ব্যবহারকারী', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                    const SizedBox(height: 8),
+                                    ..._users.map((user) => _buildUserItem(user)),
+                                    const SizedBox(height: 16),
+                                  ],
+                                  if (localVideos.isNotEmpty) ...[
+                                    const Text('ভিডিওসমূহ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                    const SizedBox(height: 8),
+                                    ...localVideos.map((v) => _buildVideoItem(v, isLocal: true)),
+                                  ],
+                                  if (_firestoreVideos.isNotEmpty) ...[
+                                    const Text('আরও ভিডিও', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                    const SizedBox(height: 8),
+                                    ..._firestoreVideos.map((v) => _buildVideoItem(v, isLocal: false)),
+                                  ],
+                                ],
+                              ),
+              ),
+            ],
+          ),
         ),
-        body: _searching
-            ? const Center(child: CircularProgressIndicator(color: _pink))
-            : query.isEmpty
-                ? _buildEmptySearch()
-                : !hasResults
-                    ? _buildNoResults(query)
-                    : ListView(
-                        padding: const EdgeInsets.all(16),
-                        children: [
-                          if (_users.isNotEmpty) ...[
-                            const Text('ব্যবহারকারী', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            const SizedBox(height: 8),
-                            ..._users.map((user) => _buildUserItem(user)),
-                            const SizedBox(height: 16),
-                          ],
-                          if (localVideos.isNotEmpty) ...[
-                            const Text('ভিডিওসমূহ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            const SizedBox(height: 8),
-                            ...localVideos.map((v) => _buildVideoItem(v, isLocal: true)),
-                          ],
-                          if (_firestoreVideos.isNotEmpty) ...[
-                            const Text('আরও ভিডিও', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            const SizedBox(height: 8),
-                            ..._firestoreVideos.map((v) => _buildVideoItem(v, isLocal: false)),
-                          ],
-                        ],
-                      ),
       ),
     );
   }
