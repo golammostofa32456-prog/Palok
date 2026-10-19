@@ -61,16 +61,21 @@ class PalokApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'PALOK',
       theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: Colors.black,
-        primaryColor: const Color(0xFFFF2D55),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFFF2D55),
-          secondary: Color(0xFF00E5FF),
-          surface: Colors.black,
-        ),
-        useMaterial3: true,
-      ),
+  brightness: Brightness.light,
+  scaffoldBackgroundColor: Colors.white,
+  primaryColor: const Color(0xFFFE2C55),
+  colorScheme: const ColorScheme.light(
+    primary: Color(0xFFFE2C55),
+    secondary: Color(0xFF00E5FF),
+    surface: Colors.white,
+  ),
+  appBarTheme: const AppBarTheme(
+    backgroundColor: Colors.white,
+    foregroundColor: Colors.black,
+    elevation: 0,
+  ),
+  useMaterial3: true,
+),
       home: firebaseError != null
           ? FirebaseErrorScreen(
               error: firebaseError!,
