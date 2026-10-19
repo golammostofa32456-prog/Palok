@@ -1,6 +1,6 @@
 
 import 'package:flutter/material.dart';
-
+import 'chat_screen.dart';
 class InboxScreen extends StatefulWidget {
   const InboxScreen({super.key});
 
