@@ -3164,8 +3164,7 @@ Widget _buildBottomNavigation() {
         break;
 
       case 3:
-        body =
-            _buildInboxScreen();
+            body = const InboxScreen();
         break;
 
       case 4:
