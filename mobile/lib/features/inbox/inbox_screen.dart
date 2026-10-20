@@ -266,10 +266,14 @@ class _InboxScreenState extends State<InboxScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        body: const Center(
+      
+  body: const Center(
   child: Text(
     'NEW INBOX SCREEN',
-    style: TextStyle(color: Colors.red, fontSize: 24),
+    style: TextStyle(
+      color: Colors.white,
+      fontSize: 24,
+    ),
   ),
 ),
         surfaceTintColor: Colors.white,
