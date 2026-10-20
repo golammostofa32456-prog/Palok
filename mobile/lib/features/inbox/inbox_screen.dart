@@ -21,8 +21,10 @@ class _InboxScreenState extends State<InboxScreen> {
 
   static const Color _pink = Color(0xFFFE2C55);
   static const Color _blue = Color(0xFF25B7E8);
-  static const Color _text = Color(0xFF161823);
-  static const Color _muted = Color(0xFF8A8B91);
+  static const Color _text = Colors.white;
+  static const Color _muted = Color(0xFFB0B0B8);
+  static const Color _background = Colors.black;
+  static const Color _surface = Color(0xFF171717);
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -38,7 +40,7 @@ class _InboxScreenState extends State<InboxScreen> {
         SnackBar(
           content: Text(message),
           behavior: SnackBarBehavior.floating,
-          backgroundColor: _text,
+          backgroundColor: _surface,
         ),
       );
   }
@@ -121,7 +123,7 @@ class _InboxScreenState extends State<InboxScreen> {
             final query = controller.text.trim().toLowerCase();
 
             return AlertDialog(
-              backgroundColor: Colors.white,
+              backgroundColor: _surface,
               title: const Text(
                 'ব্যবহারকারী খুঁজুন',
                 style: TextStyle(color: _text),
@@ -134,11 +136,23 @@ class _InboxScreenState extends State<InboxScreen> {
                     TextField(
                       controller: controller,
                       autofocus: true,
+                      style: const TextStyle(color: _text),
                       onChanged: (_) => setDialogState(() {}),
                       decoration: InputDecoration(
                         hintText: 'নাম লিখুন...',
-                        prefixIcon: const Icon(Icons.search),
-                        border: OutlineInputBorder(
+                        hintStyle: const TextStyle(color: _muted),
+                        prefixIcon: const Icon(
+                          Icons.search,
+                          color: _muted,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderSide: const BorderSide(
+                            color: Color(0xFF444444),
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: const BorderSide(color: _pink),
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
@@ -154,6 +168,7 @@ class _InboxScreenState extends State<InboxScreen> {
                               child: Text(
                                 'ব্যবহারকারী লোড করা যায়নি।',
                                 textAlign: TextAlign.center,
+                                style: TextStyle(color: _text),
                               ),
                             );
                           }
@@ -171,8 +186,9 @@ class _InboxScreenState extends State<InboxScreen> {
 
                             final data = doc.data();
                             final name = _userName(data).toLowerCase();
-                            final username =
-                                (data['username'] ?? '').toString().toLowerCase();
+                            final username = (data['username'] ?? '')
+                                .toString()
+                                .toLowerCase();
 
                             return query.isEmpty ||
                                 name.contains(query) ||
@@ -181,7 +197,10 @@ class _InboxScreenState extends State<InboxScreen> {
 
                           if (users.isEmpty) {
                             return const Center(
-                              child: Text('কোনো ব্যবহারকারী পাওয়া যায়নি।'),
+                              child: Text(
+                                'কোনো ব্যবহারকারী পাওয়া যায়নি।',
+                                style: TextStyle(color: _muted),
+                              ),
                             );
                           }
 
@@ -200,6 +219,7 @@ class _InboxScreenState extends State<InboxScreen> {
                                   name,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: _text),
                                 ),
                                 trailing: const Icon(
                                   Icons.chat_bubble_outline,
@@ -225,7 +245,10 @@ class _InboxScreenState extends State<InboxScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('বন্ধ করুন'),
+                  child: const Text(
+                    'বন্ধ করুন',
+                    style: TextStyle(color: _pink),
+                  ),
                 ),
               ],
             );
@@ -263,27 +286,18 @@ class _InboxScreenState extends State<InboxScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: _background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-      
-  body: const Center(
-  child: Text(
-    'NEW INBOX SCREEN',
-    style: TextStyle(
-      color: Colors.white,
-      fontSize: 24,
-    ),
-  ),
-),
-        surfaceTintColor: Colors.white,
+        backgroundColor: _background,
+        foregroundColor: Colors.white,
+        surfaceTintColor: _background,
         elevation: 0,
         toolbarHeight: 58,
         leading: IconButton(
           tooltip: 'বন্ধু যোগ করুন',
           icon: const Icon(
             Icons.group_add_outlined,
-            color: Colors.black,
+            color: Colors.white,
             size: 27,
           ),
           onPressed: _showSearchDialog,
@@ -294,7 +308,7 @@ class _InboxScreenState extends State<InboxScreen> {
             const Text(
               'ইনবক্স',
               style: TextStyle(
-                color: Colors.black,
+                color: Colors.white,
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
               ),
@@ -304,7 +318,9 @@ class _InboxScreenState extends State<InboxScreen> {
               onTap: () {
                 setState(() => _online = !_online);
                 _showMessage(
-                  _online ? 'অনলাইন স্ট্যাটাস চালু' : 'অনলাইন স্ট্যাটাস বন্ধ',
+                  _online
+                      ? 'অনলাইন স্ট্যাটাস চালু'
+                      : 'অনলাইন স্ট্যাটাস বন্ধ',
                 );
               },
               child: Container(
@@ -313,7 +329,7 @@ class _InboxScreenState extends State<InboxScreen> {
                   vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF3F3F4),
+                  color: _surface,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -332,7 +348,7 @@ class _InboxScreenState extends State<InboxScreen> {
                     const Icon(
                       Icons.arrow_drop_down,
                       size: 16,
-                      color: Colors.black54,
+                      color: Colors.white70,
                     ),
                   ],
                 ),
@@ -346,7 +362,7 @@ class _InboxScreenState extends State<InboxScreen> {
             tooltip: 'ব্যবহারকারী খুঁজুন',
             icon: const Icon(
               Icons.search,
-              color: Colors.black,
+              color: Colors.white,
               size: 29,
             ),
             onPressed: _showSearchDialog,
@@ -361,7 +377,7 @@ class _InboxScreenState extends State<InboxScreen> {
             Container(
               margin: const EdgeInsets.only(top: 5, bottom: 8),
               padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
-              color: const Color(0xFFF3F3F3),
+              color: _surface,
               child: Row(
                 children: [
                   const CircleAvatar(
@@ -389,7 +405,10 @@ class _InboxScreenState extends State<InboxScreen> {
                         SizedBox(height: 3),
                         Text(
                           'কার্যকলাপে এটি খুঁজে পান',
-                          style: TextStyle(fontSize: 13, color: _text),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: _muted,
+                          ),
                         ),
                       ],
                     ),
@@ -400,7 +419,7 @@ class _InboxScreenState extends State<InboxScreen> {
                     icon: const Icon(
                       Icons.close,
                       size: 21,
-                      color: Colors.black45,
+                      color: Colors.white70,
                     ),
                   ),
                 ],
@@ -421,7 +440,7 @@ class _InboxScreenState extends State<InboxScreen> {
           _notificationItem(
             id: 'system',
             icon: Icons.inbox_rounded,
-            color: const Color(0xFF15183D),
+            color: const Color(0xFF34365C),
             title: 'সিস্টেমের নোটিফিকেশন',
             subtitle: 'PALOK-এর গুরুত্বপূর্ণ আপডেট',
             time: 'এখন',
@@ -440,11 +459,15 @@ class _InboxScreenState extends State<InboxScreen> {
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
-                    color: Colors.black,
+                    color: Colors.white,
                   ),
                 ),
                 SizedBox(width: 5),
-                Icon(Icons.info_outline, size: 15, color: Colors.black45),
+                Icon(
+                  Icons.info_outline,
+                  size: 15,
+                  color: Colors.white54,
+                ),
               ],
             ),
           ),
@@ -458,7 +481,7 @@ class _InboxScreenState extends State<InboxScreen> {
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w800,
-                color: Colors.black,
+                color: Colors.white,
               ),
             ),
           ),
@@ -475,7 +498,10 @@ class _InboxScreenState extends State<InboxScreen> {
     if (_myId.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(18),
-        child: Text('মেসেজ দেখতে আগে Sign In করুন।'),
+        child: Text(
+          'মেসেজ দেখতে আগে Sign In করুন।',
+          style: TextStyle(color: _muted),
+        ),
       );
     }
 
@@ -488,7 +514,10 @@ class _InboxScreenState extends State<InboxScreen> {
         if (snapshot.hasError) {
           return const Padding(
             padding: EdgeInsets.all(18),
-            child: Text('চ্যাট লোড করা যায়নি। Firebase Rules পরীক্ষা করুন।'),
+            child: Text(
+              'চ্যাট লোড করা যায়নি। Firebase Rules পরীক্ষা করুন।',
+              style: TextStyle(color: _muted),
+            ),
           );
         }
 
@@ -595,7 +624,10 @@ class _InboxScreenState extends State<InboxScreen> {
     if (_myId.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(18),
-        child: Text('ব্যবহারকারী দেখতে আগে Sign In করুন।'),
+        child: Text(
+          'ব্যবহারকারী দেখতে আগে Sign In করুন।',
+          style: TextStyle(color: _muted),
+        ),
       );
     }
 
@@ -607,6 +639,7 @@ class _InboxScreenState extends State<InboxScreen> {
             padding: EdgeInsets.all(18),
             child: Text(
               'ব্যবহারকারী লোড করা যায়নি। Firebase Rules পরীক্ষা করুন।',
+              style: TextStyle(color: _muted),
             ),
           );
         }
@@ -710,11 +743,9 @@ class _InboxScreenState extends State<InboxScreen> {
                         );
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: isFollowing
-                            ? const Color(0xFFF1F1F2)
-                            : _pink,
-                        foregroundColor:
-                            isFollowing ? _text : Colors.white,
+                        backgroundColor:
+                            isFollowing ? _surface : _pink,
+                        foregroundColor: Colors.white,
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         shape: RoundedRectangleBorder(
@@ -738,7 +769,7 @@ class _InboxScreenState extends State<InboxScreen> {
                     },
                     icon: const Icon(
                       Icons.close,
-                      color: Colors.black38,
+                      color: Colors.white54,
                       size: 20,
                     ),
                   ),
