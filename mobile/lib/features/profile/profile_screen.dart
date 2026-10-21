@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 class ProfileScreen extends StatefulWidget {
-    final String? userId;
+  final String? userId;
 
   const ProfileScreen({
     super.key,
@@ -22,14 +22,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
   static const Color _cyan = Color(0xFF20D7E8);
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   bool _showLikedVideos = false;
 
   User? get _currentUser => _auth.currentUser;
 
+  String get _targetId =>
+      widget.userId ?? _currentUser?.uid ?? '';
+
+  bool get _isMyProfile =>
+      _currentUser != null && _targetId == _currentUser!.uid;
+
   DocumentReference<Map<String, dynamic>> get _userRef =>
-      _firestore.collection('users').doc(_currentUser!.uid);
+      _db.collection('users').doc(_targetId);
+
+  DocumentReference<Map<String, dynamic>> get _followingRef =>
+      _db
+          .collection('users')
+          .doc(_currentUser!.uid)
+          .collection('following')
+          .doc(_targetId);
 
   String _text(dynamic value, [String fallback = '']) {
     if (value == null) return fallback;
@@ -42,10 +55,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   String _username(Map<String, dynamic> data) {
-    final name = _text(data['username']);
+    final name = _text(data['username']).trim();
     if (name.isNotEmpty) return name;
 
-    final email = _currentUser?.email ?? '';
+    final email = _text(
+      data['email'],
+      _isMyProfile ? _currentUser?.email ?? '' : '',
+    );
+
     if (email.contains('@')) return email.split('@').first;
 
     return 'palok_user';
@@ -55,25 +72,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final name = _text(data['displayName']).trim();
     if (name.isNotEmpty) return name;
 
-    final nameFromUser = _text(_currentUser?.displayName).trim();
-    if (nameFromUser.isNotEmpty) return nameFromUser;
+    if (_isMyProfile) {
+      final authName = _text(_currentUser?.displayName).trim();
+      if (authName.isNotEmpty) return authName;
+    }
 
     return _username(data);
   }
 
-  int _followers(Map<String, dynamic> data) {
-    return _number(data['followersCount'] ?? data['followers']);
+  String _email(Map<String, dynamic> data) {
+    return _text(
+      data['email'],
+      _isMyProfile ? _currentUser?.email ?? '' : '',
+    );
   }
 
-  int _following(Map<String, dynamic> data) {
-    return _number(data['followingCount'] ?? data['following']);
-  }
+  int _followers(Map<String, dynamic> data) =>
+      _number(data['followersCount'] ?? data['followers']);
 
-  int _likes(Map<String, dynamic> data) {
-    return _number(data['likesCount'] ?? data['totalLikes']);
-  }
+  int _following(Map<String, dynamic> data) =>
+      _number(data['followingCount'] ?? data['following']);
+
+  int _likes(Map<String, dynamic> data) =>
+      _number(data['likesCount'] ?? data['totalLikes']);
 
   Future<void> _editProfile(Map<String, dynamic> data) async {
+    if (!_isMyProfile) return;
+
     final nameController =
         TextEditingController(text: _displayName(data));
     final usernameController =
@@ -138,7 +163,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: _black,
+              backgroundColor: _pink,
               foregroundColor: Colors.white,
             ),
             onPressed: () {
@@ -154,23 +179,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (result != true || !mounted) return;
 
-    final username = usernameController.text.trim().replaceAll('@', '');
-
-    if (username.isEmpty) return;
+    final name = nameController.text.trim();
+    final username =
+        usernameController.text.trim().replaceAll('@', '');
 
     try {
       await _userRef.set({
-        'displayName': nameController.text.trim(),
+        'displayName': name,
         'username': username,
         'bio': bioController.text.trim(),
         'profileImageUrl': imageController.text.trim(),
+        'email': _currentUser?.email ?? '',
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      if (nameController.text.trim().isNotEmpty) {
-        await _currentUser?.updateDisplayName(
-          nameController.text.trim(),
-        );
+      if (name.isNotEmpty) {
+        await _currentUser?.updateDisplayName(name);
       }
 
       if (!mounted) return;
@@ -184,6 +208,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not update profile: $error')),
       );
+    } finally {
+      nameController.dispose();
+      usernameController.dispose();
+      bioController.dispose();
+      imageController.dispose();
     }
   }
 
@@ -219,37 +248,104 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<void> _toggleFollow(bool isFollowing) async {
+    final currentUser = _currentUser;
+
+    if (currentUser == null || _isMyProfile) return;
+
+    final targetRef = _userRef;
+    final myFollowingRef = _followingRef;
+    final targetFollowerRef = targetRef
+        .collection('followers')
+        .doc(currentUser.uid);
+
+    try {
+      await _db.runTransaction((transaction) async {
+        final followingSnapshot =
+            await transaction.get(myFollowingRef);
+
+        if (isFollowing) {
+          if (!followingSnapshot.exists) return;
+
+          transaction.delete(myFollowingRef);
+          transaction.delete(targetFollowerRef);
+
+          transaction.set(
+            targetRef,
+            {'followersCount': FieldValue.increment(-1)},
+            SetOptions(merge: true),
+          );
+
+          transaction.set(
+            _db.collection('users').doc(currentUser.uid),
+            {'followingCount': FieldValue.increment(-1)},
+            SetOptions(merge: true),
+          );
+        } else {
+          if (followingSnapshot.exists) return;
+
+          transaction.set(myFollowingRef, {
+            'userId': _targetId,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+
+          transaction.set(targetFollowerRef, {
+            'userId': currentUser.uid,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+
+          transaction.set(
+            targetRef,
+            {'followersCount': FieldValue.increment(1)},
+            SetOptions(merge: true),
+          );
+
+          transaction.set(
+            _db.collection('users').doc(currentUser.uid),
+            {'followingCount': FieldValue.increment(1)},
+            SetOptions(merge: true),
+          );
+        }
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Follow action failed: $error')),
+      );
+    }
+  }
+
   Future<void> _signOut() async {
+    if (!_isMyProfile) return;
+
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Log out?'),
         content: const Text('Do you want to log out of PALOK?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text('Log out'),
           ),
         ],
       ),
     );
 
-    if (confirm != true) return;
-
-    await _auth.signOut();
-
-    if (!mounted) return;
-
-    // Your app's existing authentication flow should handle
-    // the signed-out state.
+    if (confirm == true) {
+      await _auth.signOut();
+    }
   }
 
-  Widget _avatar(String imageUrl, {double size = 86}) {
-    final validUrl = imageUrl.trim();
+  Widget _avatar(String imageUrl, {double size = 100}) {
+    final url = imageUrl.trim();
+    final validUrl =
+        url.startsWith('https://') || url.startsWith('http://');
 
     return Container(
       width: size,
@@ -265,15 +361,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       child: CircleAvatar(
         backgroundColor: const Color(0xFFF4F4F4),
-        backgroundImage: validUrl.startsWith('https://') ||
-                validUrl.startsWith('http://')
-            ? NetworkImage(validUrl)
-            : null,
-        child: validUrl.isEmpty
+        backgroundImage: validUrl ? NetworkImage(url) : null,
+        child: !validUrl
             ? const Icon(
                 Icons.person,
                 color: _grey,
-                size: 45,
+                size: 48,
               )
             : null,
       ),
@@ -288,16 +381,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
             value.toString(),
             style: const TextStyle(
               color: _black,
-              fontSize: 21,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 5),
           Text(
             label,
+            textAlign: TextAlign.center,
             style: const TextStyle(
               color: _grey,
-              fontSize: 12,
+              fontSize: 11,
             ),
           ),
         ],
@@ -326,7 +420,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 7),
               Container(
                 height: 2,
-                color: selected ? _black : Colors.transparent,
+                color: selected ? _pink : Colors.transparent,
               ),
             ],
           ),
@@ -335,20 +429,105 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _videoGrid(String uid) {
-    Query<Map<String, dynamic>> query = _firestore
-        .collection('videos')
-        .where('ownerId', isEqualTo: uid);
+  Widget _actionButton(Map<String, dynamic> data) {
+    if (_isMyProfile) {
+      return SizedBox(
+        width: double.infinity,
+        height: 46,
+        child: OutlinedButton(
+          onPressed: () => _editProfile(data),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _black,
+            side: const BorderSide(color: Color(0xFFDDDDDD)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          child: const Text(
+            'Edit profile',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+    }
 
+    if (_currentUser == null) {
+      return const SizedBox.shrink();
+    }
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: _followingRef.snapshots(),
+      builder: (context, snapshot) {
+        final isFollowing = snapshot.data?.exists ?? false;
+
+        return SizedBox(
+          width: double.infinity,
+          height: 46,
+          child: ElevatedButton(
+            onPressed: snapshot.connectionState ==
+                    ConnectionState.waiting
+                ? null
+                : () => _toggleFollow(isFollowing),
+            style: ElevatedButton.styleFrom(
+              elevation: 0,
+              backgroundColor:
+                  isFollowing ? Colors.white : _pink,
+              foregroundColor:
+                  isFollowing ? _black : Colors.white,
+              side: BorderSide(
+                color: isFollowing
+                    ? const Color(0xFFDDDDDD)
+                    : _pink,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              isFollowing ? 'Following' : 'Follow',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _emptyGrid(String message, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 24,
+        vertical: 55,
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 42, color: Colors.grey.shade400),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: _grey),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _videoGrid(String uid) {
     if (_showLikedVideos) {
       return _emptyGrid(
-        'Liked videos need the existing PALOK likedVideos data.',
+        'Liked videos will appear here when liked-video data is connected.',
         Icons.favorite_border,
       );
     }
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: query.snapshots(),
+      stream: _db
+          .collection('videos')
+          .where('ownerId', isEqualTo: uid)
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _emptyGrid(
@@ -384,7 +563,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
         if (docs.isEmpty) {
           return _emptyGrid(
-            'Your videos will appear here.',
+            'No videos yet.',
             Icons.video_library_outlined,
           );
         }
@@ -403,8 +582,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           itemBuilder: (context, index) {
             final video = docs[index].data();
-            final thumbnail = _text(video['thumbnailUrl']);
+
+            final thumbnail = _text(
+              video['thumbnailUrl'] ??
+                  video['thumbnail'] ??
+                  video['coverUrl'],
+            );
+
             final views = _number(video['viewCount']);
+            final validUrl = thumbnail.startsWith('https://') ||
+                thumbnail.startsWith('http://');
 
             return GestureDetector(
               onTap: () {
@@ -420,8 +607,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 fit: StackFit.expand,
                 children: [
                   Container(color: const Color(0xFFF0F0F0)),
-                  if (thumbnail.startsWith('https://') ||
-                      thumbnail.startsWith('http://'))
+                  if (validUrl)
                     Image.network(
                       thumbnail,
                       fit: BoxFit.cover,
@@ -476,38 +662,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _emptyGrid(String message, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 24,
-        vertical: 55,
-      ),
-      child: Column(
-        children: [
-          Icon(icon, size: 42, color: Colors.grey.shade400),
-          const SizedBox(height: 12),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: _grey),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final user = _currentUser;
-
-    if (user == null) {
+    if (_targetId.isEmpty) {
       return const Scaffold(
         backgroundColor: Colors.white,
         body: Center(
-          child: Text(
-            'Please log in to view your profile.',
-            style: TextStyle(color: _black),
-          ),
+          child: Text('Please log in to view your profile.'),
         ),
       );
     }
@@ -518,75 +679,109 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
           stream: _userRef.snapshots(),
           builder: (context, snapshot) {
-            final data = snapshot.data?.data() ?? <String, dynamic>{};
+            if (snapshot.hasError) {
+              return const Center(
+                child: Text('Could not load profile.'),
+              );
+            }
+
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
+              return const Center(
+                child: CircularProgressIndicator(color: _pink),
+              );
+            }
+
+            final data =
+                snapshot.data?.data() ?? <String, dynamic>{};
+
             final username = _username(data);
             final displayName = _displayName(data);
-            final email = _text(data['email'], user.email ?? '');
+            final email = _email(data);
             final bio = _text(data['bio']);
+
             final imageUrl = _text(
               data['profileImageUrl'],
-              user.photoURL ?? '',
+              _isMyProfile ? _currentUser?.photoURL ?? '' : '',
             );
 
             return CustomScrollView(
               slivers: [
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
+                  padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
                   sliver: SliverToBoxAdapter(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            const Text(
-                              'Profile',
-                              style: TextStyle(
-                                color: _black,
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
                             const Spacer(),
-                            IconButton(
-                              tooltip: 'Log out',
-                              onPressed: _signOut,
-                              icon: const Icon(
-                                Icons.logout,
-                                color: _black,
+                            if (_isMyProfile)
+                              IconButton(
+                                tooltip: 'Log out',
+                                onPressed: _signOut,
+                                icon: const Icon(
+                                  Icons.logout,
+                                  color: _black,
+                                ),
                               ),
-                            ),
                             IconButton(
-                              tooltip: 'More options',
-                              onPressed: () => _editProfile(data),
-                              icon: const Icon(
-                                Icons.menu,
+                              tooltip: _isMyProfile
+                                  ? 'Edit profile'
+                                  : 'More options',
+                              onPressed: _isMyProfile
+                                  ? () => _editProfile(data)
+                                  : () {
+                                      showModalBottomSheet<void>(
+                                        context: context,
+                                        builder: (context) => SafeArea(
+                                          child: ListTile(
+                                            leading: const Icon(
+                                              Icons.flag_outlined,
+                                            ),
+                                            title: const Text(
+                                              'Report user',
+                                            ),
+                                            onTap: () =>
+                                                Navigator.pop(context),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                              icon: Icon(
+                                _isMyProfile
+                                    ? Icons.menu
+                                    : Icons.more_horiz,
                                 color: _black,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 12),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            _avatar(imageUrl, size: 92),
+                            _avatar(imageUrl, size: 96),
                             const SizedBox(width: 12),
-                            _stat('Videos', _number(data['videosCount'])),
+                            _stat(
+                              'Videos',
+                              _number(data['videosCount']),
+                            ),
                             _stat('Followers', _followers(data)),
                             _stat('Following', _following(data)),
                             _stat('Likes', _likes(data)),
                           ],
                         ),
-                        const SizedBox(height: 22),
+                        const SizedBox(height: 20),
                         Text(
                           displayName,
                           style: const TextStyle(
                             color: _black,
-                            fontSize: 24,
+                            fontSize: 25,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                        const SizedBox(height: 3),
+                        const SizedBox(height: 4),
                         Text(
                           '@$username',
                           style: const TextStyle(
@@ -595,7 +790,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                         if (email.isNotEmpty) ...[
-                          const SizedBox(height: 5),
+                          const SizedBox(height: 6),
                           Text(
                             email,
                             style: const TextStyle(
@@ -614,30 +809,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ),
                         ],
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 46,
-                          child: OutlinedButton(
-                            onPressed: () => _editProfile(data),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: _black,
-                              side: const BorderSide(
-                                color: Color(0xFFDDDDDD),
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: const Text(
-                              'Edit profile',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                              ),
-                            ),
-                          ),
-                        ),
+                        const SizedBox(height: 18),
+                        _actionButton(data),
                         const SizedBox(height: 18),
                         const Divider(height: 1),
                         Row(
@@ -663,7 +836,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 SliverToBoxAdapter(
-                  child: _videoGrid(user.uid),
+                  child: _videoGrid(_targetId),
                 ),
               ],
             );
