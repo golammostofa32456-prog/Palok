@@ -1,322 +1,208 @@
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
+import '../video/video_post.dart';
 
-import 'video_post.dart';
-import 'video_player_widget.dart';
+class SearchScreen extends StatefulWidget {
+  final List<VideoPost> videos;
+  final Function(int) onVideoSelected;
 
-class VideoCard extends StatelessWidget {
-  final VideoPost video;
-  final VideoPlayerController? controller;
-
-  final bool isLiked;
-  final bool isSaved;
-  final bool isFollowing;
-
-  final int? likeCount;
-  final int? commentCount;
-  final int? saveCount;
-  final int? shareCount;
-
-  final VoidCallback? onLike;
-  final VoidCallback? onComment;
-  final VoidCallback? onSave;
-  final VoidCallback? onShare;
-  final VoidCallback? onFollow;
-  final VoidCallback? onProfile;
-
-  const VideoCard({
+  const SearchScreen({
     super.key,
-    required this.video,
-    this.controller,
-    this.isLiked = false,
-    this.isSaved = false,
-    this.isFollowing = false,
-    this.likeCount,
-    this.commentCount,
-    this.saveCount,
-    this.shareCount,
-    this.onLike,
-    this.onComment,
-    this.onSave,
-    this.onShare,
-    this.onFollow,
-    this.onProfile,
+    required this.videos,
+    required this.onVideoSelected,
   });
 
-  static const Color _pink = Color(0xFFFF2D55);
+  @override
+  State<SearchScreen> createState() => _SearchScreenState();
+}
+
+class _SearchScreenState extends State<SearchScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  List<VideoPost> _searchResults = [];
+  bool _isSearching = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _handleSearch(String query) {
+    if (query.trim().isEmpty) {
+      setState(() {
+        _searchResults = [];
+        _isSearching = false;
+      });
+      return;
+    }
+
+    final results = widget.videos.where((video) {
+      final username = video.username.toLowerCase();
+      final caption = video.caption.toLowerCase();
+      final searchLower = query.toLowerCase();
+      
+      return username.contains(searchLower) || caption.contains(searchLower);
+    }).toList();
+
+    setState(() {
+      _searchResults = results;
+      _isSearching = true;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // নিচের নেভিগেশন বারের জন্য নিরাপদ জায়গা।
-        final bottomSafeSpace =
-            MediaQuery.of(context).padding.bottom + 76.0;
-
-        final actionBottom =
-            bottomSafeSpace + 12.0;
-
-        final infoBottom =
-            bottomSafeSpace + 12.0;
-
-        return Stack(
-          fit: StackFit.expand,
+    return Scaffold(
+      backgroundColor: Colors.black, // টিকটক ডার্ক থিম ব্যাকগ্রাউন্ড
+      body: SafeArea(
+        // SafeArea এর কারণে সার্চ বার কখনোই নোটিফিকেশন বার বা ক্যামেরা নচের পেছনে ঢাকা পড়বে না
+        child: Column(
           children: [
-            _buildVideo(),
-            _buildBottomGradient(),
-            _buildVideoInfo(infoBottom),
-            _buildActionButtons(actionBottom),
-          ],
-        );
-      },
-    );
-  }
-
-  // FULL-SCREEN VIDEO
-
-  Widget _buildVideo() {
-    final videoController = controller;
-
-    if (videoController == null ||
-        !videoController.value.isInitialized) {
-      return const ColoredBox(
-        color: Colors.black,
-        child: Center(
-          child: CircularProgressIndicator(
-            color: _pink,
-          ),
-        ),
-      );
-    }
-
-    return VideoPlayerWidget(
-      controller: videoController,
-      fit: BoxFit.cover,
-    );
-  }
-
-  // BOTTOM GRADIENT
-
-  Widget _buildBottomGradient() {
-    return const IgnorePointer(
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: SizedBox(
-          height: 330,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  Colors.black38,
-                  Colors.black87,
+            // সার্চ বার এবং ব্যাক বাটন এরিয়া (ওপরের অতিরিক্ত মার্জিন যুক্ত করা হয়েছে)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 16, 16, 8),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 26),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  Expanded(
+                    child: Container(
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF161616), // কাস্টম ডার্ক গ্রে ইনপুট ব্যাকগ্রাউন্ড
+                        borderRadius: BorderRadius.circular(4), // টিকটক স্টাইল স্কয়ারিশ কর্নার
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        onChanged: _handleSearch,
+                        style: const TextStyle(color: Colors.white, fontSize: 15),
+                        textInputAction: TextInputAction.search,
+                        decoration: InputDecoration(
+                          hintText: 'ব্যবহারকারী বা ভিডিও খুঁজুন',
+                          hintStyle: const TextStyle(color: Color(0xFF868686), fontSize: 15),
+                          prefixIcon: const Icon(Icons.search, color: Color(0xFF868686), size: 20),
+                          suffixIcon: _searchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, color: Colors.white60, size: 18),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    _handleSearch('');
+                                  },
+                                )
+                              : null,
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 11),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  GestureDetector(
+                    onTap: () => _handleSearch(_searchController.text),
+                    child: const Text(
+                      'খুঁজুন',
+                      style: TextStyle(
+                        color: Color(0xFFFF2D75), // পালক/টিকটক পিঙ্ক কালার থিম
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-          ),
+            const Divider(height: 1, color: Color(0xFF121212)),
+            
+            // সার্চ রেজাল্ট অথবা ডিফল্ট এম্পটি স্ক্রিন এরিয়া
+            Expanded(
+              child: !_isSearching
+                  ? _buildEmptyState()
+                  : _searchResults.isEmpty
+                      ? _buildNoResultsState()
+                      : _buildResultsList(),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  // VIDEO INFORMATION (গোল আইকন, ফলো বাটন এবং @ চিহ্ন বাদ দেওয়া হয়েছে)
-
-  Widget _buildVideoInfo(double bottom) {
-    return Positioned(
-      left: 16,
-      right: 88,
-      bottom: bottom,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onProfile,
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    video.username.replaceFirst('@', ''), // শুধু ব্যবহারকারীর নাম থাকবে, '@' থাকবে না
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (video.caption.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              video.caption,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                height: 1.3,
-              ),
-            ),
-          ],
-          if (video.hashtags.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              video.hashtags
-                  .map(
-                    (tag) => tag.startsWith('#') ? tag : '#$tag',
-                  )
-                  .join(' '),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-          if (video.soundName.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(
-                  Icons.music_note,
-                  color: Colors.white,
-                  size: 16,
-                ),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Text(
-                    video.soundName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  // ACTION BUTTONS
-
-  Widget _buildActionButtons(double bottom) {
-    return Positioned(
-      right: 10,
-      bottom: bottom,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _ActionButton(
-            icon: isLiked
-                ? Icons.favorite
-                : Icons.favorite_border,
-            label: _formatCount(
-              likeCount ?? video.likeCount,
-            ),
-            active: isLiked,
-            onTap: onLike,
-          ),
-          const SizedBox(height: 18),
-          _ActionButton(
-            icon: Icons.comment_outlined,
-            label: _formatCount(
-              commentCount ?? video.commentCount,
-            ),
-            onTap: onComment,
-          ),
-          const SizedBox(height: 18),
-          _ActionButton(
-            icon: isSaved
-                ? Icons.bookmark
-                : Icons.bookmark_border,
-            label: _formatCount(
-              saveCount ?? video.saveCount,
-            ),
-            active: isSaved,
-            onTap: onSave,
-          ),
-          const SizedBox(height: 18),
-          _ActionButton(
-            icon: Icons.share_outlined,
-            label: _formatCount(
-              shareCount ?? video.shareCount,
-            ),
-            onTap: onShare,
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatCount(int count) {
-    if (count >= 1000000) {
-      return '${(count / 1000000).toStringAsFixed(1)}M';
-    }
-
-    if (count >= 1000) {
-      return '${(count / 1000).toStringAsFixed(1)}K';
-    }
-
-    return count.toString();
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback? onTap;
-
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    this.active = false,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 58,
+  // ডিফল্ট স্ক্রিন ভিউ (কিবোর্ড ওপেন হওয়ার কারণে স্ক্রল-বান্ধব করা হয়েছে)
+  Widget _buildEmptyState() {
+    return Center(
+      child: SingleChildScrollView(
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              color: active
-                  ? const Color(0xFFFF2D55)
-                  : Colors.white,
-              size: 31,
+            const Icon(
+              Icons.search,
+              size: 74,
+              color: Color(0xFF262626),
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(
+            const SizedBox(height: 16),
+            const Text(
+              'ব্যবহারকারী বা ভিডিও খুঁজুন',
+              style: TextStyle(
                 color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
               ),
             ),
+            const SizedBox(height: 6),
+            const Text(
+              'নাম, ইউজারনেম বা হ্যাশট্যাগ লিখুন',
+              style: TextStyle(
+                color: Color(0xFF868686),
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 80), // কিবোর্ড খোলার পর কন্টেন্ট ব্যালেন্স করার স্পেস
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildNoResultsState() {
+    return const Center(
+      child: Text(
+        'কোনো ফলাফল পাওয়া যায়নি।',
+        style: TextStyle(color: Color(0xFF868686), fontSize: 15),
+      ),
+    );
+  }
+
+  Widget _buildResultsList() {
+    return ListView.builder(
+      itemCount: _searchResults.length,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemBuilder: (context, index) {
+        final video = _searchResults[index];
+        return ListTile(
+          leading: const CircleAvatar(
+            backgroundColor: Color(0xFF161616),
+            child: Icon(Icons.person, color: Colors.white70),
+          ),
+          title: Text(
+            video.username,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          subtitle: Text(
+            video.caption,
+            style: const TextStyle(color: Color(0xFF868686)),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          onTap: () {
+            final actualIndex = widget.videos.indexOf(video);
+            if (actualIndex != -1) {
+              widget.onVideoSelected(actualIndex);
+              Navigator.pop(context);
+            }
+          },
+        );
+      },
     );
   }
 }
