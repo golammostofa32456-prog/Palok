@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
@@ -50,8 +49,6 @@ class VideoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final screenHeight = constraints.maxHeight;
-
         // নিচের নেভিগেশন বারের জন্য নিরাপদ জায়গা।
         final bottomSafeSpace =
             MediaQuery.of(context).padding.bottom + 76.0;
@@ -124,7 +121,7 @@ class VideoCard extends StatelessWidget {
     );
   }
 
-  // VIDEO INFORMATION
+  // VIDEO INFORMATION (গোল আইকন, ফলো বাটন এবং @ চিহ্ন বাদ দেওয়া হয়েছে)
 
   Widget _buildVideoInfo(double bottom) {
     return Positioned(
@@ -140,23 +137,9 @@ class VideoCard extends StatelessWidget {
             onTap: onProfile,
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: Colors.white24,
-                  child: Text(
-                    video.username.isNotEmpty
-                        ? video.username[0].toUpperCase()
-                        : 'P',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    '@${video.username.replaceFirst('@', '')}',
+                    video.username.replaceFirst('@', ''), // শুধু ব্যবহারকারীর নাম থাকবে, '@' থাকবে না
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -166,38 +149,11 @@ class VideoCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (!isFollowing) ...[
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: onFollow,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: _pink,
-                          width: 1.2,
-                        ),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Text(
-                        'Follow',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
           if (video.caption.isNotEmpty) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Text(
               video.caption,
               maxLines: 3,
