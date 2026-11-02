@@ -1,8 +1,9 @@
-
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../profile/profile_screen.dart';
 
@@ -277,7 +278,7 @@ class _SearchScreenState extends State<SearchScreen> {
     final callback = widget.onVideoSelected;
 
     if (callback == null) {
-      _showMessage('ভিডিও চালু করার ব্যবস্থা পাওয়া যায়নি।');
+      _showMessage('ভিডিও চালু করার ব্যবস্থা পাওয়া যায়নি।');
       return;
     }
 
@@ -291,7 +292,7 @@ class _SearchScreenState extends State<SearchScreen> {
     });
 
     if (index < 0) {
-      _showMessage('ভিডিওটি ফিডে পাওয়া যায়নি।');
+      _showMessage('ভিডিওটি ফিডে পাওয়া যায়নি।');
       return;
     }
 
@@ -303,7 +304,7 @@ class _SearchScreenState extends State<SearchScreen> {
       }
     } catch (e) {
       debugPrint('Open feed video error: $e');
-      _showMessage('ভিডিও চালু করা যায়নি।');
+      _showMessage('ভিডিও চালু করা যায়নি।');
     }
   }
 
@@ -311,7 +312,7 @@ class _SearchScreenState extends State<SearchScreen> {
     final id = userId.trim();
 
     if (id.isEmpty) {
-      _showMessage('এই ব্যবহারকারীর ID পাওয়া যায়নি।');
+      _showMessage('এই ব্যবহারকারীর ID পাওয়া যায়নি।');
       return;
     }
 
@@ -334,69 +335,71 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final query = _normalize(_controller.text);
-    final localVideos = _localVideoResults(query);
+  // স্ট্যাটাস বারের উচ্চতা (দুইভাবে মেপে বড়টা নেওয়া হয়)
+  double _statusBarHeight(BuildContext context) {
+    final fromMedia = MediaQuery.of(context).padding.top;
+    final fromView = MediaQueryData.fromView(View.of(context)).padding.top;
+    return math.max(fromMedia, fromView);
+  }
 
-    final hasResults = _users.isNotEmpty ||
-        localVideos.isNotEmpty ||
-        _onlineVideos.isNotEmpty;
+  Widget _buildHeader(BuildContext context, String query) {
+    final topInset = _statusBarHeight(context);
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        titleSpacing: 0,
-        title: Container(
-          height: 44,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(10),
+    return Container(
+      color: Colors.white,
+      padding: EdgeInsets.only(top: topInset + 6, bottom: 8),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.black),
+            onPressed: () => Navigator.pop(context),
           ),
-          child: TextField(
-            controller: _controller,
-            autofocus: true,
-            onChanged: _onSearchChanged,
-            onSubmitted: _performSearch,
-            textInputAction: TextInputAction.search,
-            style: const TextStyle(
-              color: Colors.black,
-              fontSize: 15,
-            ),
-            decoration: InputDecoration(
-              hintText: 'ব্যবহারকারী বা ভিডিও খুঁজুন',
-              hintStyle: TextStyle(
-                color: Colors.grey.shade500,
-                fontSize: 13,
+          Expanded(
+            child: Container(
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(10),
               ),
-              prefixIcon: const Icon(
-                Icons.search,
-                color: Colors.grey,
+              child: TextField(
+                controller: _controller,
+                autofocus: true,
+                onChanged: _onSearchChanged,
+                onSubmitted: _performSearch,
+                textInputAction: TextInputAction.search,
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontSize: 15,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'ব্যবহারকারী বা ভিডিও খুঁজুন',
+                  hintStyle: TextStyle(
+                    color: Colors.grey.shade500,
+                    fontSize: 13,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    color: Colors.grey,
+                  ),
+                  suffixIcon: query.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(
+                            Icons.close,
+                            color: Colors.grey,
+                          ),
+                          onPressed: () {
+                            _controller.clear();
+                            _onSearchChanged('');
+                          },
+                        )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding:
+                      const EdgeInsets.symmetric(vertical: 12),
+                ),
               ),
-              suffixIcon: query.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(
-                        Icons.close,
-                        color: Colors.grey,
-                      ),
-                      onPressed: () {
-                        _controller.clear();
-                        _onSearchChanged('');
-                      },
-                    )
-                  : null,
-              border: InputBorder.none,
             ),
           ),
-        ),
-        actions: [
           TextButton(
             onPressed: () => _performSearch(query),
             child: const Text(
@@ -409,61 +412,87 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: _searching
-            ? const Center(
-                child: CircularProgressIndicator(color: _pink),
-              )
-            : query.isEmpty
-                ? _buildEmptySearch()
-                : !hasResults
-                    ? _buildNoResults(query)
-                    : ListView(
-                        padding: const EdgeInsets.all(16),
-                        children: [
-                          if (_users.isNotEmpty) ...[
-                            _sectionTitle('ব্যবহারকারী'),
-                            const SizedBox(height: 8),
-                            ..._users.map(_buildUserItem),
-                            const SizedBox(height: 20),
-                          ],
-                          if (localVideos.isNotEmpty) ...[
-                            _sectionTitle('ভিডিওসমূহ'),
-                            const SizedBox(height: 8),
-                            ...localVideos.map(
-                              (video) => _buildVideoItem(
-                                video,
-                                isLocal: true,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _normalize(_controller.text);
+    final localVideos = _localVideoResults(query);
+
+    final hasResults = _users.isNotEmpty ||
+        localVideos.isNotEmpty ||
+        _onlineVideos.isNotEmpty;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: Column(
+          children: [
+            _buildHeader(context, query),
+            Expanded(
+              child: SafeArea(
+                top: false,
+                child: _searching
+                    ? const Center(
+                        child: CircularProgressIndicator(color: _pink),
+                      )
+                    : query.isEmpty
+                        ? _buildEmptySearch()
+                        : !hasResults
+                            ? _buildNoResults(query)
+                            : ListView(
+                                padding: const EdgeInsets.all(16),
+                                children: [
+                                  if (_users.isNotEmpty) ...[
+                                    _sectionTitle('ব্যবহারকারী'),
+                                    const SizedBox(height: 8),
+                                    ..._users.map(_buildUserItem),
+                                    const SizedBox(height: 20),
+                                  ],
+                                  if (localVideos.isNotEmpty) ...[
+                                    _sectionTitle('ভিডিওসমূহ'),
+                                    const SizedBox(height: 8),
+                                    ...localVideos.map(
+                                      (video) => _buildVideoItem(
+                                        video,
+                                        isLocal: true,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 20),
+                                  ],
+                                  if (_onlineVideos.isNotEmpty) ...[
+                                    _sectionTitle('আরও ভিডিও'),
+                                    const SizedBox(height: 8),
+                                    ..._onlineVideos.map(
+                                      (video) => _buildVideoItem(
+                                        video,
+                                        isLocal: false,
+                                      ),
+                                    ),
+                                  ],
+                                  if (_searchFailed) ...[
+                                    const SizedBox(height: 16),
+                                    const Text(
+                                      'কিছু অনলাইন ফলাফল লোড করা যায়নি।',
+                                      style: TextStyle(color: Colors.grey),
+                                    ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          _performSearch(query),
+                                      child: const Text(
+                                        'আবার চেষ্টা করুন',
+                                        style: TextStyle(color: _pink),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
-                            ),
-                            const SizedBox(height: 20),
-                          ],
-                          if (_onlineVideos.isNotEmpty) ...[
-                            _sectionTitle('আরও ভিডিও'),
-                            const SizedBox(height: 8),
-                            ..._onlineVideos.map(
-                              (video) => _buildVideoItem(
-                                video,
-                                isLocal: false,
-                              ),
-                            ),
-                          ],
-                          if (_searchFailed) ...[
-                            const SizedBox(height: 16),
-                            const Text(
-                              'কিছু অনলাইন ফলাফল লোড করা যায়নি।',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                            TextButton(
-                              onPressed: () => _performSearch(query),
-                              child: const Text(
-                                'আবার চেষ্টা করুন',
-                                style: TextStyle(color: _pink),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -525,7 +554,7 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              '"$query" নিয়ে কোনো ফলাফল পাওয়া যায়নি',
+              '"$query" নিয়ে কোনো ফলাফল পাওয়া যায়নি',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.black87,
@@ -534,7 +563,7 @@ class _SearchScreenState extends State<SearchScreen> {
             if (_searchFailed) ...[
               const SizedBox(height: 10),
               const Text(
-                'অনলাইন সার্চে সমস্যা হয়েছে।',
+                'অনলাইন সার্চে সমস্যা হয়েছে।',
                 style: TextStyle(color: Colors.grey),
               ),
               TextButton(
@@ -598,10 +627,6 @@ class _SearchScreenState extends State<SearchScreen> {
     final caption = _readString(video, 'caption');
     final thumbnail = _readString(video, 'thumbnailUrl');
 
-    final ownerId = video is Map
-        ? (video['ownerId'] ?? video['userId'] ?? '').toString()
-        : _readString(video, 'ownerId');
-
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(vertical: 4),
       leading: ClipRRect(
@@ -651,18 +676,12 @@ class _SearchScreenState extends State<SearchScreen> {
         size: 28,
       ),
       onTap: () {
-        if (ownerId.isNotEmpty) {
-          // ব্যবহারকারীর প্রোফাইল খুলতে নামের বদলে
-          // Firestore user ID ব্যবহার করা হচ্ছে।
-          // ভিডিও চালাতে ভিডিওর নিজস্ব ফলাফলে চাপ দাও।
-        }
-
         if (isLocal) {
           _openLocalVideo(video);
         } else {
           _showMessage(
             'এই ভিডিওটি মূল ফিডে নেই। '
-            'অনলাইন ভিডিও চালাতে আলাদা ভিডিও-প্লেয়ার '
+            'অনলাইন ভিডিও চালাতে আলাদা ভিডিও-প্লেয়ার '
             'পেজ যুক্ত করতে হবে।',
           );
         }
