@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 
 import '../video/video_post.dart';
 import '../video/video_service.dart';
+import '../video/video_url.dart';
 
 class HomeController extends ChangeNotifier {
   HomeController({
@@ -67,8 +68,7 @@ class HomeController extends ChangeNotifier {
 
   bool isSaved(String videoId) => _savedIds.contains(videoId);
 
-  bool isFollowing(String userId) =>
-      _followingIds.contains(userId);
+  bool isFollowing(String userId) => _followingIds.contains(userId);
 
   // LOCAL COUNT DELTAS
 
@@ -118,8 +118,8 @@ class HomeController extends ChangeNotifier {
       if (_disposed) return;
 
       if (_videos.isNotEmpty) {
-        // Prepare the first video and preload nearby content.
-        unawaited(_preloadNearby(0));
+        // প্রথম ভিডিও চালু হওয়ার পর prepareVideo নিজেই পরের ভিডিও
+        // প্রিলোড করে, তাই এখানে আলাদা প্রিলোড নেই (ডাটা বাঁচানোর জন্য)।
         await prepareVideo(0);
       }
     } catch (e) {
@@ -197,14 +197,13 @@ class HomeController extends ChangeNotifier {
   // VIDEO PREPARATION
 
   bool _isNetworkUrl(String url) {
-    return url.startsWith('http://') ||
-        url.startsWith('https://');
+    return url.startsWith('http://') || url.startsWith('https://');
   }
 
   VideoPlayerController _createController(String url) {
     if (_isNetworkUrl(url)) {
       return VideoPlayerController.networkUrl(
-        Uri.parse(url),
+        Uri.parse(optimizeVideoUrl(url)),
       );
     }
 
@@ -225,13 +224,11 @@ class HomeController extends ChangeNotifier {
 
     final controller = _controllers[index];
 
-    if (controller == null ||
-        !controller.value.isInitialized) {
+    if (controller == null || !controller.value.isInitialized) {
       return;
     }
 
     try {
-      // Don't wait for unrelated videos to pause.
       await controller.play();
     } catch (e) {
       debugPrint('Video play error at index $index: $e');
@@ -293,16 +290,14 @@ class HomeController extends ChangeNotifier {
 
       await controller.initialize();
 
-      if (_disposed ||
-          !identical(_controllers[index], controller)) {
+      if (_disposed || !identical(_controllers[index], controller)) {
         await controller.dispose();
         return;
       }
 
       await controller.setLooping(true);
 
-      if (_disposed ||
-          !identical(_controllers[index], controller)) {
+      if (_disposed || !identical(_controllers[index], controller)) {
         return;
       }
 
@@ -315,9 +310,7 @@ class HomeController extends ChangeNotifier {
 
       _notify();
     } catch (e) {
-      debugPrint(
-        'Video initialization failed at index $index: $e',
-      );
+      debugPrint('Video initialization failed at index $index: $e');
 
       if (identical(_controllers[index], controller)) {
         _controllers.remove(index);
@@ -338,7 +331,7 @@ class HomeController extends ChangeNotifier {
   Future<void> _preloadNearby(int index) async {
     if (_disposed) return;
 
-    // Preload the next video first to reduce data and memory use.
+    // শুধু পরের ভিডিও প্রিলোড হয়, ডাটা ও মেমরি বাঁচানোর জন্য।
     final nextIndex = index + 1;
 
     if (nextIndex < _videos.length) {
@@ -397,8 +390,7 @@ class HomeController extends ChangeNotifier {
 
     final controller = _controllers[_currentIndex];
 
-    if (controller == null ||
-        !controller.value.isInitialized) {
+    if (controller == null || !controller.value.isInitialized) {
       await prepareVideo(_currentIndex);
       return;
     }
@@ -419,8 +411,7 @@ class HomeController extends ChangeNotifier {
   bool isPlaying(int index) {
     final controller = _controllers[index];
 
-    if (controller == null ||
-        !controller.value.isInitialized) {
+    if (controller == null || !controller.value.isInitialized) {
       return false;
     }
 
@@ -438,12 +429,10 @@ class HomeController extends ChangeNotifier {
 
     if (currentlyLiked) {
       _likedIds.remove(videoId);
-      _likeDeltas[videoId] =
-          (_likeDeltas[videoId] ?? 0) - 1;
+      _likeDeltas[videoId] = (_likeDeltas[videoId] ?? 0) - 1;
     } else {
       _likedIds.add(videoId);
-      _likeDeltas[videoId] =
-          (_likeDeltas[videoId] ?? 0) + 1;
+      _likeDeltas[videoId] = (_likeDeltas[videoId] ?? 0) + 1;
     }
 
     _notify();
@@ -455,8 +444,7 @@ class HomeController extends ChangeNotifier {
           .collection('likedVideos')
           .doc(videoId);
 
-      final videoRef =
-          _firestore.collection('videos').doc(videoId);
+      final videoRef = _firestore.collection('videos').doc(videoId);
 
       if (currentlyLiked) {
         await likedRef.delete();
@@ -483,12 +471,10 @@ class HomeController extends ChangeNotifier {
     } catch (e) {
       if (currentlyLiked) {
         _likedIds.add(videoId);
-        _likeDeltas[videoId] =
-            (_likeDeltas[videoId] ?? 0) + 1;
+        _likeDeltas[videoId] = (_likeDeltas[videoId] ?? 0) + 1;
       } else {
         _likedIds.remove(videoId);
-        _likeDeltas[videoId] =
-            (_likeDeltas[videoId] ?? 0) - 1;
+        _likeDeltas[videoId] = (_likeDeltas[videoId] ?? 0) - 1;
       }
 
       _notify();
@@ -508,12 +494,10 @@ class HomeController extends ChangeNotifier {
 
     if (currentlySaved) {
       _savedIds.remove(videoId);
-      _saveDeltas[videoId] =
-          (_saveDeltas[videoId] ?? 0) - 1;
+      _saveDeltas[videoId] = (_saveDeltas[videoId] ?? 0) - 1;
     } else {
       _savedIds.add(videoId);
-      _saveDeltas[videoId] =
-          (_saveDeltas[videoId] ?? 0) + 1;
+      _saveDeltas[videoId] = (_saveDeltas[videoId] ?? 0) + 1;
     }
 
     _notify();
@@ -525,8 +509,7 @@ class HomeController extends ChangeNotifier {
           .collection('savedVideos')
           .doc(videoId);
 
-      final videoRef =
-          _firestore.collection('videos').doc(videoId);
+      final videoRef = _firestore.collection('videos').doc(videoId);
 
       if (currentlySaved) {
         await savedRef.delete();
@@ -553,12 +536,10 @@ class HomeController extends ChangeNotifier {
     } catch (e) {
       if (currentlySaved) {
         _savedIds.add(videoId);
-        _saveDeltas[videoId] =
-            (_saveDeltas[videoId] ?? 0) + 1;
+        _saveDeltas[videoId] = (_saveDeltas[videoId] ?? 0) + 1;
       } else {
         _savedIds.remove(videoId);
-        _saveDeltas[videoId] =
-            (_saveDeltas[videoId] ?? 0) - 1;
+        _saveDeltas[videoId] = (_saveDeltas[videoId] ?? 0) - 1;
       }
 
       _notify();
@@ -579,8 +560,7 @@ class HomeController extends ChangeNotifier {
       return false;
     }
 
-    final currentlyFollowing =
-        _followingIds.contains(targetUserId);
+    final currentlyFollowing = _followingIds.contains(targetUserId);
 
     if (currentlyFollowing) {
       _followingIds.remove(targetUserId);
@@ -625,8 +605,7 @@ class HomeController extends ChangeNotifier {
   void addCommentCount(String videoId, int amount) {
     if (amount == 0) return;
 
-    _commentDeltas[videoId] =
-        (_commentDeltas[videoId] ?? 0) + amount;
+    _commentDeltas[videoId] = (_commentDeltas[videoId] ?? 0) + amount;
 
     _notify();
   }
@@ -651,19 +630,16 @@ class HomeController extends ChangeNotifier {
     }
 
     try {
-      final userDoc = await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .get();
+      final userDoc =
+          await _firestore.collection('users').doc(user.uid).get();
 
       final data = userDoc.data();
 
-      final username = (
-        data?['username'] ??
-        data?['displayName'] ??
-        user.displayName ??
-        'PALOK User'
-      ).toString();
+      final username = (data?['username'] ??
+              data?['displayName'] ??
+              user.displayName ??
+              'PALOK User')
+          .toString();
 
       final commentRef = _firestore
           .collection('videos')
@@ -671,8 +647,7 @@ class HomeController extends ChangeNotifier {
           .collection('comments')
           .doc();
 
-      final videoRef =
-          _firestore.collection('videos').doc(videoId);
+      final videoRef = _firestore.collection('videos').doc(videoId);
 
       final batch = _firestore.batch();
 
@@ -715,17 +690,13 @@ class HomeController extends ChangeNotifier {
   Future<bool> addShare(VideoPost video) async {
     final videoId = video.id;
 
-    _shareDeltas[videoId] =
-        (_shareDeltas[videoId] ?? 0) + 1;
+    _shareDeltas[videoId] = (_shareDeltas[videoId] ?? 0) + 1;
 
     _notify();
 
     try {
       if (!_isDemoVideo(videoId)) {
-        await _firestore
-            .collection('videos')
-            .doc(videoId)
-            .update({
+        await _firestore.collection('videos').doc(videoId).update({
           'shareCount': FieldValue.increment(1),
         });
 
@@ -745,8 +716,7 @@ class HomeController extends ChangeNotifier {
 
       return true;
     } catch (e) {
-      _shareDeltas[videoId] =
-          (_shareDeltas[videoId] ?? 0) - 1;
+      _shareDeltas[videoId] = (_shareDeltas[videoId] ?? 0) - 1;
 
       _notify();
       debugPrint('Share error: $e');
@@ -814,4 +784,3 @@ class HomeController extends ChangeNotifier {
     super.dispose();
   }
 }
-
