@@ -70,7 +70,7 @@ class FollowingFeed extends StatelessWidget {
       scrollDirection: Axis.vertical,
       physics: const PageScrollPhysics(),
       pageSnapping: true,
-      allowImplicitScrolling: false
+      allowImplicitScrolling: false,
       itemCount: feed.length,
       onPageChanged: (index) {
         onPageChanged(
