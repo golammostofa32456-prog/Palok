@@ -65,6 +65,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _loadAll();
     }
   }
+  
 
   // ---------- helpers ----------
 
