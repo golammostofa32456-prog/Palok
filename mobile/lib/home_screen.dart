@@ -14,6 +14,7 @@ import 'features/video/video_view_service.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/navigation/bottom_navigator.dart';
 import 'features/inbox/inbox_screen.dart';
+import 'features/video/video_url.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
