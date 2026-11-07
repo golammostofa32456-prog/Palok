@@ -46,9 +46,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _savedLoaded = false;
   bool _tabLoading = false;
 
-  // সাময়িক: সমস্যা ধরতে error জমা রাখা হয়
-  final List<String> _errors = [];
-
   User? get _me => _auth.currentUser;
   String get _targetId => widget.userId ?? _me?.uid ?? '';
   bool get _isMine => _me != null && _targetId == _me!.uid;
@@ -160,7 +157,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return await task;
     } catch (e) {
       debugPrint('Profile $label error: $e');
-      _errors.add('$label: $e');
       return fallback;
     }
   }
@@ -175,32 +171,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<List<Map<String, dynamic>>> _fetchVideos(
-    String id, {
-    String username = '',
-  }) async {
+  Future<List<Map<String, dynamic>>> _fetchVideos(String id) async {
     final map = <String, Map<String, dynamic>>{};
 
-    Future<void> run(String field, String value) async {
+    Future<void> run(String field) async {
       try {
         final snap = await _db
             .collection('videos')
-            .where(field, isEqualTo: value)
+            .where(field, isEqualTo: id)
             .limit(60)
             .get();
         for (final doc in snap.docs) {
           map[doc.id] = {...doc.data(), 'id': doc.id};
         }
       } catch (e) {
-        _errors.add('q[$field]: $e');
+        debugPrint('Profile videos query ($field) error: $e');
       }
     }
 
-    await Future.wait([
-      run('ownerId', id),
-      run('userId', id),
-      if (username.isNotEmpty) run('username', username),
-    ]);
+    await Future.wait([run('ownerId'), run('userId')]);
 
     // সরাসরি কুয়েরিতে না পেলে সাম্প্রতিক ভিডিও এনে নিজেরা ছেঁকে নিই।
     if (map.isEmpty) {
@@ -210,25 +199,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             .orderBy('createdAt', descending: true)
             .limit(200)
             .get();
-
-        final owners = <String>{};
         for (final doc in snap.docs) {
           final data = doc.data();
           final owner =
               _text(data['ownerId'] ?? data['userId'] ?? data['uid']).trim();
-          if (owners.length < 4) {
-            owners.add(owner.length > 6 ? owner.substring(0, 6) : owner);
-          }
           if (owner == id) {
             map[doc.id] = {...data, 'id': doc.id};
           }
         }
-
-        if (map.isEmpty) {
-          _errors.add('scan=${snap.size} owners=${owners.join(",")}');
-        }
       } catch (e) {
-        _errors.add('scan: $e');
+        debugPrint('Profile videos fallback error: $e');
       }
     }
 
@@ -283,7 +263,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    _errors.clear();
     if (mounted) setState(() => _loading = true);
 
     final userRef = _db.collection('users').doc(id);
@@ -292,7 +271,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _guard(_fetchVideos(id), <Map<String, dynamic>>[], 'videos'),
       _guard(_countOf(userRef.collection('followers')), 0, 'followers'),
       _guard(_countOf(userRef.collection('following')), 0, 'following'),
-      _guard(_checkFollowing(id), false, 'followcheck'),
+      _guard(_checkFollowing(id), false, 'follow check'),
     ]);
 
     if (!mounted) return;
@@ -303,22 +282,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _following = results[3] as bool;
       _loading = false;
     });
-
-    // সাময়িক: সমস্যা ধরতে পর্দায় দেখানো (পরে মুছে দেব)
-    if (_errors.isNotEmpty || _videos.isEmpty) {
-      final shortId = id.length > 6 ? id.substring(0, 6) : id;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              'id=$shortId videos=${_videos.length} | ${_errors.join(" | ")}',
-            ),
-            duration: const Duration(seconds: 25),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-    }
   }
 
   Future<void> _ensureTabLoaded(int tab) async {
