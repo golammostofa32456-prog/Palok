@@ -44,7 +44,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _likedLoaded = false;
   bool _savedLoaded = false;
   bool _tabLoading = false;
-
+  final List<String> _errors = [];
   User? get _me => _auth.currentUser;
   String get _targetId => widget.userId ?? _me?.uid ?? '';
   bool get _isMine => _me != null && _targetId == _me!.uid;
