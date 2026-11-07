@@ -83,30 +83,48 @@ void _snack(BuildContext context, String message) {
     );
 }
 
-/// Follow / unfollow (updates both users' sub-collections).
+/// Follow / unfollow (updates both users' sub-collections and counters).
 Future<void> _setFollow(String peerId, bool follow) async {
   final me = FirebaseAuth.instance.currentUser;
   if (me == null || peerId.isEmpty || peerId == me.uid) return;
 
   final db = FirebaseFirestore.instance;
-  final myFollowing = db
-      .collection('users')
-      .doc(me.uid)
-      .collection('following')
-      .doc(peerId);
-  final theirFollowers = db
-      .collection('users')
-      .doc(peerId)
-      .collection('followers')
-      .doc(me.uid);
+  final myDoc = db.collection('users').doc(me.uid);
+  final peerDoc = db.collection('users').doc(peerId);
+  final myFollowing = myDoc.collection('following').doc(peerId);
+  final theirFollowers = peerDoc.collection('followers').doc(me.uid);
 
   final batch = db.batch();
   if (follow) {
-    batch.set(myFollowing, {'createdAt': FieldValue.serverTimestamp()});
-    batch.set(theirFollowers, {'createdAt': FieldValue.serverTimestamp()});
+    batch.set(myFollowing, {
+      'userId': peerId,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    batch.set(theirFollowers, {
+      'userId': me.uid,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    batch.update(peerDoc, {'followersCount': FieldValue.increment(1)});
+    batch.set(
+      myDoc,
+      {'followingCount': FieldValue.increment(1)},
+      SetOptions(merge: true),
+    );
   } else {
     batch.delete(myFollowing);
     batch.delete(theirFollowers);
+
+    final peerSnap = await peerDoc.get();
+    final fc = peerSnap.data()?['followersCount'];
+    if (fc is int && fc > 0) {
+      batch.update(peerDoc, {'followersCount': FieldValue.increment(-1)});
+    }
+
+    final mySnap = await myDoc.get();
+    final gc = mySnap.data()?['followingCount'];
+    if (gc is int && gc > 0) {
+      batch.update(myDoc, {'followingCount': FieldValue.increment(-1)});
+    }
   }
   await batch.commit();
 
@@ -123,8 +141,8 @@ Future<void> _setFollow(String peerId, bool follow) async {
   }
 }
 
-/// অন্য জায়গা (লাইক/কমেন্ট কোড) থেকে ডাকুন:
-/// InboxNotifier.send(toUserId: ownerId, type: 'like', text: 'আপনার ভিডিও লাইক করেছে');
+/// অন্য জায়গা (কমেন্ট কোড) থেকে ডাকুন:
+/// InboxNotifier.send(toUserId: ownerId, type: 'comment', text: 'কমেন্ট করেছে', videoId: id);
 /// type: 'like' | 'comment' | 'follow'
 class InboxNotifier {
   static Future<void> send({
@@ -143,23 +161,19 @@ class InboxNotifier {
     final col =
         db.collection('users').doc(toUserId).collection('notifications');
 
-    final data = <String, dynamic>{
+    final myName = d.isEmpty ? (me.displayName ?? 'PALOK User') : _userName(d);
+
+    await col.add(<String, dynamic>{
       'type': type,
       'fromUserId': me.uid,
-      'fromName': d.isEmpty ? (me.displayName ?? 'PALOK User') : _userName(d),
+      'fromUsername': myName,
+      'fromName': myName,
       'fromPhoto': d.isEmpty ? (me.photoURL ?? '') : _userPhoto(d),
       'text': text,
       'videoId': videoId ?? '',
       'read': false,
       'createdAt': FieldValue.serverTimestamp(),
-    };
-
-    if (type == 'follow') {
-      // একই ব্যক্তির বারবার ফলোতে ডুপ্লিকেট হবে না
-      await col.doc('follow_${me.uid}').set(data);
-    } else {
-      await col.add(data);
-    }
+    });
   }
 }
 
@@ -1136,6 +1150,8 @@ class _InboxActivityScreenState extends State<InboxActivityScreen> {
 
   final Set<String> _following = <String>{};
   final Set<String> _busy = <String>{};
+  final Map<String, Map<String, dynamic>> _userCache = {};
+
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _followSub;
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _stream;
 
@@ -1169,6 +1185,17 @@ class _InboxActivityScreenState extends State<InboxActivityScreen> {
   void dispose() {
     _followSub?.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadUser(String id) async {
+    _userCache[id] = {};
+    try {
+      final snap = await _db.collection('users').doc(id).get();
+      if (!mounted) return;
+      setState(() => _userCache[id] = snap.data() ?? {});
+    } catch (e) {
+      debugPrint('Load user error: $e');
+    }
   }
 
   Future<void> _markAllRead() async {
@@ -1286,8 +1313,19 @@ class _InboxActivityScreenState extends State<InboxActivityScreen> {
               final d = doc.data();
               final type = (d['type'] ?? 'follow').toString();
               final fromId = (d['fromUserId'] ?? '').toString();
-              final name = (d['fromName'] ?? 'PALOK User').toString();
-              final photo = (d['fromPhoto'] ?? '').toString();
+
+              if (fromId.isNotEmpty && !_userCache.containsKey(fromId)) {
+                _loadUser(fromId);
+              }
+              final u = _userCache[fromId] ?? {};
+              final name = u.isNotEmpty
+                  ? _userName(u)
+                  : (d['fromName'] ?? d['fromUsername'] ?? 'PALOK User')
+                      .toString();
+              final photo = u.isNotEmpty
+                  ? _userPhoto(u)
+                  : (d['fromPhoto'] ?? '').toString();
+
               final text = (d['text'] ?? '').toString();
               final unread = d['read'] != true;
               final createdAt = d['createdAt'] as Timestamp?;
