@@ -4,8 +4,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
-import 'edit_profile_screen.dart';
+
 import '../video/video_url.dart';
+import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String? userId;
@@ -44,7 +45,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _likedLoaded = false;
   bool _savedLoaded = false;
   bool _tabLoading = false;
+
+  // সাময়িক: সমস্যা ধরতে error জমা রাখা হয়
   final List<String> _errors = [];
+
   User? get _me => _auth.currentUser;
   String get _targetId => widget.userId ?? _me?.uid ?? '';
   bool get _isMine => _me != null && _targetId == _me!.uid;
@@ -65,7 +69,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _loadAll();
     }
   }
-  
 
   // ---------- helpers ----------
 
@@ -100,8 +103,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _username(Map<String, dynamic> data) {
     final name = _text(data['username']).trim();
     if (name.isNotEmpty) return name;
-    final email =
-        _text(data['email'], _isMine ? _me?.email ?? '' : '');
+    final email = _text(data['email'], _isMine ? _me?.email ?? '' : '');
     if (email.contains('@')) return email.split('@').first;
     return 'palok_user';
   }
@@ -119,9 +121,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _photo(Map<String, dynamic> data) {
     for (final key in [
       'profileImageUrl',
+      'profileImage',
       'photoURL',
       'photoUrl',
-      'profileImage',
     ]) {
       final v = _text(data[key]).trim();
       if (v.startsWith('http')) return v;
@@ -153,6 +155,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // ---------- data loading ----------
 
+  Future<T> _guard<T>(Future<T> task, T fallback, String label) async {
+    try {
+      return await task;
+    } catch (e) {
+      debugPrint('Profile $label error: $e');
+      _errors.add('$label: $e');
+      return fallback;
+    }
+  }
+
   Future<int> _countOf(Query<Map<String, dynamic>> query) async {
     try {
       final snap = await query.count().get();
@@ -163,17 +175,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<List<Map<String, dynamic>>> _fetchVideos(String id) async {
-    final col = _db.collection('videos');
-    final snaps = await Future.wait([
-      col.where('ownerId', isEqualTo: id).limit(60).get(),
-      col.where('userId', isEqualTo: id).limit(60).get(),
+  Future<List<Map<String, dynamic>>> _fetchVideos(
+    String id, {
+    String username = '',
+  }) async {
+    final map = <String, Map<String, dynamic>>{};
+
+    Future<void> run(String field, String value) async {
+      try {
+        final snap = await _db
+            .collection('videos')
+            .where(field, isEqualTo: value)
+            .limit(60)
+            .get();
+        for (final doc in snap.docs) {
+          map[doc.id] = {...doc.data(), 'id': doc.id};
+        }
+      } catch (e) {
+        _errors.add('q[$field]: $e');
+      }
+    }
+
+    await Future.wait([
+      run('ownerId', id),
+      run('userId', id),
+      if (username.isNotEmpty) run('username', username),
     ]);
 
-    final map = <String, Map<String, dynamic>>{};
-    for (final snap in snaps) {
-      for (final doc in snap.docs) {
-        map[doc.id] = {...doc.data(), 'id': doc.id};
+    // সরাসরি কুয়েরিতে না পেলে সাম্প্রতিক ভিডিও এনে নিজেরা ছেঁকে নিই।
+    if (map.isEmpty) {
+      try {
+        final snap = await _db
+            .collection('videos')
+            .orderBy('createdAt', descending: true)
+            .limit(200)
+            .get();
+
+        final owners = <String>{};
+        for (final doc in snap.docs) {
+          final data = doc.data();
+          final owner =
+              _text(data['ownerId'] ?? data['userId'] ?? data['uid']).trim();
+          if (owners.length < 4) {
+            owners.add(owner.length > 6 ? owner.substring(0, 6) : owner);
+          }
+          if (owner == id) {
+            map[doc.id] = {...data, 'id': doc.id};
+          }
+        }
+
+        if (map.isEmpty) {
+          _errors.add('scan=${snap.size} owners=${owners.join(",")}');
+        }
+      } catch (e) {
+        _errors.add('scan: $e');
       }
     }
 
@@ -228,28 +283,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
+    _errors.clear();
     if (mounted) setState(() => _loading = true);
 
-    try {
-      final userRef = _db.collection('users').doc(id);
-      final results = await Future.wait<Object?>([
-        _fetchVideos(id),
-        _countOf(userRef.collection('followers')),
-        _countOf(userRef.collection('following')),
-        _checkFollowing(id),
-      ]);
+    final userRef = _db.collection('users').doc(id);
 
-      if (!mounted) return;
-      setState(() {
-        _videos = results[0] as List<Map<String, dynamic>>;
-        _followersCount = results[1] as int;
-        _followingCount = results[2] as int;
-        _following = results[3] as bool;
-      });
-    } catch (e) {
-      debugPrint('Profile load error: $e');
-    } finally {
-      if (mounted) setState(() => _loading = false);
+    final results = await Future.wait<Object?>([
+      _guard(_fetchVideos(id), <Map<String, dynamic>>[], 'videos'),
+      _guard(_countOf(userRef.collection('followers')), 0, 'followers'),
+      _guard(_countOf(userRef.collection('following')), 0, 'following'),
+      _guard(_checkFollowing(id), false, 'followcheck'),
+    ]);
+
+    if (!mounted) return;
+    setState(() {
+      _videos = results[0] as List<Map<String, dynamic>>;
+      _followersCount = results[1] as int;
+      _followingCount = results[2] as int;
+      _following = results[3] as bool;
+      _loading = false;
+    });
+
+    // সাময়িক: সমস্যা ধরতে পর্দায় দেখানো (পরে মুছে দেব)
+    if (_errors.isNotEmpty || _videos.isEmpty) {
+      final shortId = id.length > 6 ? id.substring(0, 6) : id;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              'id=$shortId videos=${_videos.length} | ${_errors.join(" | ")}',
+            ),
+            duration: const Duration(seconds: 25),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
     }
   }
 
@@ -345,42 +413,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _editProfile(Map<String, dynamic> data) async {
-    final me = _me;
-    if (me == null) return;
+    if (_me == null) return;
 
-    final result = await showModalBottomSheet<Map<String, String>>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF171717),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => _EditProfileSheet(
-        name: _displayName(data),
-        username: _username(data),
-        bio: _text(data['bio']),
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => const EditProfileScreen(),
       ),
     );
 
-    if (result == null) return;
-
-    try {
-      await _db.collection('users').doc(me.uid).set({
-        'displayName': result['name'],
-        'username': result['username'],
-        'bio': result['bio'],
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      try {
-        await me.updateDisplayName(result['name']);
-      } catch (_) {}
-
-      _msg('প্রোফাইল আপডেট হয়েছে।');
-    } catch (e) {
-      debugPrint('Edit profile error: $e');
-      _msg('প্রোফাইল সেভ করা যায়নি।');
-    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _logout() async {
@@ -879,141 +921,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 slivers: [
                   SliverToBoxAdapter(child: _header(data)),
                   ..._gridSlivers(),
+                  // নিচের নেভিগেশন বারের জন্য জায়গা
+                  const SliverToBoxAdapter(child: SizedBox(height: 100)),
                 ],
               ),
             );
           },
-        ),
-      ),
-    );
-  }
-}
-
-// ======================================================================
-// Edit Profile Sheet
-// ======================================================================
-
-class _EditProfileSheet extends StatefulWidget {
-  final String name;
-  final String username;
-  final String bio;
-
-  const _EditProfileSheet({
-    required this.name,
-    required this.username,
-    required this.bio,
-  });
-
-  @override
-  State<_EditProfileSheet> createState() => _EditProfileSheetState();
-}
-
-class _EditProfileSheetState extends State<_EditProfileSheet> {
-  late final TextEditingController _name =
-      TextEditingController(text: widget.name);
-  late final TextEditingController _username =
-      TextEditingController(text: widget.username);
-  late final TextEditingController _bio =
-      TextEditingController(text: widget.bio);
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _username.dispose();
-    _bio.dispose();
-    super.dispose();
-  }
-
-  InputDecoration _decoration(String label) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: const TextStyle(color: Colors.white54),
-      filled: true,
-      fillColor: Colors.white10,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide.none,
-      ),
-    );
-  }
-
-  void _save() {
-    final username = _username.text
-        .trim()
-        .toLowerCase()
-        .replaceAll('@', '')
-        .replaceAll(' ', '_');
-
-    Navigator.pop(context, {
-      'name': _name.text.trim(),
-      'username': username.isEmpty ? widget.username : username,
-      'bio': _bio.text.trim(),
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        20,
-        16,
-        MediaQuery.of(context).viewInsets.bottom + 16,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Edit profile',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _name,
-              style: const TextStyle(color: Colors.white),
-              decoration: _decoration('Name'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _username,
-              style: const TextStyle(color: Colors.white),
-              decoration: _decoration('Username'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _bio,
-              maxLines: 3,
-              maxLength: 120,
-              style: const TextStyle(color: Colors.white),
-              decoration: _decoration('Bio'),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              height: 46,
-              child: ElevatedButton(
-                onPressed: _save,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF2D55),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Text(
-                  'Save',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
