@@ -6,6 +6,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:palok/features/create/palok_camera_screen.dart';
 import 'package:video_player/video_player.dart';
 
+import 'create_tools.dart';
+
 class CreateVideoScreen extends StatefulWidget {
   const CreateVideoScreen({super.key});
 
@@ -14,46 +16,154 @@ class CreateVideoScreen extends StatefulWidget {
 }
 
 class _CreateVideoScreenState extends State<CreateVideoScreen> {
+  static const Color _pink = kPalokPink;
+
   final ImagePicker _picker = ImagePicker();
 
   VideoPlayerController? _videoController;
+  VideoPlayerController? _audioController;
   XFile? _selectedVideo;
 
   bool _isLoading = false;
-  bool _isFlipped = false;
-  bool _isMuted = false;
-  bool _flashEnabled = false;
+  bool _exporting = false;
 
-  double _playbackSpeed = 1.0;
+  String _effectId = 'none';
+  double _speed = 1.0;
+  bool _flip = false;
+  bool _originalAudio = true;
+  bool _hasOriginalAudio = true;
+  String? _soundPath;
+  String _soundName = '';
+  double _soundVolume = 1.0;
+  final List<TextOverlay> _texts = <TextOverlay>[];
 
-  int _timerSeconds = 0;
-  int _countdown = 0;
-
-  String _selectedEffect = 'None';
-  String _overlayText = '';
-
-  Timer? _countdownTimer;
-
-  static const Color _pink = Color(0xFFFF2D55);
-  static const Color _cyan = Color(0xFF00E5FF);
+  Duration _lastPos = Duration.zero;
 
   @override
   void dispose() {
-    _countdownTimer?.cancel();
+    _videoController?.removeListener(_onVideoTick);
     _videoController?.dispose();
+    _audioController?.dispose();
     super.dispose();
   }
 
   // ---------------------------------------------------------
-  // PICK VIDEO FROM GALLERY
+  // PLAYERS
   // ---------------------------------------------------------
 
-  Future<void> _pickVideo(ImageSource source) async {
+  Future<void> _releasePlayers() async {
+    final v = _videoController;
+    final a = _audioController;
+    _videoController = null;
+    _audioController = null;
+    v?.removeListener(_onVideoTick);
+    await v?.dispose();
+    await a?.dispose();
+  }
+
+  // ভিডিও ও সাউন্ড একসাথে চালানো/থামানো/লুপে সিঙ্ক রাখা
+  void _onVideoTick() {
+    final v = _videoController;
+    final a = _audioController;
+    if (v == null || a == null) return;
+    if (!v.value.isInitialized || !a.value.isInitialized) return;
+
+    final pos = v.value.position;
+    if (pos + const Duration(milliseconds: 400) < _lastPos) {
+      a.seekTo(Duration.zero);
+    }
+    _lastPos = pos;
+
+    if (v.value.isPlaying != a.value.isPlaying) {
+      if (v.value.isPlaying) {
+        a.play();
+      } else {
+        a.pause();
+      }
+    }
+  }
+
+  Future<void> _prepareAudio() async {
+    final old = _audioController;
+    _audioController = null;
+    await old?.dispose();
+
+    final p = _soundPath;
+    if (p == null) return;
+
+    try {
+      final a = VideoPlayerController.file(File(p));
+      await a.initialize();
+      await a.setLooping(true);
+      await a.setVolume(_soundVolume);
+      await a.setPlaybackSpeed(_speed);
+      _audioController = a;
+    } catch (_) {
+      _soundPath = null;
+      _soundName = '';
+      _showMessage('সাউন্ড ফাইল চালানো যায়নি');
+    }
+  }
+
+  // ---------------------------------------------------------
+  // LOAD VIDEO
+  // ---------------------------------------------------------
+
+  Future<void> _loadVideo(String path, {CameraResult? from}) async {
     if (_isLoading) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
+
+    try {
+      await _releasePlayers();
+
+      final controller = VideoPlayerController.file(File(path));
+      await controller.initialize();
+      await controller.setLooping(true);
+
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+
+      final e = from?.edits;
+
+      _selectedVideo = XFile(path);
+      _effectId = e?.effectId ?? 'none';
+      _speed = e?.speed ?? 1.0;
+      _flip = false;
+      _originalAudio = true;
+      _hasOriginalAudio = from?.hasOriginalAudio ?? true;
+      _soundPath = e?.soundPath;
+      _soundName = e?.soundName ?? '';
+      _soundVolume = e?.soundVolume ?? 1.0;
+      _texts
+        ..clear()
+        ..addAll(e?.texts ?? <TextOverlay>[]);
+      _lastPos = Duration.zero;
+
+      await controller.setPlaybackSpeed(_speed);
+      await controller.setVolume(1.0);
+
+      _videoController = controller;
+      controller.addListener(_onVideoTick);
+
+      await _prepareAudio();
+
+      if (!mounted) return;
+
+      setState(() => _isLoading = false);
+
+      await controller.play();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showMessage('ভিডিও লোড করা যায়নি: $e');
+    }
+  }
+
+  Future<void> _pickVideo(ImageSource source) async {
+    if (_isLoading || _exporting) return;
 
     try {
       final XFile? file = await _picker.pickVideo(
@@ -61,240 +171,75 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
         maxDuration: const Duration(minutes: 3),
       );
 
-      if (file == null) {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
-        return;
-      }
+      if (file == null || !mounted) return;
 
-      await _videoController?.dispose();
-
-      final controller = VideoPlayerController.file(
-        File(file.path),
-      );
-
-      await controller.initialize();
-      await controller.setLooping(true);
-      await controller.setPlaybackSpeed(_playbackSpeed);
-      await controller.setVolume(_isMuted ? 0.0 : 1.0);
-
-      if (!mounted) {
-        await controller.dispose();
-        return;
-      }
-
-      setState(() {
-        _selectedVideo = file;
-        _videoController = controller;
-        _isLoading = false;
-        _isFlipped = false;
-        _isMuted = false;
-        _flashEnabled = false;
-        _playbackSpeed = 1.0;
-        _timerSeconds = 0;
-        _countdown = 0;
-        _selectedEffect = 'None';
-        _overlayText = '';
-      });
-
-      await controller.play();
+      await _loadVideo(file.path);
     } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('ভিডিও নির্বাচন করা যায়নি: $e'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      _showMessage('ভিডিও নির্বাচন করা যায়নি: $e');
     }
   }
-
-  // ---------------------------------------------------------
-  // OPEN REAL PALOK CAMERA
-  // ---------------------------------------------------------
 
   Future<void> _openCamera() async {
-    if (_isLoading) return;
+    if (_isLoading || _exporting) return;
 
-    final String? videoPath =
-        await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        builder: (_) => const CameraScreen(),
-      ),
+    await _videoController?.pause();
+    await _audioController?.pause();
+
+    final result = await Navigator.of(context).push<CameraResult>(
+      MaterialPageRoute(builder: (_) => const CameraScreen()),
     );
 
-    if (videoPath == null || !mounted) return;
+    if (result == null || !mounted) return;
 
-    await _loadVideoFromPath(videoPath);
+    await _loadVideo(result.path, from: result);
   }
-
-  // ---------------------------------------------------------
-  // LOAD VIDEO FROM REAL CAMERA
-  // ---------------------------------------------------------
-
-  Future<void> _loadVideoFromPath(String path) async {
-    if (_isLoading) return;
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final file = XFile(path);
-
-      await _videoController?.dispose();
-
-      final controller = VideoPlayerController.file(
-        File(path),
-      );
-
-      await controller.initialize();
-      await controller.setLooping(true);
-      await controller.setPlaybackSpeed(_playbackSpeed);
-      await controller.setVolume(
-        _isMuted ? 0.0 : 1.0,
-      );
-
-      if (!mounted) {
-        await controller.dispose();
-        return;
-      }
-
-      setState(() {
-        _selectedVideo = file;
-        _videoController = controller;
-        _isLoading = false;
-
-        _isFlipped = false;
-        _isMuted = false;
-        _flashEnabled = false;
-
-        _playbackSpeed = 1.0;
-        _timerSeconds = 0;
-        _countdown = 0;
-
-        _selectedEffect = 'None';
-        _overlayText = '';
-      });
-
-      await controller.play();
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-      });
-
-      _showMessage(
-        'Camera video load করা যায়নি: $e',
-      );
-    }
-  }
-
-  // ---------------------------------------------------------
-  // CLOSE
-  // ---------------------------------------------------------
 
   void _closeScreen() {
-    _countdownTimer?.cancel();
+    if (_exporting) return;
     Navigator.of(context).pop();
   }
 
   // ---------------------------------------------------------
-  // PLAY / PAUSE
+  // PLAY / FLIP / SPEED
   // ---------------------------------------------------------
 
   Future<void> _togglePlay() async {
-    final controller = _videoController;
+    final c = _videoController;
+    if (c == null || !c.value.isInitialized) return;
 
-    if (controller == null || !controller.value.isInitialized) {
-      return;
-    }
-
-    if (controller.value.isPlaying) {
-      await controller.pause();
+    if (c.value.isPlaying) {
+      await c.pause();
     } else {
-      await controller.play();
+      await c.play();
     }
 
-    if (mounted) {
-      setState(() {});
-    }
+    if (mounted) setState(() {});
   }
-
-  // ---------------------------------------------------------
-  // FLIP
-  // ---------------------------------------------------------
 
   void _toggleFlip() {
-    setState(() {
-      _isFlipped = !_isFlipped;
-    });
-
-    _showMessage(
-      _isFlipped
-          ? 'ভিডিও Flip করা হয়েছে'
-          : 'Flip বন্ধ করা হয়েছে',
-    );
+    setState(() => _flip = !_flip);
+    _showMessage(_flip ? 'ভিডিও Flip করা হয়েছে' : 'Flip বন্ধ করা হয়েছে');
   }
 
-  // ---------------------------------------------------------
-  // SPEED
-  // ---------------------------------------------------------
-
   Future<void> _showSpeedDialog() async {
-    final controller = _videoController;
-
-    if (controller == null || !controller.value.isInitialized) {
-      return;
-    }
+    final c = _videoController;
+    if (c == null || !c.value.isInitialized) return;
 
     final selected = await showModalBottomSheet<double>(
       context: context,
       backgroundColor: const Color(0xFF151515),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(24),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
-        final speeds = <double>[
-          0.5,
-          0.75,
-          1.0,
-          1.25,
-          1.5,
-          2.0,
-        ];
+        const speeds = <double>[0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
 
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              20,
-              18,
-              20,
-              24,
-            ),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white30,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                const SizedBox(height: 18),
                 const Text(
                   'Playback Speed',
                   style: TextStyle(
@@ -309,27 +254,15 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
                   runSpacing: 10,
                   alignment: WrapAlignment.center,
                   children: speeds.map((speed) {
-                    final active = _playbackSpeed == speed;
-
+                    final active = _speed == speed;
                     return GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).pop(speed);
-                      },
+                      onTap: () => Navigator.of(context).pop(speed),
                       child: Container(
                         width: 82,
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 13,
-                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
                         decoration: BoxDecoration(
-                          color: active
-                              ? _pink
-                              : Colors.white10,
+                          color: active ? _pink : Colors.white10,
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: active
-                                ? _pink
-                                : Colors.white24,
-                          ),
                         ),
                         alignment: Alignment.center,
                         child: Text(
@@ -352,206 +285,10 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
 
     if (selected == null || !mounted) return;
 
-    setState(() {
-      _playbackSpeed = selected;
-    });
-
-    await controller.setPlaybackSpeed(selected);
-
-    _showMessage(
-      'Speed ${selected}x করা হয়েছে',
-    );
-  }
-
-  // ---------------------------------------------------------
-  // TIMER
-  // ---------------------------------------------------------
-
-  Future<void> _showTimerDialog() async {
-    final selected = await showModalBottomSheet<int>(
-      context: context,
-      backgroundColor: const Color(0xFF151515),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(24),
-        ),
-      ),
-      builder: (context) {
-        final timers = <int>[0, 3, 5, 10];
-
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              20,
-              18,
-              20,
-              24,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white30,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                const Text(
-                  'Timer',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'ভিডিও preview শুরু হওয়ার আগে countdown',
-                  style: TextStyle(
-                    color: Colors.white54,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  alignment: WrapAlignment.center,
-                  children: timers.map((seconds) {
-                    final active = _timerSeconds == seconds;
-
-                    return GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).pop(seconds);
-                      },
-                      child: Container(
-                        width: 76,
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 13,
-                        ),
-                        decoration: BoxDecoration(
-                          color: active
-                              ? _pink
-                              : Colors.white10,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          seconds == 0
-                              ? 'Off'
-                              : '${seconds}s',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    if (selected == null || !mounted) return;
-
-    setState(() {
-      _timerSeconds = selected;
-    });
-
-    if (selected == 0) {
-      _countdownTimer?.cancel();
-
-      setState(() {
-        _countdown = 0;
-      });
-
-      _showMessage('Timer বন্ধ করা হয়েছে');
-      return;
-    }
-
-    _startCountdown(selected);
-  }
-
-  void _startCountdown(int seconds) {
-    _countdownTimer?.cancel();
-
-    setState(() {
-      _countdown = seconds;
-    });
-
-    _countdownTimer = Timer.periodic(
-      const Duration(seconds: 1),
-      (timer) {
-        if (!mounted) {
-          timer.cancel();
-          return;
-        }
-
-        if (_countdown <= 1) {
-          timer.cancel();
-
-          setState(() {
-            _countdown = 0;
-          });
-
-          _showMessage('Timer শেষ');
-          return;
-        }
-
-        setState(() {
-          _countdown--;
-        });
-      },
-    );
-  }
-
-  // ---------------------------------------------------------
-  // FLASH
-  // ---------------------------------------------------------
-
-  void _toggleFlash() {
-    setState(() {
-      _flashEnabled = !_flashEnabled;
-    });
-
-    _showMessage(
-      _flashEnabled
-          ? 'Flash preview চালু হয়েছে'
-          : 'Flash বন্ধ করা হয়েছে',
-    );
-  }
-
-  // ---------------------------------------------------------
-  // SOUND
-  // ---------------------------------------------------------
-
-  Future<void> _toggleSound() async {
-    final controller = _videoController;
-
-    if (controller == null || !controller.value.isInitialized) {
-      return;
-    }
-
-    setState(() {
-      _isMuted = !_isMuted;
-    });
-
-    await controller.setVolume(
-      _isMuted ? 0.0 : 1.0,
-    );
-
-    _showMessage(
-      _isMuted
-          ? 'Sound mute করা হয়েছে'
-          : 'Sound চালু হয়েছে',
-    );
+    setState(() => _speed = selected);
+    await c.setPlaybackSpeed(selected);
+    await _audioController?.setPlaybackSpeed(selected);
+    _showMessage('Speed ${selected}x করা হয়েছে');
   }
 
   // ---------------------------------------------------------
@@ -559,45 +296,19 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
   // ---------------------------------------------------------
 
   Future<void> _showEffectsDialog() async {
-    final effects = <String>[
-      'None',
-      'Dark',
-      'Warm',
-      'Cool',
-      'Pink',
-      'Cyan',
-      'B&W',
-    ];
-
     final selected = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: const Color(0xFF151515),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(24),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              20,
-              18,
-              20,
-              24,
-            ),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white30,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                const SizedBox(height: 18),
                 const Text(
                   'Effects',
                   style: TextStyle(
@@ -611,27 +322,21 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
                   spacing: 10,
                   runSpacing: 10,
                   alignment: WrapAlignment.center,
-                  children: effects.map((effect) {
-                    final active =
-                        _selectedEffect == effect;
-
+                  children: kCreateEffects.map((e) {
+                    final active = _effectId == e.id;
                     return GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).pop(effect);
-                      },
+                      onTap: () => Navigator.of(context).pop(e.id),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 18,
                           vertical: 12,
                         ),
                         decoration: BoxDecoration(
-                          color: active
-                              ? _pink
-                              : Colors.white10,
+                          color: active ? _pink : Colors.white10,
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Text(
-                          effect,
+                          e.label,
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w700,
@@ -650,200 +355,300 @@ class _CreateVideoScreenState extends State<CreateVideoScreen> {
 
     if (selected == null || !mounted) return;
 
-    setState(() {
-      _selectedEffect = selected;
-    });
-
-    _showMessage(
-      selected == 'None'
-          ? 'Effect বন্ধ করা হয়েছে'
-          : '$selected effect চালু হয়েছে',
-    );
+    setState(() => _effectId = selected);
   }
-// ---------------------------------------------------------
-// CREATE SETTINGS
-// ---------------------------------------------------------
 
-Future<void> _showCreateSettings() async {
-  await showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: const Color(0xFF151515),
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(
-        top: Radius.circular(24),
-      ),
-    ),
-    builder: (context) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Create Settings',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 18),
-              ListTile(
-                leading: const Icon(
-                  Icons.volume_up,
-                  color: Colors.white,
-                ),
-                title: const Text(
-                  'Sound',
-                  style: TextStyle(color: Colors.white),
-                ),
-                subtitle: Text(
-                  _isMuted ? 'Muted' : 'On',
-                  style: const TextStyle(color: Colors.white54),
-                ),
-              ),
-              ListTile(
-                leading: const Icon(
-                  Icons.speed,
-                  color: Colors.white,
-                ),
-                title: const Text(
-                  'Playback Speed',
-                  style: TextStyle(color: Colors.white),
-                ),
-                subtitle: Text(
-                  '${_playbackSpeed}x',
-                  style: const TextStyle(color: Colors.white54),
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                child: const Text(
-                  'Done',
-                  style: TextStyle(
-                    color: _pink,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    },
-  );
-}
   // ---------------------------------------------------------
   // TEXT
   // ---------------------------------------------------------
 
-  Future<void> _showTextDialog() async {
-    final controller = TextEditingController(
-      text: _overlayText,
-    );
+  Future<void> _addText() async {
+    if (_videoController == null) return;
 
-    final result = await showDialog<String>(
+    if (_texts.length >= 5) {
+      _showMessage('সর্বোচ্চ ৫টি লেখা যোগ করা যাবে।');
+      return;
+    }
+
+    final result = await showTextEditor(context);
+    if (result == null || result.text.isEmpty || !mounted) return;
+
+    setState(() => _texts.add(result));
+  }
+
+  Future<void> _editText(TextOverlay t) async {
+    final result = await showTextEditor(context, initial: t);
+    if (result == null || !mounted) return;
+
+    setState(() {
+      if (result.text.isEmpty) {
+        _texts.removeWhere((x) => x.id == t.id);
+      } else {
+        t.text = result.text;
+        t.colorValue = result.colorValue;
+        t.size = result.size;
+      }
+    });
+  }
+
+  // ---------------------------------------------------------
+  // SOUND
+  // ---------------------------------------------------------
+
+  Future<void> _pickSound() async {
+    final picked = await pickSoundFromDevice();
+    if (picked == null || !mounted) return;
+
+    _soundPath = picked.path;
+    _soundName = picked.name;
+    await _prepareAudio();
+
+    final v = _videoController;
+    final a = _audioController;
+    if (v != null && a != null && v.value.isPlaying) {
+      await a.seekTo(v.value.position);
+      await a.play();
+    }
+
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _removeSound() async {
+    final a = _audioController;
+    _audioController = null;
+    await a?.dispose();
+
+    _soundPath = null;
+    _soundName = '';
+
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _showSoundSheet() async {
+    if (_videoController == null) return;
+
+    await showModalBottomSheet<void>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF151515),
-          title: const Text(
-            'Add Text',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            maxLength: 80,
-            style: const TextStyle(
-              color: Colors.white,
-            ),
-            decoration: InputDecoration(
-              hintText: 'ভিডিওতে Text লিখুন',
-              hintStyle: const TextStyle(
-                color: Colors.white38,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(
-                  color: Colors.white24,
+      backgroundColor: const Color(0xFF151515),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheet) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Sound',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ListTile(
+                      leading: const Icon(
+                        Icons.library_music,
+                        color: Colors.white,
+                      ),
+                      title: Text(
+                        _soundPath == null
+                            ? 'ফোন থেকে সাউন্ড যোগ করুন'
+                            : 'অন্য সাউন্ড বাছুন',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      onTap: () async {
+                        await _pickSound();
+                        setSheet(() {});
+                      },
+                    ),
+                    if (_soundPath != null) ...[
+                      ListTile(
+                        leading: const Icon(
+                          Icons.music_note,
+                          color: Colors.white70,
+                        ),
+                        title: Text(
+                          _soundName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white70),
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.close, color: _pink),
+                          onPressed: () async {
+                            await _removeSound();
+                            setSheet(() {});
+                          },
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          const SizedBox(width: 16),
+                          const Icon(Icons.volume_down, color: Colors.white54),
+                          Expanded(
+                            child: Slider(
+                              value: _soundVolume,
+                              min: 0,
+                              max: 1,
+                              divisions: 10,
+                              activeColor: _pink,
+                              onChanged: (v) {
+                                _soundVolume = v;
+                                _audioController?.setVolume(v);
+                                setSheet(() {});
+                              },
+                            ),
+                          ),
+                          const Icon(Icons.volume_up, color: Colors.white54),
+                          const SizedBox(width: 16),
+                        ],
+                      ),
+                    ],
+                    SwitchListTile(
+                      activeColor: _pink,
+                      title: const Text(
+                        'মূল ভিডিওর শব্দ',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      subtitle: Text(
+                        _hasOriginalAudio
+                            ? 'বন্ধ করলে শুধু যোগ করা সাউন্ড থাকবে'
+                            : 'এই ভিডিওতে মূল শব্দ নেই',
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
+                      ),
+                      value: _originalAudio && _hasOriginalAudio,
+                      onChanged: _hasOriginalAudio
+                          ? (v) {
+                              _originalAudio = v;
+                              _videoController?.setVolume(v ? 1.0 : 0.0);
+                              setSheet(() {});
+                            }
+                          : null,
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text(
+                        'Done',
+                        style: TextStyle(
+                          color: _pink,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(
-                  color: _pink,
-                ),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-  FocusScope.of(context).unfocus();
-  Navigator.of(context).pop('');
-},
-              child: const Text(
-                'Remove',
-                style: TextStyle(
-                  color: Colors.white60,
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-  FocusScope.of(context).unfocus();
-  Navigator.of(context).pop(
-    controller.text.trim(),
-  );
-},
-              child: const Text(
-                'Done',
-                style: TextStyle(
-                  color: _pink,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
+            );
+          },
         );
       },
     );
 
-    controller.dispose();
-
-    if (result == null || !mounted) return;
-
-    setState(() {
-      _overlayText = result;
-    });
-
-    _showMessage(
-      result.isEmpty
-          ? 'Text সরানো হয়েছে'
-          : 'Text যোগ করা হয়েছে',
-    );
+    if (mounted) setState(() {});
   }
 
   // ---------------------------------------------------------
-  // CONTINUE
+  // SETTINGS
   // ---------------------------------------------------------
 
-  void _continueWithVideo() {
-    if (_selectedVideo == null) return;
+  Future<void> _openSettings() async {
+    if (_exporting) return;
+    await showCreateSettingsSheet(context);
+  }
 
-    _countdownTimer?.cancel();
+  // ---------------------------------------------------------
+  // CONTINUE (EXPORT)
+  // ---------------------------------------------------------
 
-    Navigator.of(context).pop(
-      _selectedVideo!.path,
+  CreateEdits _currentEdits() {
+    return CreateEdits(
+      effectId: _effectId,
+      speed: _speed,
+      flip: _flip,
+      originalAudio: _originalAudio,
+      hasOriginalAudio: _hasOriginalAudio,
+      soundPath: _soundPath,
+      soundName: _soundName,
+      soundVolume: _soundVolume,
+      texts: List<TextOverlay>.from(_texts),
     );
+  }
+
+  Future<void> _continueWithVideo() async {
+    final video = _selectedVideo;
+    final c = _videoController;
+
+    if (video == null || c == null || _exporting) return;
+
+    await c.pause();
+    await _audioController?.pause();
+
+    if (!mounted) return;
+    setState(() => _exporting = true);
+
+    final edits = _currentEdits();
+
+    final out = await CreateExporter.export(
+      inputPath: video.path,
+      edits: edits,
+      videoSize: c.value.size,
+      exportWidth: CreateSettingsStore.current.exportWidth,
+    );
+
+    if (!mounted) return;
+    setState(() => _exporting = false);
+
+    if (out != null) {
+      Navigator.of(context).pop(out);
+      return;
+    }
+
+    // এডিট ছাড়া শুধু ছোট করা ব্যর্থ হলে মূল ভিডিও দিয়েই এগোই
+    if (!edits.hasAnyEdit) {
+      Navigator.of(context).pop(video.path);
+      return;
+    }
+
+    final useOriginal = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF151515),
+        title: const Text(
+          'এডিট প্রয়োগ করা যায়নি',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          'মূল ভিডিও (এডিট ছাড়া) দিয়ে এগোবেন?\n\n'
+          '${CreateExporter.lastError}',
+          maxLines: 8,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: Colors.white70, fontSize: 12),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('না'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('হ্যাঁ', style: TextStyle(color: _pink)),
+          ),
+        ],
+      ),
+    );
+
+    if (useOriginal == true && mounted) {
+      Navigator.of(context).pop(video.path);
+    }
   }
 
   // ---------------------------------------------------------
@@ -859,97 +664,60 @@ Future<void> _showCreateSettings() async {
         SnackBar(
           content: Text(message),
           backgroundColor: Colors.black87,
-          duration: const Duration(
-            milliseconds: 1200,
-          ),
+          duration: const Duration(milliseconds: 1500),
         ),
       );
   }
 
   // ---------------------------------------------------------
-  // EFFECT FILTER
+  // PREVIEW
   // ---------------------------------------------------------
 
-  Widget _applyEffect(Widget child) {
-    switch (_selectedEffect) {
-      case 'Dark':
-        return ColorFiltered(
-          colorFilter: ColorFilter.mode(
-            Colors.black.withOpacity(.28),
-            BlendMode.darken,
-          ),
-          child: child,
-        );
+  Widget _buildPreview(VideoPlayerController c) {
+    final cf = effectById(_effectId).colorFilter;
 
-      case 'Warm':
-        return ColorFiltered(
-          colorFilter: ColorFilter.mode(
-            Colors.orange.withOpacity(.20),
-            BlendMode.overlay,
-          ),
-          child: child,
-        );
+    return Center(
+      child: AspectRatio(
+        aspectRatio: c.value.aspectRatio,
+        child: LayoutBuilder(
+          builder: (context, box) {
+            Widget video = Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.diagonal3Values(_flip ? -1.0 : 1.0, 1.0, 1.0),
+              child: VideoPlayer(c),
+            );
 
-      case 'Cool':
-        return ColorFiltered(
-          colorFilter: ColorFilter.mode(
-            Colors.blue.withOpacity(.20),
-            BlendMode.overlay,
-          ),
-          child: child,
-        );
+            if (cf != null) {
+              video = ColorFiltered(colorFilter: cf, child: video);
+            }
 
-      case 'Pink':
-        return ColorFiltered(
-          colorFilter: ColorFilter.mode(
-            _pink.withOpacity(.18),
-            BlendMode.overlay,
-          ),
-          child: child,
-        );
-
-      case 'Cyan':
-        return ColorFiltered(
-          colorFilter: ColorFilter.mode(
-            _cyan.withOpacity(.18),
-            BlendMode.overlay,
-          ),
-          child: child,
-        );
-
-      case 'B&W':
-        return ColorFiltered(
-          colorFilter: const ColorFilter.matrix(
-            <double>[
-              0.2126,
-              0.7152,
-              0.0722,
-              0,
-              0,
-              0.2126,
-              0.7152,
-              0.0722,
-              0,
-              0,
-              0.2126,
-              0.7152,
-              0.0722,
-              0,
-              0,
-              0,
-              0,
-              0,
-              1,
-              0,
-            ],
-          ),
-          child: child,
-        );
-
-      case 'None':
-      default:
-        return child;
-    }
+            return GestureDetector(
+              onTap: _togglePlay,
+              child: Stack(
+                fit: StackFit.expand,
+                clipBehavior: Clip.hardEdge,
+                children: [
+                  video,
+                  for (final t in _texts)
+                    createTextLayer(
+                      overlay: t,
+                      width: box.maxWidth,
+                      height: box.maxHeight,
+                      onTap: () => _editText(t),
+                      onDrag: (dx, dy) {
+                        setState(() {
+                          t.dx = (t.dx + dx).clamp(0.05, 0.95).toDouble();
+                          t.dy = (t.dy + dy).clamp(0.05, 0.95).toDouble();
+                        });
+                      },
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   // ---------------------------------------------------------
@@ -958,47 +726,20 @@ Future<void> _showCreateSettings() async {
 
   @override
   Widget build(BuildContext context) {
-    final controller = _videoController;
+    final c = _videoController;
+    final hasVideo = c != null && c.value.isInitialized;
 
-    final hasVideo =
-        controller != null &&
-        controller.value.isInitialized;
-
-    Widget videoWidget;
+    Widget body;
 
     if (hasVideo) {
-      videoWidget = Center(
-        child: AspectRatio(
-          aspectRatio: controller.value.aspectRatio,
-          child: Transform(
-            alignment: Alignment.center,
-            transform: Matrix4.identity()
-              ..scale(
-                _isFlipped ? -1.0 : 1.0,
-                1.0,
-              ),
-            child: VideoPlayer(controller),
-          ),
-        ),
-      );
-
-      videoWidget = _applyEffect(videoWidget);
-
-      videoWidget = GestureDetector(
-        onTap: _togglePlay,
-        child: videoWidget,
-      );
+      body = _buildPreview(c);
     } else {
-      videoWidget = Container(
+      body = Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF151515),
-              Color(0xFF050505),
-              Colors.black,
-            ],
+            colors: [Color(0xFF151515), Color(0xFF050505), Colors.black],
           ),
         ),
         child: Center(
@@ -1010,10 +751,7 @@ Future<void> _showCreateSettings() async {
                 height: 86,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white24,
-                    width: 1.5,
-                  ),
+                  border: Border.all(color: Colors.white24, width: 1.5),
                 ),
                 child: const Icon(
                   Icons.videocam_outlined,
@@ -1034,10 +772,7 @@ Future<void> _showCreateSettings() async {
               const Text(
                 'Record বা Gallery থেকে ভিডিও তৈরি করুন',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white60,
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.white60, fontSize: 14),
               ),
             ],
           ),
@@ -1053,7 +788,7 @@ Future<void> _showCreateSettings() async {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            videoWidget,
+            body,
 
             IgnorePointer(
               child: Container(
@@ -1062,10 +797,7 @@ Future<void> _showCreateSettings() async {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black87,
-                      Colors.transparent,
-                    ],
+                    colors: [Colors.black87, Colors.transparent],
                   ),
                 ),
               ),
@@ -1080,32 +812,22 @@ Future<void> _showCreateSettings() async {
                     gradient: LinearGradient(
                       begin: Alignment.bottomCenter,
                       end: Alignment.topCenter,
-                      colors: [
-                        Colors.black87,
-                        Colors.transparent,
-                      ],
+                      colors: [Colors.black87, Colors.transparent],
                     ),
                   ),
                 ),
               ),
             ),
 
-            // ---------------------------------------------------
-            // TOP BAR
-            // ---------------------------------------------------
-
+            // ---------------- TOP BAR ----------------
             Positioned(
               top: MediaQuery.of(context).padding.top + 10,
               left: 14,
               right: 14,
               child: Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _circleButton(
-                    icon: Icons.close,
-                    onTap: _closeScreen,
-                  ),
+                  _circleButton(icon: Icons.close, onTap: _closeScreen),
                   const Text(
                     'Create',
                     style: TextStyle(
@@ -1116,17 +838,13 @@ Future<void> _showCreateSettings() async {
                   ),
                   _circleButton(
                     icon: Icons.settings_outlined,
-                    onTap: _showCreateSettings,
-                    
+                    onTap: _openSettings,
                   ),
                 ],
               ),
             ),
 
-            // ---------------------------------------------------
-            // SIDE TOOLS
-            // ---------------------------------------------------
-
+            // ---------------- SIDE TOOLS ----------------
             if (hasVideo)
               Positioned(
                 right: 14,
@@ -1134,120 +852,26 @@ Future<void> _showCreateSettings() async {
                 child: Column(
                   children: [
                     _sideTool(
-                      icon: Icons.flip_camera_ios_outlined,
-                      label: 'Flip',
+                      icon: Icons.flip,
+                      label: 'Mirror',
                       onTap: _toggleFlip,
+                      active: _flip,
                     ),
                     const SizedBox(height: 20),
                     _sideTool(
                       icon: Icons.speed,
-                      label: 'Speed',
+                      label: '${_speed}x',
                       onTap: _showSpeedDialog,
-                    ),
-                    const SizedBox(height: 20),
-                    _sideTool(
-                      icon: Icons.timer_outlined,
-                      label: 'Timer',
-                      onTap: _showTimerDialog,
-                    ),
-                    const SizedBox(height: 20),
-                    _sideTool(
-                      icon: _flashEnabled
-                          ? Icons.flash_on
-                          : Icons.flash_off_outlined,
-                      label: 'Flash',
-                      onTap: _toggleFlash,
+                      active: _speed != 1.0,
                     ),
                   ],
                 ),
               ),
 
-            // ---------------------------------------------------
-            // FLASH PREVIEW
-            // ---------------------------------------------------
-
-            if (_flashEnabled && hasVideo)
-              IgnorePointer(
-                child: Container(
-                  color: Colors.white.withOpacity(.12),
-                ),
-              ),
-
-            // ---------------------------------------------------
-            // TEXT OVERLAY
-            // ---------------------------------------------------
-
-            if (_overlayText.trim().isNotEmpty)
-              Positioned(
-                left: 30,
-                right: 30,
-                top: MediaQuery.of(context).size.height * 0.25,
-                child: IgnorePointer(
-                  child: Text(
-                    _overlayText,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w900,
-                      shadows: [
-                        Shadow(
-                          color: Colors.black,
-                          blurRadius: 8,
-                          offset: Offset(2, 2),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-            // ---------------------------------------------------
-            // COUNTDOWN
-            // ---------------------------------------------------
-
-            if (_countdown > 0)
-              Center(
-                child: IgnorePointer(
-                  child: Container(
-                    width: 110,
-                    height: 110,
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white54,
-                        width: 2,
-                      ),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      '$_countdown',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 52,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-            // ---------------------------------------------------
-            // LOADING
-            // ---------------------------------------------------
-
             if (_isLoading)
-              const Center(
-                child: CircularProgressIndicator(
-                  color: _pink,
-                ),
-              ),
+              const Center(child: CircularProgressIndicator(color: _pink)),
 
-            // ---------------------------------------------------
-            // BOTTOM CONTROLS
-            // ---------------------------------------------------
-
+            // ---------------- BOTTOM ----------------
             Positioned(
               left: 0,
               right: 0,
@@ -1262,79 +886,61 @@ Future<void> _showCreateSettings() async {
                         bottom: 18,
                       ),
                       child: Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment.spaceEvenly,
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
                           _bottomTool(
-                            icon: _isMuted
-                                ? Icons.volume_off
-                                : Icons.music_note,
+                            icon: Icons.music_note,
                             label: 'Sound',
-                            onTap: _toggleSound,
+                            onTap: _showSoundSheet,
+                            active: _soundPath != null || !_originalAudio,
                           ),
                           _bottomTool(
                             icon: Icons.auto_awesome,
                             label: 'Effects',
                             onTap: _showEffectsDialog,
+                            active: _effectId != 'none',
                           ),
                           _bottomTool(
                             icon: Icons.text_fields,
                             label: 'Text',
-                            onTap: _showTextDialog,
+                            onTap: _addText,
+                            active: _texts.isNotEmpty,
                           ),
                         ],
                       ),
                     ),
-
-                  // -------------------------------------------------
-                  // MAIN BUTTON ROW
-                  // -------------------------------------------------
-
                   Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.spaceEvenly,
-                    crossAxisAlignment:
-                        CrossAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       _galleryButton(),
-
                       GestureDetector(
-                        onTap: hasVideo
-                            ? _togglePlay
-                            : _openCamera,
+                        onTap: hasVideo ? _togglePlay : _openCamera,
                         child: Container(
                           width: 82,
                           height: 82,
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 4,
-                            ),
+                            border: Border.all(color: Colors.white, width: 4),
                           ),
                           child: Container(
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: hasVideo
-                                  ? _pink
-                                  : Colors.white,
+                              color: hasVideo ? _pink : Colors.white,
                             ),
                             child: Icon(
                               hasVideo
-                                  ? (controller.value.isPlaying
+                                  ? (c.value.isPlaying
                                       ? Icons.pause
                                       : Icons.play_arrow)
                                   : Icons.camera_alt,
-                              color: hasVideo
-                                  ? Colors.white
-                                  : Colors.black,
+                              color: hasVideo ? Colors.white : Colors.black,
                               size: 34,
                             ),
                           ),
                         ),
                       ),
-
                       if (hasVideo)
                         GestureDetector(
                           onTap: _continueWithVideo,
@@ -1343,8 +949,7 @@ Future<void> _showCreateSettings() async {
                             height: 42,
                             decoration: BoxDecoration(
                               color: _pink,
-                              borderRadius:
-                                  BorderRadius.circular(22),
+                              borderRadius: BorderRadius.circular(22),
                             ),
                             alignment: Alignment.center,
                             child: const Icon(
@@ -1358,19 +963,49 @@ Future<void> _showCreateSettings() async {
                         const SizedBox(width: 64),
                     ],
                   ),
-
                   const SizedBox(height: 12),
-
                   const Text(
                     'ভিডিও সর্বোচ্চ ৩ মিনিট',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
                   ),
                 ],
               ),
             ),
+
+            // ---------------- EXPORTING ----------------
+            if (_exporting)
+              Positioned.fill(
+                child: AbsorbPointer(
+                  child: Container(
+                    color: Colors.black87,
+                    child: const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(color: _pink),
+                          SizedBox(height: 18),
+                          Text(
+                            'ভিডিও প্রস্তুত হচ্ছে...',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          SizedBox(height: 6),
+                          Text(
+                            'কিছুক্ষণ অপেক্ষা করুন',
+                            style: TextStyle(
+                              color: Colors.white54,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -1378,7 +1013,7 @@ Future<void> _showCreateSettings() async {
   }
 
   // ---------------------------------------------------------
-  // CIRCLE BUTTON
+  // SMALL WIDGETS
   // ---------------------------------------------------------
 
   Widget _circleButton({
@@ -1393,27 +1028,18 @@ Future<void> _showCreateSettings() async {
         decoration: BoxDecoration(
           color: Colors.black54,
           shape: BoxShape.circle,
-          border: Border.all(
-            color: Colors.white24,
-          ),
+          border: Border.all(color: Colors.white24),
         ),
-        child: Icon(
-          icon,
-          color: Colors.white,
-          size: 23,
-        ),
+        child: Icon(icon, color: Colors.white, size: 23),
       ),
     );
   }
-
-  // ---------------------------------------------------------
-  // SIDE TOOL
-  // ---------------------------------------------------------
 
   Widget _sideTool({
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    bool active = false,
   }) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -1424,55 +1050,43 @@ Future<void> _showCreateSettings() async {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: Colors.black45,
+              color: active ? _pink.withOpacity(0.25) : Colors.black45,
               shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.white24,
-              ),
+              border: Border.all(color: active ? _pink : Colors.white24),
             ),
             child: Icon(
               icon,
-              color: Colors.white,
+              color: active ? _pink : Colors.white,
               size: 22,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 11,
-            ),
+            style: const TextStyle(color: Colors.white, fontSize: 11),
           ),
         ],
       ),
     );
   }
 
-  // ---------------------------------------------------------
-  // BOTTOM TOOL
-  // ---------------------------------------------------------
-
   Widget _bottomTool({
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    bool active = false,
   }) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Column(
         children: [
-          Icon(
-            icon,
-            color: Colors.white,
-            size: 25,
-          ),
+          Icon(icon, color: active ? _pink : Colors.white, size: 25),
           const SizedBox(height: 4),
           Text(
             label,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: active ? _pink : Colors.white,
               fontSize: 12,
             ),
           ),
@@ -1481,27 +1095,17 @@ Future<void> _showCreateSettings() async {
     );
   }
 
-  // ---------------------------------------------------------
-  // GALLERY BUTTON
-  // ---------------------------------------------------------
-
   Widget _galleryButton() {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () {
-        _pickVideo(
-          ImageSource.gallery,
-        );
-      },
+      onTap: () => _pickVideo(ImageSource.gallery),
       child: Container(
         width: 64,
         height: 64,
         decoration: BoxDecoration(
           color: Colors.white12,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: Colors.white38,
-          ),
+          border: Border.all(color: Colors.white38),
         ),
         child: const Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1514,10 +1118,7 @@ Future<void> _showCreateSettings() async {
             SizedBox(height: 2),
             Text(
               'Gallery',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 9,
-              ),
+              style: TextStyle(color: Colors.white, fontSize: 9),
             ),
           ],
         ),
