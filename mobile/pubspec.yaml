@@ -23,7 +23,7 @@ dependencies:
   ffmpeg_kit_flutter_new: ^4.6.4
   # Image / Video picking
   image_picker: ^1.1.2
-
+  file_picker: ^8.1.0
   # Cloudinary upload
   http: ^1.6.0
 
