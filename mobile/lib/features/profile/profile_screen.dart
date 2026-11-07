@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
-
+import 'edit_profile_screen.dart';
 import '../video/video_url.dart';
 
 class ProfileScreen extends StatefulWidget {
