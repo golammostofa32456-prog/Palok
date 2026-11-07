@@ -75,8 +75,7 @@ class _UploadSheetState extends State<UploadSheet> {
   Future<void> _togglePreview() async {
     final controller = _previewController;
 
-    if (controller == null ||
-        !controller.value.isInitialized) {
+    if (controller == null || !controller.value.isInitialized) {
       return;
     }
 
@@ -141,6 +140,8 @@ class _UploadSheetState extends State<UploadSheet> {
       ),
     );
 
+    // ভিডিও ছোট করার নিয়ম (incoming transformation) এই preset এর
+    // ভেতরেই Cloudinary Console এ সেট করা আছে।
     request.fields['upload_preset'] = _uploadPreset;
 
     request.files.add(
@@ -160,8 +161,7 @@ class _UploadSheetState extends State<UploadSheet> {
       );
     }
 
-    if (response.statusCode < 200 ||
-        response.statusCode >= 300) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
       final dynamic errorData =
           decoded is Map ? decoded['error'] : null;
 
@@ -178,17 +178,17 @@ class _UploadSheetState extends State<UploadSheet> {
       throw Exception('ভিডিও URL পাওয়া যায়নি');
     }
 
-    final videoUrl =
-        (decoded['secure_url'] ?? '').toString();
+    final videoUrl = (decoded['secure_url'] ?? '').toString();
 
     if (videoUrl.isEmpty) {
       throw Exception('ভিডিও URL পাওয়া যায়নি');
     }
 
+    // ছোট আকারের থাম্বনেইল (প্রথম ১ সেকেন্ডের ফ্রেম, ৩০০ পিক্সেল)।
     final thumbnailUrl = videoUrl
         .replaceFirst(
           '/video/upload/',
-          '/video/upload/so_1,f_jpg/',
+          '/video/upload/so_1,w_300,c_limit,f_jpg/',
         )
         .replaceFirst(
           RegExp(
@@ -231,8 +231,7 @@ class _UploadSheetState extends State<UploadSheet> {
     try {
       await _previewController?.pause();
 
-      final uploaded =
-          await _uploadToCloudinary(widget.filePath);
+      final uploaded = await _uploadToCloudinary(widget.filePath);
 
       final caption = _captionController.text.trim();
 
@@ -241,22 +240,18 @@ class _UploadSheetState extends State<UploadSheet> {
           .doc(userId)
           .get();
 
-      final userData =
-          userSnapshot.data() ?? <String, dynamic>{};
+      final userData = userSnapshot.data() ?? <String, dynamic>{};
 
       final username = widget.username.trim().isNotEmpty
-          ? widget.username
-              .trim()
-              .replaceFirst(RegExp(r'^@'), '')
+          ? widget.username.trim().replaceFirst(RegExp(r'^@'), '')
           : (userData['username'] ?? 'PALOK User').toString();
 
-      final profileImageUrl = (
-        userData['profileImageUrl'] ??
-        userData['profileImage'] ??
-        userData['photoURL'] ??
-        userData['photoUrl'] ??
-        ''
-      ).toString();
+      final profileImageUrl = (userData['profileImageUrl'] ??
+              userData['profileImage'] ??
+              userData['photoURL'] ??
+              userData['photoUrl'] ??
+              '')
+          .toString();
 
       await widget.firestore.collection('videos').add({
         'videoUrl': uploaded['videoUrl'],
@@ -278,9 +273,12 @@ class _UploadSheetState extends State<UploadSheet> {
 
       if (!mounted) return;
 
+      // pop করার আগেই messenger ধরে রাখি, যাতে পরে context এর সমস্যা না হয়।
+      final messenger = ScaffoldMessenger.of(context);
+
       Navigator.of(context).pop();
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(
           content: Text(
             'ভিডিও সফলভাবে PALOK-এ পোস্ট হয়েছে 🎉',
@@ -419,9 +417,7 @@ class _UploadSheetState extends State<UploadSheet> {
                   ),
                 const Spacer(),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    16, 8, 16, 16,
-                  ),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -439,9 +435,7 @@ class _UploadSheetState extends State<UploadSheet> {
                         enabled: !_uploading,
                         maxLines: 3,
                         maxLength: 2200,
-                        style: const TextStyle(
-                          color: Colors.white,
-                        ),
+                        style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           hintText: 'Write a caption... #PALOK',
                           hintStyle: const TextStyle(
@@ -460,20 +454,16 @@ class _UploadSheetState extends State<UploadSheet> {
                           child: Text(
                             'সর্বোচ্চ ভিডিও সাইজ ১৫ MB। '
                             'পোস্টটি পাবলিক ভিডিও হিসেবে সংরক্ষিত হবে।',
-                            style: TextStyle(
-                              color: Colors.white70,
-                            ),
+                            style: TextStyle(color: Colors.white70),
                           ),
                         ),
                       SizedBox(
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton(
-                          onPressed:
-                              _uploading ? null : _postVideo,
+                          onPressed: _uploading ? null : _postVideo,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                const Color(0xFFFF2D55),
+                            backgroundColor: const Color(0xFFFF2D55),
                             foregroundColor: Colors.white,
                           ),
                           child: _uploading
