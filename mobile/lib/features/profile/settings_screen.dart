@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../../l10n/app_strings.dart';
 import '../inbox/inbox_screen.dart' show InboxActivityScreen;
 import 'edit_profile_screen.dart';
 
@@ -58,7 +59,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('না'),
+            child: Text(tr('no')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -76,28 +77,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text(
-          'পাসওয়ার্ড দিন',
-          style: TextStyle(color: Colors.white),
+        title: Text(
+          tr('enter_password'),
+          style: const TextStyle(color: Colors.white),
         ),
         content: TextField(
           controller: controller,
           obscureText: true,
           autofocus: true,
           style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
-            hintText: 'আপনার বর্তমান পাসওয়ার্ড',
-            hintStyle: TextStyle(color: _grey),
+          decoration: InputDecoration(
+            hintText: tr('current_password_hint'),
+            hintStyle: const TextStyle(color: _grey),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('বাতিল'),
+            child: Text(tr('cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, controller.text),
-            child: const Text('নিশ্চিত', style: TextStyle(color: _pink)),
+            child: Text(tr('confirm'), style: const TextStyle(color: _pink)),
           ),
         ],
       ),
@@ -120,27 +121,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _pickLanguage() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF171717),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        final current = LanguageController.instance.code;
+
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text(
+                      tr('choose_language'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+                for (final lang in AppLanguage.all)
+                  ListTile(
+                    title: Text(
+                      lang.nativeName,
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                    trailing: lang.code == current
+                        ? const Icon(Icons.check, color: _pink)
+                        : null,
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      await LanguageController.instance.setLanguage(lang.code);
+                    },
+                  ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _changePassword() async {
     final email = _user?.email;
     if (email == null || email.isEmpty) {
-      _msg('এই অ্যাকাউন্টে ইমেইল নেই।');
+      _msg(tr('no_email_on_account'));
       return;
     }
 
     final ok = await _confirm(
-      title: 'পাসওয়ার্ড বদলান',
-      body: '$email ঠিকানায় পাসওয়ার্ড রিসেটের লিংক পাঠানো হবে।',
-      confirmText: 'পাঠান',
+      title: tr('change_password'),
+      body: tr('reset_body', {'email': email}),
+      confirmText: tr('send'),
     );
     if (!ok) return;
 
     try {
       await _auth.sendPasswordResetEmail(email: email);
-      _msg('রিসেট লিংক পাঠানো হয়েছে। ইমেইল (স্প্যামসহ) দেখুন।');
+      _msg(tr('reset_sent'));
     } on FirebaseAuthException catch (e) {
-      _msg('পাঠানো যায়নি: ${e.message ?? e.code}');
+      _msg(tr('reset_failed', {'error': e.message ?? e.code}));
     } catch (e) {
-      _msg('পাঠানো যায়নি।');
+      _msg(tr('reset_failed_generic'));
     }
   }
 
@@ -149,18 +203,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       applicationName: 'PALOK',
       applicationVersion: '1.0.0',
-      children: const [
-        SizedBox(height: 8),
-        Text('PALOK একটি ছোট ভিডিও শেয়ারিং প্ল্যাটফর্ম।'),
+      children: [
+        const SizedBox(height: 8),
+        Text(tr('about_body')),
       ],
     );
   }
 
   Future<void> _logout() async {
     final ok = await _confirm(
-      title: 'Log out',
-      body: 'আপনি কি Log out করতে চান?',
-      confirmText: 'হ্যাঁ',
+      title: tr('logout'),
+      body: tr('logout_confirm'),
+      confirmText: tr('yes'),
     );
     if (!ok) return;
 
@@ -171,7 +225,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       } catch (_) {}
       _goToRoot();
     } catch (e) {
-      _msg('Log out করা যায়নি।');
+      _msg(tr('logout_failed'));
     }
   }
 
@@ -228,7 +282,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _deleteUserData(String uid) async {
     final userRef = _db.collection('users').doc(uid);
 
-    // আমাকে যাদের ফলো লিস্ট থেকে সরানো (অন্যদের followers থেকে আমার এন্ট্রি)
+    // অন্যদের followers লিস্ট থেকে আমার এন্ট্রি সরানো
     try {
       final following = await userRef.collection('following').get();
       final peers = following.docs.map((d) => d.id).toList();
@@ -288,10 +342,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (user == null) return;
 
     final ok = await _confirm(
-      title: 'অ্যাকাউন্ট মুছবেন?',
-      body: 'আপনার প্রোফাইল, ভিডিও, ফলো ও নোটিফিকেশন স্থায়ীভাবে মুছে যাবে। '
-          'এটা আর ফেরানো যাবে না।',
-      confirmText: 'মুছে ফেলুন',
+      title: tr('delete_title'),
+      body: tr('delete_body'),
+      confirmText: tr('delete_confirm_btn'),
     );
     if (!ok) return;
 
@@ -314,15 +367,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _goToRoot();
     } on FirebaseAuthException catch (e) {
       if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
-        _msg('পাসওয়ার্ড ভুল। আবার চেষ্টা করুন।');
+        _msg(tr('wrong_password'));
       } else if (e.code == 'requires-recent-login') {
-        _msg('নিরাপত্তার জন্য Log out করে আবার Log in করে চেষ্টা করুন।');
+        _msg(tr('relogin_required'));
       } else {
-        _msg('অ্যাকাউন্ট মোছা যায়নি: ${e.message ?? e.code}');
+        _msg(tr('delete_failed', {'error': e.message ?? e.code}));
       }
     } catch (e) {
       debugPrint('Delete account error: $e');
-      _msg('অ্যাকাউন্ট মোছা যায়নি। ইন্টারনেট ও Firebase Rules পরীক্ষা করুন।');
+      _msg(tr('delete_failed_generic'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -368,78 +421,89 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final email = _user?.email ?? '';
+    return LanguageBuilder(
+      builder: (context) {
+        final email = _user?.email ?? '';
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          'সেটিংস এবং গোপনীয়তা',
-          style: TextStyle(fontWeight: FontWeight.w800),
-        ),
-        bottom: _busy
-            ? const PreferredSize(
-                preferredSize: Size.fromHeight(3),
-                child: LinearProgressIndicator(
-                  minHeight: 3,
-                  color: _pink,
-                  backgroundColor: Colors.transparent,
-                ),
-              )
-            : null,
-      ),
-      body: ListView(
-        children: [
-          _section('অ্যাকাউন্ট'),
-          _tile(
-            icon: Icons.person_outline,
-            title: 'Edit profile',
-            onTap: _editProfile,
-          ),
-          _tile(
-            icon: Icons.email_outlined,
-            title: 'ইমেইল',
-            subtitle: email.isEmpty ? 'ইমেইল নেই' : email,
-          ),
-          if (_isPasswordUser)
-            _tile(
-              icon: Icons.lock_outline,
-              title: 'পাসওয়ার্ড বদলান',
-              onTap: _changePassword,
+        return Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            title: Text(
+              tr('settings_title'),
+              style: const TextStyle(fontWeight: FontWeight.w800),
             ),
-          _section('কার্যকলাপ'),
-          _tile(
-            icon: Icons.history,
-            title: 'কার্যকলাপ কেন্দ্র',
-            onTap: _openActivity,
+            bottom: _busy
+                ? const PreferredSize(
+                    preferredSize: Size.fromHeight(3),
+                    child: LinearProgressIndicator(
+                      minHeight: 3,
+                      color: _pink,
+                      backgroundColor: Colors.transparent,
+                    ),
+                  )
+                : null,
           ),
-          _section('সহায়তা'),
-          _tile(
-            icon: Icons.info_outline,
-            title: 'PALOK সম্পর্কে',
-            onTap: _about,
+          body: ListView(
+            children: [
+              _section(tr('section_account')),
+              _tile(
+                icon: Icons.person_outline,
+                title: tr('edit_profile'),
+                onTap: _editProfile,
+              ),
+              _tile(
+                icon: Icons.email_outlined,
+                title: tr('email'),
+                subtitle: email.isEmpty ? tr('no_email') : email,
+              ),
+              if (_isPasswordUser)
+                _tile(
+                  icon: Icons.lock_outline,
+                  title: tr('change_password'),
+                  onTap: _changePassword,
+                ),
+              _section(tr('section_language')),
+              _tile(
+                icon: Icons.language,
+                title: LanguageController.instance.current.nativeName,
+                subtitle: tr('choose_language'),
+                onTap: _pickLanguage,
+              ),
+              _section(tr('section_activity')),
+              _tile(
+                icon: Icons.history,
+                title: tr('activity_center'),
+                onTap: _openActivity,
+              ),
+              _section(tr('section_help')),
+              _tile(
+                icon: Icons.info_outline,
+                title: tr('about_palok'),
+                onTap: _about,
+              ),
+              _section(tr('section_login')),
+              _tile(
+                icon: Icons.logout,
+                title: tr('logout'),
+                color: _pink,
+                onTap: _logout,
+                chevron: false,
+              ),
+              _tile(
+                icon: Icons.delete_forever_outlined,
+                title: tr('delete_account'),
+                color: _pink,
+                onTap: _deleteAccount,
+                chevron: false,
+              ),
+              const SizedBox(height: 30),
+            ],
           ),
-          _section('লগইন'),
-          _tile(
-            icon: Icons.logout,
-            title: 'Log out',
-            color: _pink,
-            onTap: _logout,
-            chevron: false,
-          ),
-          _tile(
-            icon: Icons.delete_forever_outlined,
-            title: 'অ্যাকাউন্ট মুছুন',
-            color: _pink,
-            onTap: _deleteAccount,
-            chevron: false,
-          ),
-          const SizedBox(height: 30),
-        ],
-      ),
+        );
+      },
     );
   }
 }
