@@ -1,14 +1,19 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'firebase_options.dart';
 import 'home_screen.dart';
+import 'l10n/app_strings.dart';
 import 'login_screen.dart';
 import 'splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // সেভ করা ভাষা আগে লোড হবে, যাতে প্রথম স্ক্রিন থেকেই ঠিক ভাষা আসে।
+  await LanguageController.instance.load();
 
   FirebaseApp? firebaseApp;
   Object? firebaseError;
@@ -25,7 +30,7 @@ Future<void> main() async {
   } catch (e) {
     firebaseError = e;
 
-    // duplicate-app হলেও যদি Firebase app তৈরি হয়ে থাকে,
+    // duplicate-app হলেও যদি Firebase app তৈরি হয়ে থাকে,
     // existing app ব্যবহার করার চেষ্টা করবে।
     try {
       if (Firebase.apps.isNotEmpty) {
@@ -57,30 +62,44 @@ class PalokApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'PALOK',
-      theme: ThemeData(
-  brightness: Brightness.light,
-  scaffoldBackgroundColor: Colors.white,
-  primaryColor: const Color(0xFFFE2C55),
-  colorScheme: const ColorScheme.light(
-    primary: Color(0xFFFE2C55),
-    secondary: Color(0xFF00E5FF),
-    surface: Colors.white,
-  ),
-  appBarTheme: const AppBarTheme(
-    backgroundColor: Colors.white,
-    foregroundColor: Colors.black,
-    elevation: 0,
-  ),
-  useMaterial3: true,
-),
-      home: firebaseError != null
-          ? FirebaseErrorScreen(
-              error: firebaseError!,
-            )
-          : const SplashScreen(),
+    // ভাষা বদলালে MaterialApp নতুন locale নিয়ে আবার আঁকা হবে।
+    return ListenableBuilder(
+      listenable: LanguageController.instance,
+      builder: (context, _) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'PALOK',
+          locale: LanguageController.instance.locale,
+          supportedLocales:
+              AppLanguage.all.map((l) => Locale(l.code)).toList(),
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          theme: ThemeData(
+            brightness: Brightness.light,
+            scaffoldBackgroundColor: Colors.white,
+            primaryColor: const Color(0xFFFE2C55),
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFFFE2C55),
+              secondary: Color(0xFF00E5FF),
+              surface: Colors.white,
+            ),
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              elevation: 0,
+            ),
+            useMaterial3: true,
+          ),
+          home: firebaseError != null
+              ? FirebaseErrorScreen(
+                  error: firebaseError!,
+                )
+              : const SplashScreen(),
+        );
+      },
     );
   }
 }
@@ -244,7 +263,7 @@ class _FirebaseErrorScreenState extends State<FirebaseErrorScreen> {
 
     if (text.contains('duplicate-app')) {
       return 'Firebase ইতিমধ্যে চালু আছে। '
-          'অ্যাপটি পুনরায় চালু করুন।';
+          'অ্যাপটি পুনরায় চালু করুন।';
     }
 
     if (text.contains('network')) {
