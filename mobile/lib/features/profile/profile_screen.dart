@@ -507,6 +507,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _ensureTabLoaded(2);
               },
             ),
+                        ListTile(
+              leading:
+                  const Icon(Icons.settings_outlined, color: Colors.white),
+              title: const Text(
+                'সেটিংস এবং গোপনীয়তা',
+                style: TextStyle(color: Colors.white),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => const SettingsScreen(),
+                  ),
+                );
+              },
+            ),
             const Divider(height: 1, color: Color(0xFF2A2A2A)),
             ListTile(
               leading: const Icon(Icons.logout, color: _kPink),
