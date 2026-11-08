@@ -1,7 +1,27 @@
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+
+// ============================================================
+// CLOUDINARY সেটআপ (এখানে আপনার দুটো মান বসান)
+// cloud name: Cloudinary Dashboard এর উপরে লেখা থাকে
+// upload preset: Settings > Upload > Upload presets (অবশ্যই "Unsigned")
+// ============================================================
+const String _cloudinaryCloudName = 'YOUR_CLOUD_NAME';
+const String _cloudinaryUploadPreset = 'YOUR_UPLOAD_PRESET';
+
+class _UploadException implements Exception {
+  final String message;
+  const _UploadException(this.message);
+
+  @override
+  String toString() => message;
+}
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -13,6 +33,7 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final ImagePicker _picker = ImagePicker();
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _usernameController = TextEditingController();
@@ -23,10 +44,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   String _email = '';
   String _profileImage = '';
+  String _originalUsername = '';
+  Uint8List? _pickedBytes;
 
   static const Color palokPink = Color(0xFFFF2D55);
   static const Color cardColor = Color(0xFF18181B);
   static const Color appBarColor = Color(0xFF101014);
+
+  bool get _cloudinaryReady =>
+      !_cloudinaryCloudName.startsWith('YOUR_') &&
+      !_cloudinaryUploadPreset.startsWith('YOUR_');
 
   @override
   void initState() {
@@ -72,6 +99,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         bio = (data['bio'] ?? '').toString();
 
         profileImage = (data['profileImage'] ??
+                data['photoURL'] ??
                 data['photoUrl'] ??
                 data['profilePhoto'] ??
                 '')
@@ -93,11 +121,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
 
       if (username.isEmpty) {
-        username = name;
+        // নাম বাংলা/স্পেস থাকলে ইউজারনেমে চলে না, তাই ইমেইল থেকে বানানো হয়
+        var base = (user.email?.split('@').first ?? '')
+            .replaceAll(RegExp(r'[^a-zA-Z0-9._]'), '');
+        if (base.length < 3) {
+          base = 'palok_user';
+        }
+        username = base;
       }
 
       _nameController.text = name;
       _usernameController.text = username;
+      _originalUsername = (data?['username'] ?? '').toString();
       _bioController.text = bio;
       _profileImage = profileImage;
 
@@ -135,6 +170,162 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
       );
     }
+  }
+
+  // ============================================================
+  // PHOTO
+  // ============================================================
+
+  void _showPhotoOptions() {
+    if (_saving) return;
+
+    final bool hasPhoto = _pickedBytes != null || _profileImage.isNotEmpty;
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: cardColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(
+                Icons.photo_library_outlined,
+                color: Colors.white,
+              ),
+              title: const Text(
+                'Choose from gallery',
+                style: TextStyle(color: Colors.white),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickPhoto();
+              },
+            ),
+            if (hasPhoto)
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: palokPink),
+                title: const Text(
+                  'Remove photo',
+                  style: TextStyle(color: palokPink),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  setState(() {
+                    _pickedBytes = null;
+                    _profileImage = '';
+                  });
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickPhoto() async {
+    try {
+      final XFile? file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1080,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+
+      if (file == null) return;
+
+      final Uint8List bytes = await file.readAsBytes();
+
+      if (!mounted) return;
+
+      setState(() {
+        _pickedBytes = bytes;
+      });
+    } catch (e) {
+      _showMessage(
+        'Could not open the gallery: $e',
+        isError: true,
+      );
+    }
+  }
+
+  Future<String> _uploadToCloudinary(Uint8List bytes, String uid) async {
+    if (!_cloudinaryReady) {
+      throw const _UploadException(
+        'Cloudinary সেটআপ বসানো হয়নি। edit_profile_screen.dart এর উপরের দুটো মান বসান।',
+      );
+    }
+
+    final Uri uri = Uri.parse(
+      'https://api.cloudinary.com/v1_1/$_cloudinaryCloudName/image/upload',
+    );
+
+    final http.MultipartRequest request = http.MultipartRequest('POST', uri)
+      ..fields['upload_preset'] = _cloudinaryUploadPreset
+      ..files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: 'profile_${uid}_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        ),
+      );
+
+    final http.StreamedResponse streamed =
+        await request.send().timeout(const Duration(seconds: 60));
+    final String body = await streamed.stream.bytesToString();
+
+    if (streamed.statusCode != 200 && streamed.statusCode != 201) {
+      String reason = 'HTTP ${streamed.statusCode}';
+      try {
+        final dynamic decoded = jsonDecode(body);
+        if (decoded is Map && decoded['error'] is Map) {
+          reason = (decoded['error']['message'] ?? reason).toString();
+        }
+      } catch (_) {}
+      throw _UploadException('ছবি আপলোড হয়নি: $reason');
+    }
+
+    final dynamic decoded = jsonDecode(body);
+    final String url =
+        decoded is Map ? (decoded['secure_url'] ?? '').toString() : '';
+
+    if (url.isEmpty) {
+      throw const _UploadException('ছবি আপলোড হয়নি: লিংক পাওয়া যায়নি।');
+    }
+
+    return url;
+  }
+
+  // ============================================================
+  // USERNAME UNIQUE CHECK
+  // ============================================================
+
+  Future<bool> _isUsernameTaken(String username, String myUid) async {
+    final CollectionReference<Map<String, dynamic>> col =
+        _firestore.collection('users');
+
+    final List<QuerySnapshot<Map<String, dynamic>>> results =
+        await Future.wait([
+      col.where('username', isEqualTo: username).limit(3).get(),
+      col
+          .where('usernameLower', isEqualTo: username.toLowerCase())
+          .limit(3)
+          .get(),
+    ]);
+
+    for (final QuerySnapshot<Map<String, dynamic>> snap in results) {
+      for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
+          in snap.docs) {
+        if (doc.id != myUid) return true;
+      }
+    }
+
+    return false;
   }
 
   // ============================================================
@@ -246,6 +437,39 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     try {
       // ========================================================
+      // USERNAME UNIQUE CHECK (শুধু বদলালে)
+      // ========================================================
+
+      if (username != _originalUsername) {
+        final bool taken = await _isUsernameTaken(username, user.uid);
+
+        if (taken) {
+          if (!mounted) return;
+
+          setState(() {
+            _saving = false;
+          });
+
+          _showMessage(
+            'This username is already taken. Try another one.',
+            isError: true,
+            seconds: 4,
+          );
+          return;
+        }
+      }
+
+      // ========================================================
+      // PHOTO UPLOAD (নতুন ছবি বাছা হলে)
+      // ========================================================
+
+      String imageUrl = _profileImage;
+
+      if (_pickedBytes != null) {
+        imageUrl = await _uploadToCloudinary(_pickedBytes!, user.uid);
+      }
+
+      // ========================================================
       // SAVE TO FIRESTORE
       // ========================================================
 
@@ -257,9 +481,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           'name': name,
           'displayName': name,
           'username': username,
+          'usernameLower': username.toLowerCase(),
           'bio': bio,
           'email': user.email ?? _email,
-          'profileImage': _profileImage,
+          'profileImage': imageUrl,
+          'photoURL': imageUrl,
           'updatedAt': FieldValue.serverTimestamp(),
         },
         SetOptions(merge: true),
@@ -273,9 +499,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         if (user.displayName != name) {
           await user.updateDisplayName(name);
         }
+        await user.updatePhotoURL(imageUrl.isEmpty ? null : imageUrl);
       } catch (_) {
         // Firestore save already succeeded.
       }
+
+      _originalUsername = username;
+      _profileImage = imageUrl;
+      _pickedBytes = null;
 
       if (!mounted) return;
 
@@ -306,8 +537,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           'username': username,
           'bio': bio,
           'email': user.email ?? _email,
-          'profileImage': _profileImage,
+          'profileImage': imageUrl,
         },
+      );
+    } on _UploadException catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _saving = false;
+      });
+
+      _showMessage(
+        e.message,
+        isError: true,
+        seconds: 5,
       );
     } on FirebaseException catch (e) {
       if (!mounted) return;
@@ -410,6 +653,41 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   // ============================================================
+  // AVATAR IMAGE
+  // ============================================================
+
+  Widget _avatarImage() {
+    const Widget placeholder = Icon(
+      Icons.person,
+      color: Colors.white,
+      size: 62,
+    );
+
+    if (_pickedBytes != null) {
+      return Image.memory(
+        _pickedBytes!,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+      );
+    }
+
+    if (_profileImage.isNotEmpty) {
+      return Image.network(
+        _profileImage,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (context, error, stackTrace) {
+          return placeholder;
+        },
+      );
+    }
+
+    return placeholder;
+  }
+
+  // ============================================================
   // BUILD
   // ============================================================
 
@@ -487,96 +765,72 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     // ==================================================
 
                     Center(
-                      child: Column(
-                        children: [
-                          Stack(
-                            alignment: Alignment.bottomRight,
-                            children: [
-                              Container(
-                                width: 118,
-                                height: 118,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient:
-                                      const LinearGradient(
-                                    colors: [
-                                      Color(0xFF00E5FF),
-                                      Color(0xFF8E7CC3),
-                                      Color(0xFFFF2D55),
-                                    ],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                ),
-                                padding:
-                                    const EdgeInsets.all(3),
-                                child: Container(
-                                  decoration:
-                                      const BoxDecoration(
+                      child: GestureDetector(
+                        onTap: _showPhotoOptions,
+                        child: Column(
+                          children: [
+                            Stack(
+                              alignment: Alignment.bottomRight,
+                              children: [
+                                Container(
+                                  width: 118,
+                                  height: 118,
+                                  decoration: const BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: Colors.black,
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        Color(0xFF00E5FF),
+                                        Color(0xFF8E7CC3),
+                                        Color(0xFFFF2D55),
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
                                   ),
-                                  child: ClipOval(
-                                    child: _profileImage
-                                            .isNotEmpty
-                                        ? Image.network(
-                                            _profileImage,
-                                            fit: BoxFit.cover,
-                                            errorBuilder:
-                                                (
-                                              context,
-                                              error,
-                                              stackTrace,
-                                            ) {
-                                              return const Icon(
-                                                Icons.person,
-                                                color:
-                                                    Colors.white,
-                                                size: 62,
-                                              );
-                                            },
-                                          )
-                                        : const Icon(
-                                            Icons.person,
-                                            color: Colors.white,
-                                            size: 62,
-                                          ),
+                                  padding: const EdgeInsets.all(3),
+                                  child: Container(
+                                    decoration: const BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.black,
+                                    ),
+                                    child: ClipOval(
+                                      child: _avatarImage(),
+                                    ),
                                   ),
                                 ),
-                              ),
 
-                              Container(
-                                width: 38,
-                                height: 38,
-                                decoration:
-                                    BoxDecoration(
-                                  color: palokPink,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.black,
-                                    width: 3,
+                                Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    color: palokPink,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.black,
+                                      width: 3,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.camera_alt_rounded,
+                                    color: Colors.white,
+                                    size: 19,
                                   ),
                                 ),
-                                child: const Icon(
-                                  Icons.camera_alt_rounded,
-                                  color: Colors.white,
-                                  size: 19,
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 12),
-
-                          const Text(
-                            'Change photo',
-                            style: TextStyle(
-                              color: palokPink,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
+                              ],
                             ),
-                          ),
-                        ],
+
+                            const SizedBox(height: 12),
+
+                            const Text(
+                              'Change photo',
+                              style: TextStyle(
+                                color: palokPink,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
 
