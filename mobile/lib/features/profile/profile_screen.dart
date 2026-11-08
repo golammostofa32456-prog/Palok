@@ -5,8 +5,73 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import '../inbox/chat_screen.dart';
+import '../inbox/inbox_screen.dart' show InboxActivityScreen, InboxNotifier;
 import '../video/video_url.dart';
 import 'edit_profile_screen.dart';
+
+const Color _kPink = Color(0xFFFF2D55);
+const Color _kCyan = Color(0xFF20D7E8);
+const Color _kGrey = Color(0xFF868686);
+
+/// ফলো / আনফলো (দুই ব্যবহারকারীর সাব-কালেকশন ও কাউন্টার আপডেট করে)
+Future<void> _followUser(String peerId, bool follow) async {
+  final me = FirebaseAuth.instance.currentUser;
+  if (me == null || peerId.isEmpty || peerId == me.uid) return;
+
+  final db = FirebaseFirestore.instance;
+  final myDoc = db.collection('users').doc(me.uid);
+  final peerDoc = db.collection('users').doc(peerId);
+  final myFollowing = myDoc.collection('following').doc(peerId);
+  final theirFollowers = peerDoc.collection('followers').doc(me.uid);
+
+  final peerSnap = await peerDoc.get();
+  final mySnap = await myDoc.get();
+  final peerCount = peerSnap.data()?['followersCount'];
+  final myCount = mySnap.data()?['followingCount'];
+
+  final batch = db.batch();
+  if (follow) {
+    batch.set(myFollowing, {
+      'userId': peerId,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    batch.set(theirFollowers, {
+      'userId': me.uid,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    if (peerCount is int) {
+      batch.update(peerDoc, {'followersCount': FieldValue.increment(1)});
+    }
+    batch.set(
+      myDoc,
+      {'followingCount': FieldValue.increment(1)},
+      SetOptions(merge: true),
+    );
+  } else {
+    batch.delete(myFollowing);
+    batch.delete(theirFollowers);
+    if (peerCount is int && peerCount > 0) {
+      batch.update(peerDoc, {'followersCount': FieldValue.increment(-1)});
+    }
+    if (myCount is int && myCount > 0) {
+      batch.update(myDoc, {'followingCount': FieldValue.increment(-1)});
+    }
+  }
+  await batch.commit();
+
+  if (follow) {
+    try {
+      await InboxNotifier.send(
+        toUserId: peerId,
+        type: 'follow',
+        text: 'আপনাকে অনুসরণ করা শুরু করেছে',
+      );
+    } catch (e) {
+      debugPrint('Follow notification error: $e');
+    }
+  }
+}
 
 class ProfileScreen extends StatefulWidget {
   final String? userId;
@@ -22,9 +87,6 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   static const Color _bg = Colors.black;
-  static const Color _grey = Color(0xFF868686);
-  static const Color _pink = Color(0xFFFF2D55);
-  static const Color _cyan = Color(0xFF20D7E8);
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -118,9 +180,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _photo(Map<String, dynamic> data) {
     for (final key in [
       'profileImageUrl',
-      'profileImage',
       'photoURL',
       'photoUrl',
+      'profileImage',
     ]) {
       final v = _text(data[key]).trim();
       if (v.startsWith('http')) return v;
@@ -152,15 +214,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // ---------- data loading ----------
 
-  Future<T> _guard<T>(Future<T> task, T fallback, String label) async {
-    try {
-      return await task;
-    } catch (e) {
-      debugPrint('Profile $label error: $e');
-      return fallback;
-    }
-  }
-
   Future<int> _countOf(Query<Map<String, dynamic>> query) async {
     try {
       final snap = await query.count().get();
@@ -172,43 +225,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchVideos(String id) async {
+    final col = _db.collection('videos');
+    final snaps = await Future.wait([
+      col.where('ownerId', isEqualTo: id).limit(60).get(),
+      col.where('userId', isEqualTo: id).limit(60).get(),
+    ]);
+
     final map = <String, Map<String, dynamic>>{};
-
-    Future<void> run(String field) async {
-      try {
-        final snap = await _db
-            .collection('videos')
-            .where(field, isEqualTo: id)
-            .limit(60)
-            .get();
-        for (final doc in snap.docs) {
-          map[doc.id] = {...doc.data(), 'id': doc.id};
-        }
-      } catch (e) {
-        debugPrint('Profile videos query ($field) error: $e');
-      }
-    }
-
-    await Future.wait([run('ownerId'), run('userId')]);
-
-    // সরাসরি কুয়েরিতে না পেলে সাম্প্রতিক ভিডিও এনে নিজেরা ছেঁকে নিই।
-    if (map.isEmpty) {
-      try {
-        final snap = await _db
-            .collection('videos')
-            .orderBy('createdAt', descending: true)
-            .limit(200)
-            .get();
-        for (final doc in snap.docs) {
-          final data = doc.data();
-          final owner =
-              _text(data['ownerId'] ?? data['userId'] ?? data['uid']).trim();
-          if (owner == id) {
-            map[doc.id] = {...data, 'id': doc.id};
-          }
-        }
-      } catch (e) {
-        debugPrint('Profile videos fallback error: $e');
+    for (final snap in snaps) {
+      for (final doc in snap.docs) {
+        map[doc.id] = {...doc.data(), 'id': doc.id};
       }
     }
 
@@ -265,23 +291,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (mounted) setState(() => _loading = true);
 
-    final userRef = _db.collection('users').doc(id);
+    try {
+      final userRef = _db.collection('users').doc(id);
+      final results = await Future.wait<Object?>([
+        _fetchVideos(id),
+        _countOf(userRef.collection('followers')),
+        _countOf(userRef.collection('following')),
+        _checkFollowing(id),
+      ]);
 
-    final results = await Future.wait<Object?>([
-      _guard(_fetchVideos(id), <Map<String, dynamic>>[], 'videos'),
-      _guard(_countOf(userRef.collection('followers')), 0, 'followers'),
-      _guard(_countOf(userRef.collection('following')), 0, 'following'),
-      _guard(_checkFollowing(id), false, 'follow check'),
-    ]);
-
-    if (!mounted) return;
-    setState(() {
-      _videos = results[0] as List<Map<String, dynamic>>;
-      _followersCount = results[1] as int;
-      _followingCount = results[2] as int;
-      _following = results[3] as bool;
-      _loading = false;
-    });
+      if (!mounted) return;
+      setState(() {
+        _videos = results[0] as List<Map<String, dynamic>>;
+        _followersCount = results[1] as int;
+        _followingCount = results[2] as int;
+        _following = results[3] as bool;
+      });
+    } catch (e) {
+      debugPrint('Profile load error: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _ensureTabLoaded(int tab) async {
@@ -335,32 +365,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
 
     try {
-      final myRef = _db
-          .collection('users')
-          .doc(me.uid)
-          .collection('following')
-          .doc(id);
-      final theirRef = _db
-          .collection('users')
-          .doc(id)
-          .collection('followers')
-          .doc(me.uid);
-
-      final batch = _db.batch();
-      if (was) {
-        batch.delete(myRef);
-        batch.delete(theirRef);
-      } else {
-        batch.set(myRef, {
-          'userId': id,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-        batch.set(theirRef, {
-          'userId': me.uid,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
-      await batch.commit();
+      await _followUser(id, !was);
     } catch (e) {
       debugPrint('Follow error: $e');
       if (mounted) {
@@ -375,17 +380,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _editProfile(Map<String, dynamic> data) async {
+  Future<void> _editProfile() async {
     if (_me == null) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute<Object?>(builder: (_) => const EditProfileScreen()),
+    );
+  }
+
+  Future<void> _openChat(Map<String, dynamic> data) async {
+    if (_me == null) {
+      _msg('মেসেজ করতে আগে Sign In করুন।');
+      return;
+    }
+    if (_isMine) return;
 
     await Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => const EditProfileScreen(),
+        builder: (_) => ChatScreen(
+          peerId: _targetId,
+          peerName: _displayName(data),
+          peerPhotoUrl: _photo(data),
+        ),
       ),
     );
+  }
 
-    if (mounted) setState(() {});
+  Future<void> _openList(String sub, String title) async {
+    final id = _targetId;
+    if (id.isEmpty) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => _UserListScreen(userId: id, title: title, sub: sub),
+      ),
+    );
+    if (mounted) _loadAll();
   }
 
   Future<void> _logout() async {
@@ -405,7 +437,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('হ্যাঁ', style: TextStyle(color: _pink)),
+            child: const Text('হ্যাঁ', style: TextStyle(color: _kPink)),
           ),
         ],
       ),
@@ -424,7 +456,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  void _openMenu(Map<String, dynamic> data) {
+  void _openMenu() {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: const Color(0xFF171717),
@@ -444,12 +476,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               onTap: () {
                 Navigator.pop(ctx);
-                _editProfile(data);
+                _editProfile();
               },
             ),
             ListTile(
-              leading: const Icon(Icons.logout, color: _pink),
-              title: const Text('Log out', style: TextStyle(color: _pink)),
+              leading: const Icon(Icons.history, color: Colors.white),
+              title: const Text(
+                'কার্যকলাপ কেন্দ্র',
+                style: TextStyle(color: Colors.white),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => const InboxActivityScreen(),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.bookmark_border, color: Colors.white),
+              title: const Text(
+                'Save করা ভিডিও',
+                style: TextStyle(color: Colors.white),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                setState(() => _tab = 2);
+                _ensureTabLoaded(2);
+              },
+            ),
+            const Divider(height: 1, color: Color(0xFF2A2A2A)),
+            ListTile(
+              leading: const Icon(Icons.logout, color: _kPink),
+              title: const Text('Log out', style: TextStyle(color: _kPink)),
               onTap: () {
                 Navigator.pop(ctx);
                 _logout();
@@ -473,7 +534,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // ---------- UI ----------
 
-  Widget _topBar(String title, Map<String, dynamic> data) {
+  Widget _topBar(String title) {
     final canPop = Navigator.of(context).canPop();
 
     return SizedBox(
@@ -507,7 +568,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: _isMine
                 ? IconButton(
                     icon: const Icon(Icons.menu, color: Colors.white),
-                    onPressed: () => _openMenu(data),
+                    onPressed: _openMenu,
                   )
                 : null,
           ),
@@ -517,14 +578,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _avatar(String url, {double size = 96}) {
-    return Container(
+    final ring = Container(
       width: size,
       height: size,
       padding: const EdgeInsets.all(3),
       decoration: const BoxDecoration(
         shape: BoxShape.circle,
         gradient: LinearGradient(
-          colors: [_pink, _cyan],
+          colors: [_kPink, _kCyan],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -533,88 +594,154 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: const Color(0xFF1E1E1E),
         backgroundImage: url.isNotEmpty ? NetworkImage(url) : null,
         child: url.isEmpty
-            ? const Icon(Icons.person, color: _grey, size: 48)
+            ? const Icon(Icons.person, color: _kGrey, size: 48)
             : null,
       ),
     );
-  }
 
-  Widget _stat(String label, int value) {
-    return Expanded(
-      child: Column(
+    if (!_isMine) return ring;
+
+    return GestureDetector(
+      onTap: _editProfile,
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          Text(
-            _fmt(value),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+          ring,
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: _kCyan,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.black, width: 2),
+              ),
+              child: const Icon(Icons.add, color: Colors.white, size: 18),
             ),
           ),
-          const SizedBox(height: 3),
-          Text(label, style: const TextStyle(color: _grey, fontSize: 13)),
         ],
       ),
     );
   }
 
+  Widget _stat(String label, int value, VoidCallback? onTap) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            children: [
+              Text(
+                _fmt(value),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(label, style: const TextStyle(color: _kGrey, fontSize: 13)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _actions(Map<String, dynamic> data) {
+    if (_isMine) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: OutlinedButton(
+            onPressed: _editProfile,
+            style: OutlinedButton.styleFrom(
+              backgroundColor: const Color(0xFF161616),
+              side: const BorderSide(color: Color(0xFF252525)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            child: const Text(
+              'Edit Profile',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final Widget followButton = _following
+        ? OutlinedButton(
+            onPressed: _followBusy ? null : _toggleFollow,
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Color(0xFF3A3A3A)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            child: const Text(
+              'Following',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          )
+        : ElevatedButton(
+            onPressed: _followBusy ? null : _toggleFollow,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _kPink,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            child: const Text(
+              'Follow',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          );
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40),
+      padding: const EdgeInsets.symmetric(horizontal: 32),
       child: SizedBox(
-        width: double.infinity,
         height: 44,
-        child: _isMine
-            ? OutlinedButton(
-                onPressed: () => _editProfile(data),
+        child: Row(
+          children: [
+            Expanded(child: followButton),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 48,
+              height: 44,
+              child: OutlinedButton(
+                onPressed: () => _openChat(data),
                 style: OutlinedButton.styleFrom(
-                  backgroundColor: const Color(0xFF161616),
-                  side: const BorderSide(color: Color(0xFF252525)),
+                  padding: EdgeInsets.zero,
+                  side: const BorderSide(color: Color(0xFF3A3A3A)),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
-                child: const Text(
-                  'Edit Profile',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
+                child: const Icon(
+                  Icons.chat_bubble_outline,
+                  color: Colors.white,
+                  size: 20,
                 ),
-              )
-            : _following
-                ? OutlinedButton(
-                    onPressed: _followBusy ? null : _toggleFollow,
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFF3A3A3A)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                    child: const Text(
-                      'Following',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  )
-                : ElevatedButton(
-                    onPressed: _followBusy ? null : _toggleFollow,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _pink,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                    child: const Text(
-                      'Follow',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -667,7 +794,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Column(
       children: [
-        _topBar(_displayName(data), data),
+        _topBar(_displayName(data)),
         const SizedBox(height: 8),
         _avatar(_photo(data)),
         const SizedBox(height: 10),
@@ -682,11 +809,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 16),
         Row(
           children: [
-            _stat('Following', following),
+            _stat(
+              'Following',
+              following,
+              () => _openList('following', 'Following'),
+            ),
             Container(width: 1, height: 12, color: Colors.grey.shade800),
-            _stat('Followers', followers),
+            _stat(
+              'Followers',
+              followers,
+              () => _openList('followers', 'Followers'),
+            ),
             Container(width: 1, height: 12, color: Colors.grey.shade800),
-            _stat('Likes', likes),
+            _stat('Likes', likes, null),
           ],
         ),
         const SizedBox(height: 16),
@@ -748,7 +883,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           Icon(icon, size: 56, color: Colors.grey.shade700),
           const SizedBox(height: 12),
-          Text(text, style: const TextStyle(color: _grey)),
+          Text(text, style: const TextStyle(color: _kGrey)),
         ],
       ),
     );
@@ -821,7 +956,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         SliverToBoxAdapter(
           child: Padding(
             padding: EdgeInsets.only(top: 60),
-            child: Center(child: CircularProgressIndicator(color: _pink)),
+            child: Center(child: CircularProgressIndicator(color: _kPink)),
           ),
         ),
       ];
@@ -877,20 +1012,261 @@ class _ProfileScreenState extends State<ProfileScreen> {
             final data = snapshot.data?.data() ?? <String, dynamic>{};
 
             return RefreshIndicator(
-              color: _pink,
+              color: _kPink,
               onRefresh: _refresh,
               child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
                   SliverToBoxAdapter(child: _header(data)),
                   ..._gridSlivers(),
-                  // নিচের নেভিগেশন বারের জন্য জায়গা
-                  const SliverToBoxAdapter(child: SizedBox(height: 100)),
                 ],
               ),
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+// ======================================================================
+// Followers / Following list
+// ======================================================================
+
+class _UserListScreen extends StatefulWidget {
+  final String userId;
+  final String title;
+  final String sub; // 'followers' | 'following'
+
+  const _UserListScreen({
+    required this.userId,
+    required this.title,
+    required this.sub,
+  });
+
+  @override
+  State<_UserListScreen> createState() => _UserListScreenState();
+}
+
+class _UserListScreenState extends State<_UserListScreen> {
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final String _myId = FirebaseAuth.instance.currentUser?.uid ?? '';
+
+  final Set<String> _myFollowing = <String>{};
+  final Set<String> _busy = <String>{};
+  final Map<String, Map<String, dynamic>> _cache = {};
+
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _sub;
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _stream;
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = _db
+        .collection('users')
+        .doc(widget.userId)
+        .collection(widget.sub)
+        .limit(200)
+        .snapshots();
+
+    if (_myId.isNotEmpty) {
+      _sub = _db
+          .collection('users')
+          .doc(_myId)
+          .collection('following')
+          .snapshots()
+          .listen((s) {
+        if (!mounted) return;
+        setState(() {
+          _myFollowing
+            ..clear()
+            ..addAll(s.docs.map((d) => d.id));
+        });
+      }, onError: (Object e) => debugPrint('My following error: $e'));
+    }
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadUser(String id) async {
+    _cache[id] = {};
+    try {
+      final snap = await _db.collection('users').doc(id).get();
+      if (!mounted) return;
+      setState(() => _cache[id] = snap.data() ?? {});
+    } catch (e) {
+      debugPrint('Load user error: $e');
+    }
+  }
+
+  String _name(Map<String, dynamic> d) {
+    for (final k in ['displayName', 'name', 'username']) {
+      final v = (d[k] ?? '').toString().trim();
+      if (v.isNotEmpty) return v;
+    }
+    return 'PALOK User';
+  }
+
+  String _photoOf(Map<String, dynamic> d) {
+    for (final k in ['profileImageUrl', 'photoURL', 'photoUrl', 'profileImage']) {
+      final v = (d[k] ?? '').toString().trim();
+      if (v.startsWith('http')) return v;
+    }
+    return '';
+  }
+
+  Future<void> _toggle(String id) async {
+    if (_busy.contains(id)) return;
+    setState(() => _busy.add(id));
+    try {
+      await _followUser(id, !_myFollowing.contains(id));
+    } catch (e) {
+      debugPrint('List follow error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Follow করা যায়নি।')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy.remove(id));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: Text(
+          widget.title,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+      ),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: _stream,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            debugPrint('User list error: ${snapshot.error}');
+            return const Center(
+              child: Text(
+                'লিস্ট লোড করা যায়নি।',
+                style: TextStyle(color: _kGrey),
+              ),
+            );
+          }
+          if (!snapshot.hasData) {
+            return const Center(
+              child: CircularProgressIndicator(color: _kPink),
+            );
+          }
+
+          final ids = snapshot.data!.docs.map((d) => d.id).toList();
+          if (ids.isEmpty) {
+            return Center(
+              child: Text(
+                widget.sub == 'followers'
+                    ? 'এখনো কোনো Follower নেই'
+                    : 'এখনো কাউকে Follow করা হয়নি',
+                style: const TextStyle(color: _kGrey),
+              ),
+            );
+          }
+
+          return ListView.builder(
+            itemCount: ids.length,
+            itemBuilder: (context, index) {
+              final id = ids[index];
+              if (!_cache.containsKey(id)) _loadUser(id);
+
+              final d = _cache[id] ?? {};
+              final name = d.isEmpty ? '...' : _name(d);
+              final username = (d['username'] ?? '').toString();
+              final photo = _photoOf(d);
+              final isMe = id == _myId;
+              final isFollowing = _myFollowing.contains(id);
+              final busy = _busy.contains(id);
+
+              return ListTile(
+                onTap: () {
+                  if (isMe) return;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => ProfileScreen(userId: id),
+                    ),
+                  );
+                },
+                leading: CircleAvatar(
+                  radius: 24,
+                  backgroundColor: const Color(0xFF25B7E8),
+                  backgroundImage:
+                      photo.isNotEmpty ? NetworkImage(photo) : null,
+                  child: photo.isEmpty
+                      ? Text(
+                          name.isNotEmpty && name != '...'
+                              ? name.characters.first.toUpperCase()
+                              : '?',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        )
+                      : null,
+                ),
+                title: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                subtitle: username.isEmpty
+                    ? null
+                    : Text(
+                        '@$username',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: _kGrey, fontSize: 12),
+                      ),
+                trailing: isMe
+                    ? null
+                    : SizedBox(
+                        height: 32,
+                        child: ElevatedButton(
+                          onPressed: busy ? null : () => _toggle(id),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                isFollowing ? const Color(0xFF2A2A2A) : _kPink,
+                            disabledBackgroundColor: const Color(0xFF2A2A2A),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                          child: Text(
+                            isFollowing ? 'Following' : 'Follow',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+              );
+            },
+          );
+        },
       ),
     );
   }
@@ -1064,9 +1440,7 @@ class _ViewerPageState extends State<_ViewerPage> {
                       'ভিডিও চালু করা যায়নি।',
                       style: TextStyle(color: Colors.white70),
                     )
-                  : const CircularProgressIndicator(
-                      color: Color(0xFFFF2D55),
-                    ),
+                  : const CircularProgressIndicator(color: _kPink),
             ),
           if (ready && !c.value.isPlaying)
             const Center(
