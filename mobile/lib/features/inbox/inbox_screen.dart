@@ -94,6 +94,11 @@ Future<void> _setFollow(String peerId, bool follow) async {
   final myFollowing = myDoc.collection('following').doc(peerId);
   final theirFollowers = peerDoc.collection('followers').doc(me.uid);
 
+  final peerSnap = await peerDoc.get();
+  final mySnap = await myDoc.get();
+  final peerCount = peerSnap.data()?['followersCount'];
+  final myCount = mySnap.data()?['followingCount'];
+
   final batch = db.batch();
   if (follow) {
     batch.set(myFollowing, {
@@ -104,7 +109,10 @@ Future<void> _setFollow(String peerId, bool follow) async {
       'userId': me.uid,
       'createdAt': FieldValue.serverTimestamp(),
     });
-    batch.update(peerDoc, {'followersCount': FieldValue.increment(1)});
+    // followersCount ফিল্ড না থাকলে (যেমন ডেমো ইউজার) Rules ব্যাচ আটকে দেয়
+    if (peerCount is int) {
+      batch.update(peerDoc, {'followersCount': FieldValue.increment(1)});
+    }
     batch.set(
       myDoc,
       {'followingCount': FieldValue.increment(1)},
@@ -113,16 +121,10 @@ Future<void> _setFollow(String peerId, bool follow) async {
   } else {
     batch.delete(myFollowing);
     batch.delete(theirFollowers);
-
-    final peerSnap = await peerDoc.get();
-    final fc = peerSnap.data()?['followersCount'];
-    if (fc is int && fc > 0) {
+    if (peerCount is int && peerCount > 0) {
       batch.update(peerDoc, {'followersCount': FieldValue.increment(-1)});
     }
-
-    final mySnap = await myDoc.get();
-    final gc = mySnap.data()?['followingCount'];
-    if (gc is int && gc > 0) {
+    if (myCount is int && myCount > 0) {
       batch.update(myDoc, {'followingCount': FieldValue.increment(-1)});
     }
   }
