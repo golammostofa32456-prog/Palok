@@ -9,7 +9,7 @@ import '../inbox/chat_screen.dart';
 import '../inbox/inbox_screen.dart' show InboxActivityScreen, InboxNotifier;
 import '../video/video_url.dart';
 import 'edit_profile_screen.dart';
-
+import 'settings_screen.dart';
 const Color _kPink = Color(0xFFFF2D55);
 const Color _kCyan = Color(0xFF20D7E8);
 const Color _kGrey = Color(0xFF868686);
