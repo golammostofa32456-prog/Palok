@@ -12,8 +12,8 @@ import 'package:image_picker/image_picker.dart';
 // cloud name: Cloudinary Dashboard এর উপরে লেখা থাকে
 // upload preset: Settings > Upload > Upload presets (অবশ্যই "Unsigned")
 // ============================================================
-const String _cloudinaryCloudName = 'YOUR_CLOUD_NAME';
-const String _cloudinaryUploadPreset = 'YOUR_UPLOAD_PRESET';
+const String _cloudinaryCloudName = 'u0jufmrl';
+const String _cloudinaryUploadPreset = 'palok_video_upload';
 
 class _UploadException implements Exception {
   final String message;
