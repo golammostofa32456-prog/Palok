@@ -29,7 +29,9 @@ dependencies:
 
   # Share
   share_plus: ^11.0.0
-
+  flutter_localizations:
+    sdk: flutter
+  shared_preferences: ^2.3.0
   # SVG
   flutter_svg: ^2.0.17
 
