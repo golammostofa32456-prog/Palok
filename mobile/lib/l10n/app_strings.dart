@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'strings_home.dart';
 import 'strings_profile.dart';
 
 // ============================================================
@@ -106,8 +107,11 @@ String tr(String key, [Map<String, String>? params]) {
   return text;
 }
 
+/// সব অনুবাদ ফাইলে খোঁজে। নতুন strings_xxx.dart বানালে এখানে একটা লাইন যোগ হবে।
 String? _find(String code, String key) {
-  return _strings[code]?[key] ?? profileStrings[code]?[key];
+  return _strings[code]?[key] ??
+      profileStrings[code]?[key] ??
+      homeStrings[code]?[key];
 }
 
 // ============================================================
