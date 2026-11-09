@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'strings_profile.dart';
+
 // ============================================================
 // ভাষার তালিকা
 // নতুন ভাষা যোগ করতে: এখানে একটা লাইন, আর নিচে _xx ম্যাপ বানিয়ে _strings এ বসান
@@ -94,7 +96,7 @@ class LanguageBuilder extends StatelessWidget {
 /// অনুবাদ আনার ফাংশন। উদাহরণ: tr('logout') বা tr('reset_body', {'email': x})
 String tr(String key, [Map<String, String>? params]) {
   final code = LanguageController.instance.code;
-  var text = _strings[code]?[key] ?? _strings['en']?[key] ?? key;
+  var text = _find(code, key) ?? _find('en', key) ?? key;
 
   if (params != null) {
     params.forEach((name, value) {
@@ -102,6 +104,10 @@ String tr(String key, [Map<String, String>? params]) {
     });
   }
   return text;
+}
+
+String? _find(String code, String key) {
+  return _strings[code]?[key] ?? profileStrings[code]?[key];
 }
 
 // ============================================================
