@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:share_plus/share_plus.dart';
 import '../search/search_screen.dart';
 
+import '../../l10n/app_strings.dart';
 import '../friends/friends_screen.dart';
 import '../inbox/inbox_screen.dart';
 import '../profile/profile_screen.dart';
@@ -61,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return true;
     }
 
-    _showMessage('এই সুবিধাটি ব্যবহার করতে আগে Sign In করুন।');
+    _showMessage(tr('h_login_required'));
     return false;
   }
 
@@ -87,7 +88,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final success = await _homeController.toggleLike(video);
 
     if (!success && mounted) {
-      _showMessage('Like করা যায়নি। আবার চেষ্টা করুন।');
+      _showMessage(tr('h_like_failed'));
     }
   }
 
@@ -97,12 +98,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final success = await _homeController.toggleSave(video);
 
     if (!success && mounted) {
-      _showMessage('ভিডিও Save করা যায়নি। আবার চেষ্টা করুন।');
+      _showMessage(tr('h_save_failed'));
     } else if (success && mounted) {
       _showMessage(
         _homeController.isSaved(video.id)
-            ? 'ভিডিওটি Saved হয়েছে।'
-            : 'ভিডিওটি Unsave করা হয়েছে।',
+            ? tr('h_saved_ok')
+            : tr('h_unsaved_ok'),
       );
     }
   }
@@ -113,9 +114,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final success = await _homeController.toggleFollow(video);
 
     if (!success && mounted) {
-      _showMessage(
-        'Follow করা যায়নি। নিজের অ্যাকাউন্ট Follow করা যাবে না।',
-      );
+      _showMessage(tr('h_follow_failed'));
     }
   }
 
@@ -124,13 +123,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       await Share.share(
-        'Watch this video on PALOK\n\n$link',
+        '${tr('h_share_text')}\n\n$link',
       );
 
       await _homeController.addShare(video);
     } catch (e) {
       if (mounted) {
-        _showMessage('ভিডিও Share করা যায়নি।');
+        _showMessage(tr('h_share_failed'));
       }
     }
   }
@@ -148,6 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
   void _openSearch() {
     Navigator.push(
       context,
@@ -165,8 +165,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  
-  
   Widget _buildFeed() {
     return AnimatedBuilder(
       animation: _homeController,
@@ -200,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 12),
                   ElevatedButton(
                     onPressed: _homeController.refresh,
-                    child: const Text('আবার চেষ্টা করুন'),
+                    child: Text(tr('h_retry')),
                   ),
                 ],
               ),
@@ -219,14 +217,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   size: 48,
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'এখনো কোনো ভিডিও নেই।',
-                  style: TextStyle(color: Colors.white),
+                Text(
+                  tr('h_no_videos'),
+                  style: const TextStyle(color: Colors.white),
                 ),
                 const SizedBox(height: 12),
                 ElevatedButton(
                   onPressed: _homeController.refresh,
-                  child: const Text('রিফ্রেশ'),
+                  child: Text(tr('h_refresh')),
                 ),
               ],
             ),
@@ -262,11 +260,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 onSave: () => _toggleSave(video),
                 onShare: () => _shareVideo(video),
                 onFollow: () => _toggleFollow(video),
+                // ভিডিওর মালিকের প্রোফাইল খোলে (আগে নিজের প্রোফাইল খুলত)
                 onProfile: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const ProfileScreen(),
+                      builder: (_) => ProfileScreen(userId: video.ownerId),
                     ),
                   );
                 },
@@ -313,7 +312,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   setState(() => _topIndex = 0);
                 },
                 child: Text(
-                  'Following',
+                  tr('p_following'),
                   style: TextStyle(
                     color: _topIndex == 0
                         ? Colors.white
@@ -331,7 +330,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   setState(() => _topIndex = 1);
                 },
                 child: Text(
-                  'For You',
+                  tr('h_for_you'),
                   style: TextStyle(
                     color: _topIndex == 1
                         ? Colors.white
@@ -342,7 +341,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               IconButton(
                 onPressed: _openSearch,
-                tooltip: 'Search',
+                tooltip: tr('h_search'),
                 icon: const Icon(
                   Icons.search,
                   color: Colors.white,
@@ -358,82 +357,86 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pages = <Widget>[
-      Stack(
-        fit: StackFit.expand,
-        children: [
-          _buildFeed(),
-          _buildTopBar(),
-        ],
-      ),
-      const FriendsScreen(),
-      const SizedBox.shrink(),
-      const InboxScreen(),
-      const ProfileScreen(),
-    ];
+    return LanguageBuilder(
+      builder: (context) {
+        final pages = <Widget>[
+          Stack(
+            fit: StackFit.expand,
+            children: [
+              _buildFeed(),
+              _buildTopBar(),
+            ],
+          ),
+          const FriendsScreen(),
+          const SizedBox.shrink(),
+          const InboxScreen(),
+          const ProfileScreen(),
+        ];
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: pages,
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.black,
-        selectedItemColor: Colors.white,
-        unselectedItemColor: Colors.grey,
-        selectedFontSize: 11,
-        unselectedFontSize: 11,
-        items: [
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.home_filled),
-            label: 'Home',
+        return Scaffold(
+          backgroundColor: Colors.black,
+          body: IndexedStack(
+            index: _selectedIndex,
+            children: pages,
           ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.people_outline),
-            label: 'Friends',
-          ),
-          BottomNavigationBarItem(
-            icon: Container(
-              width: 45,
-              height: 28,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                gradient: const LinearGradient(
-                  colors: [_cyan, _pink],
-                ),
+          bottomNavigationBar: BottomNavigationBar(
+            currentIndex: _selectedIndex,
+            onTap: _onItemTapped,
+            type: BottomNavigationBarType.fixed,
+            backgroundColor: Colors.black,
+            selectedItemColor: Colors.white,
+            unselectedItemColor: Colors.grey,
+            selectedFontSize: 11,
+            unselectedFontSize: 11,
+            items: [
+              BottomNavigationBarItem(
+                icon: const Icon(Icons.home_filled),
+                label: tr('h_nav_home'),
               ),
-              child: Center(
-                child: Container(
-                  width: 38,
-                  height: 24,
+              BottomNavigationBarItem(
+                icon: const Icon(Icons.people_outline),
+                label: tr('h_nav_friends'),
+              ),
+              BottomNavigationBarItem(
+                icon: Container(
+                  width: 45,
+                  height: 28,
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(8),
+                    gradient: const LinearGradient(
+                      colors: [_cyan, _pink],
+                    ),
                   ),
-                  child: const Icon(
-                    Icons.add,
-                    color: Colors.black,
-                    size: 20,
+                  child: Center(
+                    child: Container(
+                      width: 38,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(
+                        Icons.add,
+                        color: Colors.black,
+                        size: 20,
+                      ),
+                    ),
                   ),
                 ),
+                label: '',
               ),
-            ),
-            label: '',
+              BottomNavigationBarItem(
+                icon: const Icon(Icons.chat_bubble_outline),
+                label: tr('h_nav_inbox'),
+              ),
+              BottomNavigationBarItem(
+                icon: const Icon(Icons.person_outline),
+                label: tr('h_nav_profile'),
+              ),
+            ],
           ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.chat_bubble_outline),
-            label: 'Inbox',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            label: 'Profile',
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -489,7 +492,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
       _textController.clear();
       FocusScope.of(context).unfocus();
     } else {
-      widget.showMessage('কমেন্ট পাঠানো যায়নি। আবার চেষ্টা করুন।');
+      widget.showMessage(tr('h_comment_failed'));
     }
   }
 
@@ -520,7 +523,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
             ),
             const SizedBox(height: 14),
             Text(
-              'Comments · ${widget.controller.commentCount(widget.video)}',
+              '${tr('h_comments')} · ${widget.controller.commentCount(widget.video)}',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 16,
@@ -530,11 +533,11 @@ class _CommentsSheetState extends State<_CommentsSheet> {
             const Divider(color: Colors.white12),
             Expanded(
               child: widget.video.id.startsWith('demo_')
-                  ? const Center(
+                  ? Center(
                       child: Text(
-                        'Demo ভিডিওর কমেন্ট এখানে সংরক্ষিত হয় না।',
+                        tr('h_demo_comments'),
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white70),
+                        style: const TextStyle(color: Colors.white70),
                       ),
                     )
                   : StreamBuilder(
@@ -543,10 +546,10 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                       ),
                       builder: (context, snapshot) {
                         if (snapshot.hasError) {
-                          return const Center(
+                          return Center(
                             child: Text(
-                              'কমেন্ট লোড করা যায়নি।',
-                              style: TextStyle(color: Colors.white70),
+                              tr('h_comments_failed'),
+                              style: const TextStyle(color: Colors.white70),
                             ),
                           );
                         }
@@ -562,10 +565,10 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                         final docs = snapshot.data!.docs;
 
                         if (docs.isEmpty) {
-                          return const Center(
+                          return Center(
                             child: Text(
-                              'প্রথম কমেন্টটি আপনিই করুন!',
-                              style: TextStyle(color: Colors.white70),
+                              tr('h_first_comment'),
+                              style: const TextStyle(color: Colors.white70),
                             ),
                           );
                         }
@@ -620,7 +623,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                         textInputAction: TextInputAction.send,
                         onSubmitted: (_) => _sendComment(),
                         decoration: InputDecoration(
-                          hintText: 'একটি কমেন্ট লিখুন...',
+                          hintText: tr('h_comment_hint'),
                           hintStyle: const TextStyle(
                             color: Colors.white54,
                           ),
