@@ -1,15 +1,18 @@
-import 'dart:math' as math;
 import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../l10n/app_strings.dart';
 import '../inbox/chat_screen.dart';
 import '../inbox/inbox_screen.dart' show InboxActivityScreen, InboxNotifier;
 import '../video/video_url.dart';
 import 'edit_profile_screen.dart';
 import 'settings_screen.dart';
+
 const Color _kPink = Color(0xFFFF2D55);
 const Color _kCyan = Color(0xFF20D7E8);
 const Color _kGrey = Color(0xFF868686);
@@ -350,7 +353,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _toggleFollow() async {
     final me = _me;
     if (me == null) {
-      _msg('Follow করতে আগে Sign In করুন।');
+      _msg(tr('p_login_to_follow'));
       return;
     }
     if (_isMine || _followBusy) return;
@@ -374,7 +377,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _followersCount = math.max(0, _followersCount + (was ? 1 : -1));
         });
       }
-      _msg('Follow করা যায়নি। আবার চেষ্টা করুন।');
+      _msg(tr('p_follow_failed'));
     } finally {
       if (mounted) setState(() => _followBusy = false);
     }
@@ -390,7 +393,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _openChat(Map<String, dynamic> data) async {
     if (_me == null) {
-      _msg('মেসেজ করতে আগে Sign In করুন।');
+      _msg(tr('p_login_to_message'));
       return;
     }
     if (_isMine) return;
@@ -407,14 +410,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _openList(String sub, String title) async {
+  Future<void> _openList(String sub) async {
     final id = _targetId;
     if (id.isEmpty) return;
 
     await Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => _UserListScreen(userId: id, title: title, sub: sub),
+        builder: (_) => _UserListScreen(userId: id, sub: sub),
       ),
     );
     if (mounted) _loadAll();
@@ -425,19 +428,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Log out', style: TextStyle(color: Colors.white)),
-        content: const Text(
-          'আপনি কি Log out করতে চান?',
-          style: TextStyle(color: Colors.white70),
+        title: Text(tr('logout'), style: const TextStyle(color: Colors.white)),
+        content: Text(
+          tr('logout_confirm'),
+          style: const TextStyle(color: Colors.white70),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('না'),
+            child: Text(tr('no')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('হ্যাঁ', style: TextStyle(color: _kPink)),
+            child: Text(tr('yes'), style: const TextStyle(color: _kPink)),
           ),
         ],
       ),
@@ -452,7 +455,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             .popUntil((route) => route.isFirst);
       }
     } catch (e) {
-      _msg('Log out করা যায়নি।');
+      _msg(tr('logout_failed'));
     }
   }
 
@@ -470,9 +473,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 8),
             ListTile(
               leading: const Icon(Icons.edit_outlined, color: Colors.white),
-              title: const Text(
-                'Edit profile',
-                style: TextStyle(color: Colors.white),
+              title: Text(
+                tr('edit_profile'),
+                style: const TextStyle(color: Colors.white),
               ),
               onTap: () {
                 Navigator.pop(ctx);
@@ -481,9 +484,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.history, color: Colors.white),
-              title: const Text(
-                'কার্যকলাপ কেন্দ্র',
-                style: TextStyle(color: Colors.white),
+              title: Text(
+                tr('activity_center'),
+                style: const TextStyle(color: Colors.white),
               ),
               onTap: () {
                 Navigator.pop(ctx);
@@ -497,9 +500,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.bookmark_border, color: Colors.white),
-              title: const Text(
-                'Save করা ভিডিও',
-                style: TextStyle(color: Colors.white),
+              title: Text(
+                tr('p_saved_videos'),
+                style: const TextStyle(color: Colors.white),
               ),
               onTap: () {
                 Navigator.pop(ctx);
@@ -507,12 +510,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _ensureTabLoaded(2);
               },
             ),
-                        ListTile(
+            ListTile(
               leading:
                   const Icon(Icons.settings_outlined, color: Colors.white),
-              title: const Text(
-                'সেটিংস এবং গোপনীয়তা',
-                style: TextStyle(color: Colors.white),
+              title: Text(
+                tr('settings_title'),
+                style: const TextStyle(color: Colors.white),
               ),
               onTap: () {
                 Navigator.pop(ctx);
@@ -527,7 +530,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const Divider(height: 1, color: Color(0xFF2A2A2A)),
             ListTile(
               leading: const Icon(Icons.logout, color: _kPink),
-              title: const Text('Log out', style: TextStyle(color: _kPink)),
+              title: Text(
+                tr('logout'),
+                style: const TextStyle(color: _kPink),
+              ),
               onTap: () {
                 Navigator.pop(ctx);
                 _logout();
@@ -660,7 +666,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               const SizedBox(height: 3),
-              Text(label, style: const TextStyle(color: _kGrey, fontSize: 13)),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: _kGrey, fontSize: 13),
+              ),
             ],
           ),
         ),
@@ -684,9 +696,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
-            child: const Text(
-              'Edit Profile',
-              style: TextStyle(
+            child: Text(
+              tr('edit_profile'),
+              style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
               ),
@@ -705,9 +717,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
-            child: const Text(
-              'Following',
-              style: TextStyle(
+            child: Text(
+              tr('p_following'),
+              style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
               ),
@@ -721,9 +733,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
-            child: const Text(
-              'Follow',
-              style: TextStyle(
+            child: Text(
+              tr('p_follow'),
+              style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
               ),
@@ -827,18 +839,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Row(
           children: [
             _stat(
-              'Following',
+              tr('p_following'),
               following,
-              () => _openList('following', 'Following'),
+              () => _openList('following'),
             ),
             Container(width: 1, height: 12, color: Colors.grey.shade800),
             _stat(
-              'Followers',
+              tr('p_followers'),
               followers,
-              () => _openList('followers', 'Followers'),
+              () => _openList('followers'),
             ),
             Container(width: 1, height: 12, color: Colors.grey.shade800),
-            _stat('Likes', likes, null),
+            _stat(tr('p_likes'), likes, null),
           ],
         ),
         const SizedBox(height: 16),
@@ -881,26 +893,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _emptyState() {
     IconData icon = Icons.video_library_outlined;
-    String text = 'এখনো কোনো ভিডিও নেই';
+    String text = tr('p_no_videos');
 
     if (_tab == 1) {
       icon = _isMine ? Icons.favorite_border : Icons.lock_outline;
-      text = _isMine
-          ? 'Like করা ভিডিও এখানে দেখা যাবে'
-          : 'এই ব্যবহারকারীর Like করা ভিডিও গোপন';
+      text = _isMine ? tr('p_liked_empty_mine') : tr('p_liked_private');
     } else if (_tab == 2) {
       icon = Icons.bookmark_border;
-      text = 'Save করা ভিডিও এখানে দেখা যাবে';
+      text = tr('p_saved_empty');
     }
 
     return Padding(
-      padding: const EdgeInsets.only(top: 60),
+      padding: const EdgeInsets.only(top: 60, left: 24, right: 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 56, color: Colors.grey.shade700),
           const SizedBox(height: 12),
-          Text(text, style: const TextStyle(color: _kGrey)),
+          Text(
+            text,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: _kGrey),
+          ),
         ],
       ),
     );
@@ -1001,47 +1015,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final id = _targetId;
+    return LanguageBuilder(
+      builder: (context) {
+        final id = _targetId;
 
-    if (id.isEmpty) {
-      return const Scaffold(
-        backgroundColor: _bg,
-        body: Center(
-          child: Text(
-            'প্রোফাইল দেখতে আগে Sign In করুন।',
-            style: TextStyle(color: Colors.white),
-          ),
-        ),
-      );
-    }
-
-    if (_streamFor != id) {
-      _streamFor = id;
-      _userStream = _db.collection('users').doc(id).snapshots();
-    }
-
-    return Scaffold(
-      backgroundColor: _bg,
-      body: SafeArea(
-        child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: _userStream,
-          builder: (context, snapshot) {
-            final data = snapshot.data?.data() ?? <String, dynamic>{};
-
-            return RefreshIndicator(
-              color: _kPink,
-              onRefresh: _refresh,
-              child: CustomScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                slivers: [
-                  SliverToBoxAdapter(child: _header(data)),
-                  ..._gridSlivers(),
-                ],
+        if (id.isEmpty) {
+          return Scaffold(
+            backgroundColor: _bg,
+            body: Center(
+              child: Text(
+                tr('p_login_to_view'),
+                style: const TextStyle(color: Colors.white),
               ),
-            );
-          },
-        ),
-      ),
+            ),
+          );
+        }
+
+        if (_streamFor != id) {
+          _streamFor = id;
+          _userStream = _db.collection('users').doc(id).snapshots();
+        }
+
+        return Scaffold(
+          backgroundColor: _bg,
+          body: SafeArea(
+            child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: _userStream,
+              builder: (context, snapshot) {
+                final data = snapshot.data?.data() ?? <String, dynamic>{};
+
+                return RefreshIndicator(
+                  color: _kPink,
+                  onRefresh: _refresh,
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      SliverToBoxAdapter(child: _header(data)),
+                      ..._gridSlivers(),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1052,12 +1070,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
 class _UserListScreen extends StatefulWidget {
   final String userId;
-  final String title;
   final String sub; // 'followers' | 'following'
 
   const _UserListScreen({
     required this.userId,
-    required this.title,
     required this.sub,
   });
 
@@ -1145,7 +1161,7 @@ class _UserListScreenState extends State<_UserListScreen> {
       debugPrint('List follow error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Follow করা যায়নি।')),
+          SnackBar(content: Text(tr('p_follow_failed'))),
         );
       }
     } finally {
@@ -1155,136 +1171,147 @@ class _UserListScreenState extends State<_UserListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: Text(
-          widget.title,
-          style: const TextStyle(fontWeight: FontWeight.w800),
-        ),
-      ),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: _stream,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            debugPrint('User list error: ${snapshot.error}');
-            return const Center(
-              child: Text(
-                'লিস্ট লোড করা যায়নি।',
-                style: TextStyle(color: _kGrey),
-              ),
-            );
-          }
-          if (!snapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(color: _kPink),
-            );
-          }
+    return LanguageBuilder(
+      builder: (context) {
+        return Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            title: Text(
+              widget.sub == 'followers'
+                  ? tr('p_followers')
+                  : tr('p_following'),
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+          body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: _stream,
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                debugPrint('User list error: ${snapshot.error}');
+                return Center(
+                  child: Text(
+                    tr('p_list_load_failed'),
+                    style: const TextStyle(color: _kGrey),
+                  ),
+                );
+              }
+              if (!snapshot.hasData) {
+                return const Center(
+                  child: CircularProgressIndicator(color: _kPink),
+                );
+              }
 
-          final ids = snapshot.data!.docs.map((d) => d.id).toList();
-          if (ids.isEmpty) {
-            return Center(
-              child: Text(
-                widget.sub == 'followers'
-                    ? 'এখনো কোনো Follower নেই'
-                    : 'এখনো কাউকে Follow করা হয়নি',
-                style: const TextStyle(color: _kGrey),
-              ),
-            );
-          }
+              final ids = snapshot.data!.docs.map((d) => d.id).toList();
+              if (ids.isEmpty) {
+                return Center(
+                  child: Text(
+                    widget.sub == 'followers'
+                        ? tr('p_no_followers')
+                        : tr('p_no_following'),
+                    style: const TextStyle(color: _kGrey),
+                  ),
+                );
+              }
 
-          return ListView.builder(
-            itemCount: ids.length,
-            itemBuilder: (context, index) {
-              final id = ids[index];
-              if (!_cache.containsKey(id)) _loadUser(id);
+              return ListView.builder(
+                itemCount: ids.length,
+                itemBuilder: (context, index) {
+                  final id = ids[index];
+                  if (!_cache.containsKey(id)) _loadUser(id);
 
-              final d = _cache[id] ?? {};
-              final name = d.isEmpty ? '...' : _name(d);
-              final username = (d['username'] ?? '').toString();
-              final photo = _photoOf(d);
-              final isMe = id == _myId;
-              final isFollowing = _myFollowing.contains(id);
-              final busy = _busy.contains(id);
+                  final d = _cache[id] ?? {};
+                  final name = d.isEmpty ? '...' : _name(d);
+                  final username = (d['username'] ?? '').toString();
+                  final photo = _photoOf(d);
+                  final isMe = id == _myId;
+                  final isFollowing = _myFollowing.contains(id);
+                  final busy = _busy.contains(id);
 
-              return ListTile(
-                onTap: () {
-                  if (isMe) return;
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => ProfileScreen(userId: id),
+                  return ListTile(
+                    onTap: () {
+                      if (isMe) return;
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => ProfileScreen(userId: id),
+                        ),
+                      );
+                    },
+                    leading: CircleAvatar(
+                      radius: 24,
+                      backgroundColor: const Color(0xFF25B7E8),
+                      backgroundImage:
+                          photo.isNotEmpty ? NetworkImage(photo) : null,
+                      child: photo.isEmpty
+                          ? Text(
+                              name.isNotEmpty && name != '...'
+                                  ? name.characters.first.toUpperCase()
+                                  : '?',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )
+                          : null,
                     ),
+                    title: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    subtitle: username.isEmpty
+                        ? null
+                        : Text(
+                            '@$username',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: _kGrey, fontSize: 12),
+                          ),
+                    trailing: isMe
+                        ? null
+                        : SizedBox(
+                            height: 32,
+                            child: ElevatedButton(
+                              onPressed: busy ? null : () => _toggle(id),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isFollowing
+                                    ? const Color(0xFF2A2A2A)
+                                    : _kPink,
+                                disabledBackgroundColor:
+                                    const Color(0xFF2A2A2A),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                              ),
+                              child: Text(
+                                isFollowing
+                                    ? tr('p_following')
+                                    : tr('p_follow'),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
                   );
                 },
-                leading: CircleAvatar(
-                  radius: 24,
-                  backgroundColor: const Color(0xFF25B7E8),
-                  backgroundImage:
-                      photo.isNotEmpty ? NetworkImage(photo) : null,
-                  child: photo.isEmpty
-                      ? Text(
-                          name.isNotEmpty && name != '...'
-                              ? name.characters.first.toUpperCase()
-                              : '?',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        )
-                      : null,
-                ),
-                title: Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                subtitle: username.isEmpty
-                    ? null
-                    : Text(
-                        '@$username',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: _kGrey, fontSize: 12),
-                      ),
-                trailing: isMe
-                    ? null
-                    : SizedBox(
-                        height: 32,
-                        child: ElevatedButton(
-                          onPressed: busy ? null : () => _toggle(id),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                isFollowing ? const Color(0xFF2A2A2A) : _kPink,
-                            disabledBackgroundColor: const Color(0xFF2A2A2A),
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                          ),
-                          child: Text(
-                            isFollowing ? 'Following' : 'Follow',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
               );
             },
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1453,9 +1480,9 @@ class _ViewerPageState extends State<_ViewerPage> {
           else
             Center(
               child: _failed
-                  ? const Text(
-                      'ভিডিও চালু করা যায়নি।',
-                      style: TextStyle(color: Colors.white70),
+                  ? Text(
+                      tr('p_video_failed'),
+                      style: const TextStyle(color: Colors.white70),
                     )
                   : const CircularProgressIndicator(color: _kPink),
             ),
