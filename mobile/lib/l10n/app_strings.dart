@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'strings_profile.dart';
 // ============================================================
 // ভাষার তালিকা
 // নতুন ভাষা যোগ করতে: এখানে একটা লাইন, আর নিচে _xx ম্যাপ বানিয়ে _strings এ বসান
