@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_strings.dart';
+
 class CommentsSheet extends StatefulWidget {
   final String videoId;
   final String videoOwnerId;
@@ -42,7 +44,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
     if (text.isEmpty || _sending) return;
 
     if (widget.currentUserId.isEmpty) {
-      _showError('Comment করতে Login করতে হবে');
+      _showError(tr('h_login_required'));
       return;
     }
 
@@ -100,7 +102,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
       }
     } catch (_) {
       if (mounted) {
-        _showError('Comment করা যায়নি');
+        _showError(tr('h_comment_failed'));
       }
     } finally {
       if (mounted) {
@@ -161,9 +163,9 @@ class _CommentsSheetState extends State<CommentsSheet> {
               children: [
                 const SizedBox(width: 18),
 
-                const Text(
-                  'Comments',
-                  style: TextStyle(
+                Text(
+                  tr('h_comments'),
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
@@ -211,10 +213,10 @@ class _CommentsSheetState extends State<CommentsSheet> {
                   final docs = snapshot.data?.docs ?? [];
 
                   if (docs.isEmpty) {
-                    return const Center(
+                    return Center(
                       child: Text(
-                        'No comments yet',
-                        style: TextStyle(
+                        tr('h_first_comment'),
+                        style: const TextStyle(
                           color: Colors.white54,
                         ),
                       ),
@@ -346,7 +348,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
                         color: Colors.white,
                       ),
                       decoration: InputDecoration(
-                        hintText: 'Add a comment...',
+                        hintText: tr('h_comment_hint'),
                         hintStyle: const TextStyle(
                           color: Colors.white38,
                         ),
