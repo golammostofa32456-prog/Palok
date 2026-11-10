@@ -14,6 +14,7 @@ class BottomNavigator extends StatelessWidget {
   final ValueChanged<int> onSelect;
   final Color pink;
   final Color cyan;
+  
 
   @override
   Widget build(BuildContext context) {
