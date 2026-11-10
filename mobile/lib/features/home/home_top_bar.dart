@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_strings.dart';
+
 class HomeTopBar extends StatelessWidget {
   final Animation<double> logoOpacity;
   final Animation<double> logoScale;
@@ -40,83 +42,86 @@ class HomeTopBar extends StatelessWidget {
             10,
             0,
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              AnimatedBuilder(
-                animation: Listenable.merge([
-                  logoOpacity,
-                  logoScale,
-                ]),
-                builder: (_, __) {
-                  return Opacity(
-                    opacity: logoOpacity.value,
-                    child: Transform.scale(
-                      scale: logoScale.value,
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              pink,
-                              cyan,
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius:
-                              BorderRadius.circular(13),
-                          boxShadow: [
-                            BoxShadow(
-                              color: pink.withOpacity(0.35),
-                              blurRadius: 15,
-                              spreadRadius: 1,
+          // ভাষা বদলালে শুধু এই অংশ নতুন করে আঁকা হবে
+          child: LanguageBuilder(
+            builder: (context) => Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                AnimatedBuilder(
+                  animation: Listenable.merge([
+                    logoOpacity,
+                    logoScale,
+                  ]),
+                  builder: (_, __) {
+                    return Opacity(
+                      opacity: logoOpacity.value,
+                      child: Transform.scale(
+                        scale: logoScale.value,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                pink,
+                                cyan,
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                             ),
-                          ],
-                        ),
-                        alignment: Alignment.center,
-                        child: const Text(
-                          'P',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w900,
+                            borderRadius: BorderRadius.circular(13),
+                            boxShadow: [
+                              BoxShadow(
+                                color: pink.withOpacity(0.35),
+                                blurRadius: 15,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                          alignment: Alignment.center,
+                          child: const Text(
+                            'P',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                },
-              ),
-
-              const Spacer(),
-
-              _TopTab(
-                title: 'For You',
-                selected: topIndex == 0,
-                onTap: onForYou,
-              ),
-
-              const SizedBox(width: 18),
-
-              _TopTab(
-                title: 'Following',
-                selected: topIndex == 1,
-                onTap: onFollowing,
-              ),
-
-              const SizedBox(width: 8),
-
-              IconButton(
-                onPressed: onSearch,
-                icon: const Icon(
-                  Icons.search_rounded,
-                  color: Colors.white,
-                  size: 27,
+                    );
+                  },
                 ),
-              ),
-            ],
+
+                const Spacer(),
+
+                _TopTab(
+                  title: tr('h_for_you'),
+                  selected: topIndex == 0,
+                  onTap: onForYou,
+                ),
+
+                const SizedBox(width: 18),
+
+                _TopTab(
+                  title: tr('p_following'),
+                  selected: topIndex == 1,
+                  onTap: onFollowing,
+                ),
+
+                const SizedBox(width: 8),
+
+                IconButton(
+                  onPressed: onSearch,
+                  tooltip: tr('h_search'),
+                  icon: const Icon(
+                    Icons.search_rounded,
+                    color: Colors.white,
+                    size: 27,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -149,13 +154,9 @@ class _TopTab extends StatelessWidget {
             Text(
               title,
               style: TextStyle(
-                color: selected
-                    ? Colors.white
-                    : Colors.white60,
+                color: selected ? Colors.white : Colors.white60,
                 fontSize: 15,
-                fontWeight: selected
-                    ? FontWeight.w800
-                    : FontWeight.w500,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
               ),
             ),
             const SizedBox(height: 5),
@@ -167,8 +168,7 @@ class _TopTab extends StatelessWidget {
               height: 2.5,
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius:
-                    BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
           ],
